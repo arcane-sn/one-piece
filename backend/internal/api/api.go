@@ -7,6 +7,9 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"os"
+	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/arcane-sn/one-piece/backend/internal/store"
@@ -37,7 +40,25 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 	})
+	if staticDir != "" {
+		mux.Handle("/", s.spa())
+	}
 	return s.guard(mux)
+}
+
+// spa serves files from the static dir, falling back to index.html so
+// client-side routes (e.g. /boards/1) survive a refresh.
+func (s *server) spa() http.Handler {
+	files := http.FileServer(http.Dir(s.static))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// path.Clean on a rooted path neutralizes any ".." traversal.
+		rel := path.Clean("/" + r.URL.Path)
+		if fi, err := os.Stat(filepath.Join(s.static, filepath.FromSlash(rel))); err == nil && !fi.IsDir() {
+			files.ServeHTTP(w, r)
+			return
+		}
+		http.ServeFile(w, r, filepath.Join(s.static, "index.html"))
+	})
 }
 
 // guard enforces, for /api/*: JSON content type on mutations (cheap CSRF defence),

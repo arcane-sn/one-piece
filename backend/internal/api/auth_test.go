@@ -18,7 +18,9 @@ type testSrv struct {
 }
 
 // newTestServer returns a running API with user owner/password123.
-func newTestServer(t *testing.T) *testSrv {
+func newTestServer(t *testing.T) *testSrv { return newTestServerDir(t, "") }
+
+func newTestServerDir(t *testing.T, staticDir string) *testSrv {
 	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
@@ -27,7 +29,7 @@ func newTestServer(t *testing.T) *testSrv {
 	if err := st.CreateUser("owner", "password123"); err != nil {
 		t.Fatal(err)
 	}
-	ts := httptest.NewServer(New(st, ""))
+	ts := httptest.NewServer(New(st, staticDir))
 	t.Cleanup(func() { ts.Close(); st.DB.Close() })
 	return &testSrv{ts, st}
 }
