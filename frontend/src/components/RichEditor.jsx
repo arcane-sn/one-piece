@@ -51,6 +51,7 @@ function StyleMenu({ value, onPick }) {
 // WYSIWYG editor (Tiptap). The value is Markdown, so it stays readable for
 // `claude -p` and for plain-text previews.
 export default function RichEditor({ value, onChange, placeholder }) {
+  const ref = useRef(null)
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ link: { openOnClick: false } }),
@@ -61,9 +62,22 @@ export default function RichEditor({ value, onChange, placeholder }) {
     ],
     content: value,
     contentType: 'markdown',
+    editorProps: {
+      // Plain-text paste is treated as Markdown ("- [ ] x" becomes a task list, "## T" a heading).
+      handlePaste: (_view, event) => {
+        const cd = event.clipboardData
+        const text = cd?.getData('text/plain')
+        const ed = ref.current
+        if (!text || cd.getData('text/html') || !ed || ed.isActive('codeBlock')) return false
+        event.preventDefault()
+        ed.commands.insertContent(text, { contentType: 'markdown' })
+        return true
+      },
+    },
     shouldRerenderOnTransaction: true, // keeps toolbar "active" states in sync
     onUpdate: ({ editor: ed }) => onChange(ed.getMarkdown().trimEnd()),
   })
+  ref.current = editor
   // Pick up value changes made outside the editor (e.g. AI-generated text).
   useEffect(() => {
     if (editor && value !== editor.getMarkdown().trimEnd()) editor.commands.setContent(value, { contentType: 'markdown' })

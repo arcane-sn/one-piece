@@ -282,3 +282,9 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 .rte-pop button:hover { background: rgba(234, 146, 89, 0.2); }
 .rte-pop button.on { background: rgba(234, 146, 89, 0.32); }
 .rte-opt-p { font-size: 13.5px; font-weight: 500; } .rte-opt-h1 { font-size: 18px; font-weight: 800; } .rte-opt-h2 { font-size: 16px; font-weight: 800; } .rte-opt-h3 { font-size: 14px; font-weight: 800; }
+
+/* deadline: clear button shows on hover */
+.date-wrap { position: relative; }
+.date-clear { position: absolute; right: 40px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: rgba(59, 36, 23, 0.1); color: var(--brown); font-size: 15px; line-height: 1; opacity: 0; transition: opacity 0.12s; }
+.date-wrap:hover .date-clear, .date-clear:focus-visible { opacity: 1; }
+.date-clear:hover:not(:disabled) { background: rgba(214, 90, 66, 0.25); color: var(--deep); }

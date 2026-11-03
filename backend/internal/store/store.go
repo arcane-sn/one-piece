@@ -15,6 +15,11 @@ type ValidationError struct{ Msg string }
 
 func (e ValidationError) Error() string { return e.Msg }
 
+// ConflictError is a valid request that the current state forbids (maps to HTTP 409).
+type ConflictError struct{ Msg string }
+
+func (e ConflictError) Error() string { return e.Msg }
+
 type Store struct{ DB *sql.DB }
 
 const schema = `
@@ -31,7 +36,13 @@ CREATE TABLE IF NOT EXISTS board_folders(
 CREATE TABLE IF NOT EXISTS cards(
   id INTEGER PRIMARY KEY, board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
   title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', deadline TEXT NOT NULL DEFAULT '',
+  approved INTEGER NOT NULL DEFAULT 0, content_version INTEGER NOT NULL DEFAULT 1,
   status TEXT NOT NULL, position INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS card_reviews(
+  id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  content_version INTEGER NOT NULL, status TEXT NOT NULL,
+  verdict TEXT NOT NULL DEFAULT '', summary TEXT NOT NULL DEFAULT '', missing TEXT NOT NULL DEFAULT '[]',
+  log TEXT NOT NULL DEFAULT '', error TEXT NOT NULL DEFAULT '');
 `
 
 // addColumn adds table.column (with the given DDL type/default) when it is missing.
@@ -63,6 +74,8 @@ func Open(path string) (*Store, error) {
 	for _, m := range [][3]string{
 		{"boards", "description", "TEXT NOT NULL DEFAULT ''"},
 		{"cards", "deadline", "TEXT NOT NULL DEFAULT ''"},
+		{"cards", "approved", "INTEGER NOT NULL DEFAULT 0"},
+		{"cards", "content_version", "INTEGER NOT NULL DEFAULT 1"},
 	} {
 		if err := addColumn(db, m[0], m[1], m[2]); err != nil {
 			db.Close()

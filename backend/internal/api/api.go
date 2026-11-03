@@ -104,9 +104,12 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeErr(w http.ResponseWriter, err error) {
 	var ve store.ValidationError
+	var ce store.ConflictError
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+	case errors.As(err, &ce):
+		writeJSON(w, http.StatusConflict, map[string]string{"error": ce.Msg})
 	case errors.As(err, &ve):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": ve.Msg})
 	default:

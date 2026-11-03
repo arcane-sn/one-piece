@@ -109,8 +109,13 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
             </div>
             <div className="field">
               <span>Deadline</span>
-              <input type="date" value={deadline} onChange={edit(setDeadline)} />
-              {deadline && <button type="button" className="link" onClick={() => { setDeadline(''); setSaved(false) }}>Clear Deadline</button>}
+              <div className="date-wrap">
+                <input type="date" value={deadline} onChange={edit(setDeadline)} />
+                {deadline && (
+                  <button type="button" className="date-clear" aria-label="Clear Deadline" title="Clear Deadline"
+                    onClick={() => { setDeadline(''); setSaved(false) }}>×</button>
+                )}
+              </div>
             </div>
             <div className="field">
               <button type="button" disabled title="Available after Claude review">Approve</button>

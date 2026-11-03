@@ -14,8 +14,11 @@ type Card struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Deadline    string `json:"deadline"` // "" or YYYY-MM-DD
-	Status      string `json:"status"`
-	Position    int    `json:"position"`
+	Approved    bool   `json:"approved"`
+	// ContentVersion increases whenever title or description change; reviews are tied to it.
+	ContentVersion int    `json:"contentVersion"`
+	Status         string `json:"status"`
+	Position       int    `json:"position"`
 }
 
 // Statuses are the kanban columns, in display order.
@@ -57,11 +60,11 @@ type queryer interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
-const cardCols = `id,board_id,title,description,deadline,status,position`
+const cardCols = `id,board_id,title,description,deadline,approved,content_version,status,position`
 
 func scanCard(row *sql.Row) (Card, error) {
 	var c Card
-	err := row.Scan(&c.ID, &c.BoardID, &c.Title, &c.Description, &c.Deadline, &c.Status, &c.Position)
+	err := row.Scan(&c.ID, &c.BoardID, &c.Title, &c.Description, &c.Deadline, &c.Approved, &c.ContentVersion, &c.Status, &c.Position)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Card{}, ErrNotFound
 	}
@@ -106,7 +109,7 @@ func (s *Store) ListCards(boardID int64) ([]Card, error) {
 	cards := []Card{}
 	for rows.Next() {
 		var c Card
-		if err := rows.Scan(&c.ID, &c.BoardID, &c.Title, &c.Description, &c.Deadline, &c.Status, &c.Position); err != nil {
+		if err := rows.Scan(&c.ID, &c.BoardID, &c.Title, &c.Description, &c.Deadline, &c.Approved, &c.ContentVersion, &c.Status, &c.Position); err != nil {
 			return nil, err
 		}
 		cards = append(cards, c)
@@ -122,7 +125,11 @@ func (s *Store) UpdateCard(id int64, title, description, deadline string) (Card,
 	if deadline, err = cleanDeadline(deadline); err != nil {
 		return Card{}, err
 	}
-	res, err := s.DB.Exec(`UPDATE cards SET title=?, description=?, deadline=? WHERE id=?`, title, description, deadline, id)
+	res, err := s.DB.Exec(`UPDATE cards SET deadline=?,
+			content_version = content_version + (CASE WHEN title<>? OR description<>? THEN 1 ELSE 0 END),
+			approved = CASE WHEN title<>? OR description<>? THEN 0 ELSE approved END,
+			title=?, description=? WHERE id=?`,
+		deadline, title, description, title, description, title, description, id)
 	if err != nil {
 		return Card{}, err
 	}
