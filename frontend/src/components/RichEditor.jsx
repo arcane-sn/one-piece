@@ -80,7 +80,7 @@ export default function RichEditor({ value, onChange, placeholder }) {
   ref.current = editor
   // Pick up value changes made outside the editor (e.g. AI-generated text).
   useEffect(() => {
-    if (editor && value !== editor.getMarkdown().trimEnd()) editor.commands.setContent(value, { contentType: 'markdown' })
+    if (editor && value !== editor.getMarkdown().trimEnd()) editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false })
   }, [value, editor])
   if (!editor) return null
 

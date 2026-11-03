@@ -13,6 +13,7 @@ export default function CardItem({ card, onOpen, onDropOn }) {
       onClick={() => onOpen(card)}
     >
       <div className="kcard-title">{card.title}</div>
+      {card.approved && <span className="approved-chip">Approved ✓</span>}
       {plain(card.description) && <div className="kcard-desc">{plain(card.description)}</div>}
       {card.deadline && (
         <span className="deadline-chip" title="Deadline">

@@ -177,9 +177,16 @@ func (s *server) runReview(r store.Review, c store.Card) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	final, err := streamClaude(ctx, reviewSystemPrompt, msg.String(), folders, func(line string) {
-		s.st.AppendReviewLog(r.ID, line)
-	})
+	logLine := func(line string) { s.st.AppendReviewLog(r.ID, line) }
+	logLine("Review started")
+	switch len(folders) {
+	case 0:
+	case 1:
+		logLine("Checking 1 product folder")
+	default:
+		logLine(fmt.Sprintf("Checking %d product folders", len(folders)))
+	}
+	final, err := streamClaude(ctx, reviewSystemPrompt, msg.String(), folders, logLine)
 	if err != nil {
 		log.Printf("review %d failed: %v", r.ID, err)
 		s.st.FailReview(r.ID, "Claude could not review this ticket. Try again.")
@@ -191,6 +198,7 @@ func (s *server) runReview(r store.Review, c store.Card) {
 		s.st.FailReview(r.ID, "Claude returned a review that could not be read. Try again.")
 		return
 	}
+	logLine("Verdict: " + strings.ReplaceAll(v.Verdict, "_", " "))
 	s.st.FinishReview(r.ID, v.Verdict, v.Summary, v.Missing)
 }
 

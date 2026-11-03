@@ -88,7 +88,7 @@ func TestReviewRunsOnSaveAndGatesApproval(t *testing.T) {
 
 	r := wait("done")
 	if r.Verdict != "needs_work" || r.Summary != "Too vague" || !reflect.DeepEqual(r.Missing, []string{"No Definition of Done"}) ||
-		!reflect.DeepEqual(r.Log, []string{"Reading main.go"}) || r.ContentVersion != 1 {
+		!reflect.DeepEqual(r.Log, []string{"Review started", "Checking 1 product folder", "Reading main.go", "Verdict: needs work"}) || r.ContentVersion != 1 {
 		t.Fatalf("review = %+v", r)
 	}
 	stub.mu.Lock()

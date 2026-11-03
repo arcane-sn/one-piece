@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import PromptModal from './PromptModal'
 import RichEditor from './RichEditor'
+import { ReviewComment, ReviewSide, useReview } from './ReviewPanel'
 
 const STATUS_LABEL = { business: 'Business', agent: 'Agent', qa: 'QA', done: 'Done' }
 
@@ -17,6 +18,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
   const [error, setError] = useState('')
   const [promptOpen, setPromptOpen] = useState(false)
   const titleRef = useRef(null)
+  const { review, refresh, start } = useReview(current?.id)
 
   const dirty =
     title !== (current?.title ?? '') ||
@@ -50,6 +52,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
       setCurrent(next)
       setSaved(true)
       onChanged(next)
+      refresh() // the server starts a review when the content changed
     } catch (err) {
       setError(err.message)
     } finally {
@@ -67,6 +70,31 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
     } catch (err) {
       setError(err.message)
       setBusy(false)
+    }
+  }
+
+  const contentChanged = title !== (current?.title ?? '') || description !== (current?.description ?? '')
+
+  async function approve(value) {
+    setBusy(true)
+    setError('')
+    try {
+      const next = await api(`/api/cards/${current.id}/approve`, { method: 'POST', body: { approved: value } })
+      setCurrent((c) => ({ ...c, ...next }))
+      onChanged(next)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function startReview() {
+    setError('')
+    try {
+      await start()
+    } catch (err) {
+      setError(err.message)
     }
   }
 
@@ -100,6 +128,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
               <RichEditor value={description} placeholder="Describe the change and what “done” looks like."
                 onChange={(v) => { setDescription(v); setSaved(false) }} />
             </div>
+            <ReviewComment card={current} review={review} />
           </div>
 
           <aside className="ticket-side">
@@ -117,10 +146,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
                 )}
               </div>
             </div>
-            <div className="field">
-              <button type="button" disabled title="Available after Claude review">Approve</button>
-              <p className="hint">Unlocks once Claude has reviewed this ticket.</p>
-            </div>
+            <ReviewSide card={current} review={review} unsaved={contentChanged} busy={busy} onStart={startReview} onApprove={approve} />
           </aside>
         </div>
 
