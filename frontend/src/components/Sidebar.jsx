@@ -17,7 +17,7 @@ export default function Sidebar({ user, boards, onLogout, onNewBoard }) {
       </NavLink>
       <div className="side-head">
         <span className="side-label">Boards</span>
-        <button className="side-plus" title="New board" aria-label="New board" onClick={onNewBoard} />
+        <button className="side-plus" title="New Board" aria-label="New Board" onClick={onNewBoard} />
       </div>
       {boards.map((b, i) => (
         <NavLink key={b.id} to={`/boards/${b.id}`} className="nav-item board-link">
@@ -29,7 +29,7 @@ export default function Sidebar({ user, boards, onLogout, onNewBoard }) {
       <div className="side-user">
         <span className="avatar">{user.charAt(0).toUpperCase()}</span>
         <span className="grow user-name">{user}</span>
-        <button className="link" onClick={onLogout}>Log out</button>
+        <button className="link" onClick={onLogout}>Log Out</button>
       </div>
     </aside>
   )

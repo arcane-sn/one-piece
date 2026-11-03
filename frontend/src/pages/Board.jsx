@@ -70,7 +70,7 @@ export default function Board({ reloadBoards }) {
   if (board === false) {
     return (
       <>
-        <h1 className="title">Board not found</h1>
+        <h1 className="title">Board Not Found</h1>
         <p className="sub-line"><Link to="/">← Back to dashboard</Link></p>
       </>
     )
@@ -100,7 +100,7 @@ export default function Board({ reloadBoards }) {
             cards={cards.filter((c) => c.status === status).sort((a, b) => a.position - b.position)}
             onMove={moveCard}
             onOpen={setTicket}
-            footer={status === 'business' ? <button className="add-card" onClick={() => setTicket('new')}>+ Add card</button> : null}
+            footer={status === 'business' ? <button className="add-card" onClick={() => setTicket('new')}>+ Add Card</button> : null}
           />
         ))}
       </div>

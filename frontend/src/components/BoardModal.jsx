@@ -51,14 +51,14 @@ export default function BoardModal({ initial, onSaved, onClose }) {
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !picking && onClose()}>
-      <form className="modal" role="dialog" aria-modal="true" aria-label={initial ? 'Edit board' : 'New board'} onSubmit={submit}>
+      <form className="modal" role="dialog" aria-modal="true" aria-label={initial ? 'Edit Board' : 'New Board'} onSubmit={submit}>
         <div className="modal-head">
-          <h2>{initial ? 'Edit board' : 'New board'}</h2>
+          <h2>{initial ? 'Edit Board' : 'New Board'}</h2>
           <p>One board per product. Add the folders its agents may read and edit.</p>
         </div>
 
         <label className="field">
-          <span>Product name</span>
+          <span>Product Name</span>
           <input ref={nameRef} placeholder="e.g. Harbor App" maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
         </label>
 
@@ -84,7 +84,7 @@ export default function BoardModal({ initial, onSaved, onClose }) {
             </ul>
           )}
           <button type="button" className="add-folder" onClick={addFolder} disabled={picking}>
-            {picking ? 'Waiting for Finder…' : folders.length ? '+ Add another folder' : '+ Choose a folder…'}
+            {picking ? 'Waiting for Finder…' : folders.length ? '+ Add Another Folder' : '+ Choose a Folder…'}
           </button>
         </div>
 
@@ -92,7 +92,7 @@ export default function BoardModal({ initial, onSaved, onClose }) {
         <div className="modal-actions">
           <button type="button" onClick={onClose} disabled={picking}>Cancel</button>
           <button className="primary" type="submit" disabled={busy || picking || !name.trim()}>
-            {initial ? 'Save changes' : 'Create board'}
+            {initial ? 'Save Changes' : 'Create Board'}
           </button>
         </div>
       </form>

@@ -8,7 +8,7 @@ const STATUSES = ['business', 'agent', 'qa', 'done']
 
 function greeting() {
   const h = new Date().getHours()
-  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
+  return h < 12 ? 'Good Morning' : h < 18 ? 'Good Afternoon' : 'Good Evening'
 }
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -66,10 +66,10 @@ export default function Dashboard({ user, boards, reload, onNew, onEdit }) {
             </div>
           </div>
         ))}
-        <button className="add-tile" onClick={onNew}>+ Add a product</button>
+        <button className="add-tile" onClick={onNew}>+ Add a Product</button>
       </div>
 
-      <div className="section-title"><span className="pulse" />Agents at work</div>
+      <div className="section-title"><span className="pulse" />Agents at Work</div>
       <div className="panel"><span className="muted">All quiet on deck. No agents are running.</span></div>
     </>
   )

@@ -16,7 +16,7 @@ export default function Column({ status, label, dot, cards, onMove, onOpen, foot
   }
 
   const [emptyTitle, emptyHint] =
-    status === 'business' ? ['No cards yet', 'Add one to get started.'] : ['Nothing here yet', 'Drop a card to review it.']
+    status === 'business' ? ['No Cards Yet', 'Add one to get started.'] : ['Nothing Here Yet', 'Drop a card to review it.']
 
   return (
     <section

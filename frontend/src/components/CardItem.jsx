@@ -1,3 +1,6 @@
+// Markdown -> one short plain-text line for the card preview.
+const plain = (md) => md.replace(/```[\s\S]*?```/g, ' ').replace(/[#>*_`~\[\]()!-]+/g, ' ').replace(/\s+/g, ' ').trim()
+
 // A draggable kanban card; click opens the ticket modal.
 export default function CardItem({ card, onOpen, onDropOn }) {
   return (
@@ -10,7 +13,7 @@ export default function CardItem({ card, onOpen, onDropOn }) {
       onClick={() => onOpen(card)}
     >
       <div className="kcard-title">{card.title}</div>
-      {card.description && <div className="kcard-desc">{card.description}</div>}
+      {plain(card.description) && <div className="kcard-desc">{plain(card.description)}</div>}
       {card.deadline && (
         <span className="deadline-chip" title="Deadline">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

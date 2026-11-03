@@ -135,3 +135,13 @@
   ```bash
   git add -A && git commit -m "feat(ui): ticket modal replaces inline card forms"
   ```
+
+---
+
+### Task 4 (added during execution): Rich-text description and Title Case UI
+
+Requested by the user after Task 3: "Description harus bisa di edit kaya paragraph, list, pasang WYSIWYG yang oke … lengkap kaya Jira" and "New Capital, Create Ticket" (Title Case for titles/buttons/labels).
+
+- Description editor: Tiptap 3 (`@tiptap/react`, `starter-kit`, `markdown`, `extension-list` for task lists, `extensions` for placeholder) in `components/RichEditor.jsx`; toolbar: text style (paragraph/H1-3), bold, italic, strike, inline code, bullet/numbered/task list, quote, code block, divider, link, undo/redo.
+- Ruling: the description is stored as **Markdown** in the existing `description` column (no schema change): readable for `claude -p`, no HTML sanitising needed, plain-text preview on cards via a small stripper. Costs if wrong: tables/images are not supported yet; old plain-text descriptions render as Markdown paragraphs.
+- Title Case applied to headings, buttons, field labels, empty-state titles; sentences, placeholders and confirm messages stay sentence case.

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import RichEditor from './RichEditor'
 
 const STATUS_LABEL = { business: 'Business', agent: 'Agent', qa: 'QA', done: 'Done' }
 
@@ -74,9 +75,9 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && requestClose()}>
-      <form className="modal ticket" role="dialog" aria-modal="true" aria-label={current ? 'Edit ticket' : 'New ticket'} onSubmit={save}>
+      <form className="modal ticket" role="dialog" aria-modal="true" aria-label={current ? 'Edit Ticket' : 'New Ticket'} onSubmit={save}>
         <div className="ticket-head">
-          <h2>{current ? 'Edit ticket' : 'New ticket'}</h2>
+          <h2>{current ? 'Edit Ticket' : 'New Ticket'}</h2>
           <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}>×</button>
         </div>
 
@@ -86,11 +87,11 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
               <span>Title</span>
               <input ref={titleRef} placeholder="What needs to happen?" maxLength={200} value={title} onChange={edit(setTitle)} />
             </label>
-            <label className="field">
+            <div className="field">
               <span>Description</span>
-              <textarea rows={9} maxLength={10000} placeholder="Describe the change and what “done” looks like."
-                value={description} onChange={edit(setDescription)} />
-            </label>
+              <RichEditor value={description} placeholder="Describe the change and what “done” looks like."
+                onChange={(v) => { setDescription(v); setSaved(false) }} />
+            </div>
           </div>
 
           <aside className="ticket-side">
@@ -101,7 +102,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
             <div className="field">
               <span>Deadline</span>
               <input type="date" value={deadline} onChange={edit(setDeadline)} />
-              {deadline && <button type="button" className="link" onClick={() => { setDeadline(''); setSaved(false) }}>Clear deadline</button>}
+              {deadline && <button type="button" className="link" onClick={() => { setDeadline(''); setSaved(false) }}>Clear Deadline</button>}
             </div>
             <div className="field">
               <span>Approval</span>
@@ -118,7 +119,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
           {saved && !dirty && <span className="saved">Saved ✓</span>}
           <button type="button" onClick={requestClose}>Close</button>
           <button className="primary" type="submit" disabled={busy || !title.trim() || (current && !dirty)}>
-            {current ? 'Save changes' : 'Create ticket'}
+            {current ? 'Save Changes' : 'Create Ticket'}
           </button>
         </div>
       </form>
