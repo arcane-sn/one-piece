@@ -13,6 +13,39 @@ type Board struct {
 	ID      int64    `json:"id"`
 	Name    string   `json:"name"`
 	Folders []string `json:"folders"`
+	// Counts is the number of cards per status (all four keys always present).
+	Counts map[string]int `json:"counts"`
+}
+
+func zeroCounts() map[string]int {
+	m := make(map[string]int, len(Statuses))
+	for _, s := range Statuses {
+		m[s] = 0
+	}
+	return m
+}
+
+// cardCounts returns per-status card counts keyed by board id; boardID 0 means all boards.
+func (s *Store) cardCounts(boardID int64) (map[int64]map[string]int, error) {
+	rows, err := s.DB.Query(`SELECT board_id,status,COUNT(*) FROM cards WHERE ?=0 OR board_id=? GROUP BY board_id,status`, boardID, boardID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]map[string]int{}
+	for rows.Next() {
+		var id int64
+		var st string
+		var n int
+		if err := rows.Scan(&id, &st, &n); err != nil {
+			return nil, err
+		}
+		if out[id] == nil {
+			out[id] = zeroCounts()
+		}
+		out[id][st] = n
+	}
+	return out, rows.Err()
 }
 
 func cleanName(name string) (string, error) {
@@ -82,7 +115,7 @@ func (s *Store) CreateBoard(name string, folders []string) (Board, error) {
 	if err := tx.Commit(); err != nil {
 		return Board{}, err
 	}
-	return Board{ID: id, Name: name, Folders: folders}, nil
+	return Board{ID: id, Name: name, Folders: folders, Counts: zeroCounts()}, nil
 }
 
 func (s *Store) ListBoards() ([]Board, error) {
@@ -93,7 +126,7 @@ func (s *Store) ListBoards() ([]Board, error) {
 		return nil, err
 	}
 	for rows.Next() {
-		b := Board{Folders: []string{}}
+		b := Board{Folders: []string{}, Counts: zeroCounts()}
 		if err := rows.Scan(&b.ID, &b.Name); err != nil {
 			rows.Close()
 			return nil, err
@@ -117,11 +150,24 @@ func (s *Store) ListBoards() ([]Board, error) {
 			boards[i].Folders = append(boards[i].Folders, p)
 		}
 	}
-	return boards, frows.Err()
+	if err := frows.Err(); err != nil {
+		return nil, err
+	}
+	frows.Close() // single connection: release before the counts query
+	counts, err := s.cardCounts(0)
+	if err != nil {
+		return nil, err
+	}
+	for i := range boards {
+		if c, ok := counts[boards[i].ID]; ok {
+			boards[i].Counts = c
+		}
+	}
+	return boards, nil
 }
 
 func (s *Store) GetBoard(id int64) (Board, error) {
-	b := Board{ID: id, Folders: []string{}}
+	b := Board{ID: id, Folders: []string{}, Counts: zeroCounts()}
 	err := s.DB.QueryRow(`SELECT name FROM boards WHERE id=?`, id).Scan(&b.Name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Board{}, ErrNotFound
@@ -141,7 +187,18 @@ func (s *Store) GetBoard(id int64) (Board, error) {
 		}
 		b.Folders = append(b.Folders, p)
 	}
-	return b, rows.Err()
+	if err := rows.Err(); err != nil {
+		return Board{}, err
+	}
+	rows.Close() // single connection: release before the counts query
+	counts, err := s.cardCounts(id)
+	if err != nil {
+		return Board{}, err
+	}
+	if c, ok := counts[id]; ok {
+		b.Counts = c
+	}
+	return b, nil
 }
 
 func (s *Store) UpdateBoard(id int64, name string, folders []string) (Board, error) {
@@ -174,7 +231,7 @@ func (s *Store) UpdateBoard(id int64, name string, folders []string) (Board, err
 	if err := tx.Commit(); err != nil {
 		return Board{}, err
 	}
-	return Board{ID: id, Name: name, Folders: folders}, nil
+	return s.GetBoard(id)
 }
 
 func (s *Store) DeleteBoard(id int64) error {

@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { api } from '../api'
+import { api, baseName } from '../api'
 import Column from '../components/Column'
+import { FolderIcon } from '../components/Logo'
 
 const COLUMNS = [
-  ['business', 'Business'],
-  ['agent', 'Agent'],
-  ['qa', 'QA'],
-  ['done', 'Done'],
+  ['business', 'Business', '#EA9259'],
+  ['agent', 'Agent', '#D65A42'],
+  ['qa', 'QA', '#3B2417'],
+  ['done', 'Done', '#7FC9C9'],
 ]
 
 function AddCard({ onAdd }) {
+  const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
 
@@ -19,18 +21,23 @@ function AddCard({ onAdd }) {
     if (await onAdd(title, desc)) {
       setTitle('')
       setDesc('')
+      setOpen(false)
     }
   }
+  if (!open) return <button className="add-card" onClick={() => setOpen(true)}>+ Add card</button>
   return (
     <form className="form" onSubmit={submit}>
-      <input placeholder="Card title" value={title} onChange={(e) => setTitle(e.target.value)} />
+      <input autoFocus placeholder="Card title" value={title} onChange={(e) => setTitle(e.target.value)} />
       <textarea rows={2} placeholder="Description (optional)" value={desc} onChange={(e) => setDesc(e.target.value)} />
-      <button type="submit" disabled={!title.trim()}>+ Add card</button>
+      <div className="row">
+        <button className="primary" type="submit" disabled={!title.trim()} style={{ height: 36 }}>Add card</button>
+        <button type="button" onClick={() => setOpen(false)}>Cancel</button>
+      </div>
     </form>
   )
 }
 
-export default function Board() {
+export default function Board({ reloadBoards }) {
   const { id } = useParams()
   const [board, setBoard] = useState(null) // null = loading, false = not found
   const [cards, setCards] = useState([])
@@ -52,6 +59,7 @@ export default function Board() {
     setError('')
     try {
       await fn()
+      reloadBoards() // keep sidebar counts fresh
       return true
     } catch (e) {
       setError(e.message)
@@ -93,8 +101,10 @@ export default function Board() {
         (s === status ? target : col(s).filter((c) => c.id !== cardId)).map((c, i) => ({ ...c, status: s, position: i })),
       ),
     )
+    setError('')
     try {
       await api(`/api/cards/${cardId}/move`, { method: 'POST', body: { status, position: pos } })
+      reloadBoards()
     } catch (e) {
       setError(e.message)
       load()
@@ -104,8 +114,8 @@ export default function Board() {
   if (board === false) {
     return (
       <>
-        <p>Board not found.</p>
-        <Link to="/">← Back to dashboard</Link>
+        <h1 className="title">Board not found</h1>
+        <p className="sub-line"><Link to="/">← Back to dashboard</Link></p>
       </>
     )
   }
@@ -113,16 +123,24 @@ export default function Board() {
 
   return (
     <>
-      <Link to="/">← Dashboard</Link>
-      <h2>{board.name}</h2>
-      <p className="muted">{board.folders.length ? board.folders.join(' · ') : 'No folders yet'}</p>
-      {error && <p className="error">{error}</p>}
+      <div className="crumb"><Link to="/">Boards</Link> / {board.name}</div>
+      <div className="page-head">
+        <h1 className="title">{board.name}</h1>
+        <div className="chips right">
+          {board.folders.length === 0 && <span className="muted">No folders yet</span>}
+          {board.folders.map((f) => (
+            <span className="chip soft" key={f} title={f}><FolderIcon />{baseName(f)}</span>
+          ))}
+        </div>
+      </div>
+      {error && <p className="error" style={{ marginBottom: 16 }}>{error}</p>}
       <div className="columns">
-        {COLUMNS.map(([status, label]) => (
+        {COLUMNS.map(([status, label, dot]) => (
           <Column
             key={status}
             status={status}
             label={label}
+            dot={dot}
             cards={cards.filter((c) => c.status === status).sort((a, b) => a.position - b.position)}
             onMove={moveCard}
             onSave={saveCard}

@@ -1,10 +1,28 @@
-import { useEffect, useState } from 'react'
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { api } from './api'
-import Logo from './components/Logo'
+import Sidebar from './components/Sidebar'
 import Board from './pages/Board'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
+
+function Shell({ user, onLogout }) {
+  const [boards, setBoards] = useState(null) // null = loading
+  const reload = useCallback(() => api('/api/boards').then(setBoards).catch(() => setBoards((b) => b ?? [])), [])
+  useEffect(() => { reload() }, [reload])
+
+  return (
+    <>
+      <Sidebar user={user} boards={boards ?? []} onLogout={onLogout} />
+      <main className="main">
+        <Routes>
+          <Route path="/" element={<Dashboard user={user} boards={boards} reload={reload} />} />
+          <Route path="/boards/:id" element={<Board reloadBoards={reload} />} />
+        </Routes>
+      </main>
+    </>
+  )
+}
 
 export default function App() {
   const [user, setUser] = useState(undefined) // undefined = loading, null = logged out
@@ -13,7 +31,7 @@ export default function App() {
     api('/api/me').then((r) => setUser(r.username)).catch(() => setUser(null))
   }, [])
 
-  if (user === undefined) return <p className="muted">Loading…</p>
+  if (user === undefined) return <p className="muted" style={{ padding: 24 }}>Loading…</p>
   if (!user) return <Login onLoggedIn={setUser} />
 
   async function logout() {
@@ -23,18 +41,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <header className="topbar">
-        <Link to="/" className="brand"><Logo size={28} /></Link>
-        <span>
-          {user} <button onClick={logout}>Log out</button>
-        </span>
-      </header>
-      <main className="container">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/boards/:id" element={<Board />} />
-        </Routes>
-      </main>
+      <Shell user={user} onLogout={logout} />
     </BrowserRouter>
   )
 }

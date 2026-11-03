@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import CardItem from './CardItem'
+import Logo from './Logo'
 
 // One kanban column. Dropping on a card inserts before it; dropping on the
 // column itself appends to the end.
-export default function Column({ status, label, cards, onMove, onSave, onDelete, footer }) {
+export default function Column({ status, label, dot, cards, onMove, onSave, onDelete, footer }) {
   const [over, setOver] = useState(false)
 
   function drop(e, index) {
@@ -14,6 +15,9 @@ export default function Column({ status, label, cards, onMove, onSave, onDelete,
     if (id) onMove(id, status, index)
   }
 
+  const [emptyTitle, emptyHint] =
+    status === 'business' ? ['No cards yet', 'Add one to get started.'] : ['Nothing here yet', 'Drop a card to review it.']
+
   return (
     <section
       className={'column' + (over ? ' over' : '')}
@@ -21,10 +25,20 @@ export default function Column({ status, label, cards, onMove, onSave, onDelete,
       onDragLeave={() => setOver(false)}
       onDrop={(e) => drop(e, cards.length)}
     >
-      <h3>{label} · {cards.length}</h3>
+      <div className="col-head">
+        <span className="col-title"><span className="dot" style={{ background: dot }} />{label}</span>
+        <span className="col-count">{cards.length}</span>
+      </div>
       {cards.map((c, i) => (
         <CardItem key={c.id} card={c} onSave={onSave} onDelete={onDelete} onDropOn={(e) => drop(e, i)} />
       ))}
+      {cards.length === 0 && (
+        <div className="col-empty">
+          <Logo glyph size={32} />
+          <b>{emptyTitle}</b>
+          <span>{emptyHint}</span>
+        </div>
+      )}
       {footer}
     </section>
   )

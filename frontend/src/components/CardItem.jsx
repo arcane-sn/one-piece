@@ -18,11 +18,11 @@ export default function CardItem({ card, onSave, onDelete, onDropOn }) {
 
   if (editing) {
     return (
-      <form className="kcard form" onSubmit={save} style={{ cursor: 'default' }}>
+      <form className="kcard editing form" onSubmit={save}>
         <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} />
         <textarea rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} />
         <div className="row">
-          <button className="primary" type="submit" disabled={!title.trim()}>Save</button>
+          <button className="primary" type="submit" disabled={!title.trim()} style={{ height: 36 }}>Save</button>
           <button type="button" onClick={cancel}>Cancel</button>
         </div>
       </form>
@@ -37,11 +37,11 @@ export default function CardItem({ card, onSave, onDelete, onDropOn }) {
       onDrop={onDropOn}
       onClick={() => setEditing(true)}
     >
-      <div className="row">
-        <strong>{card.title}</strong>
-        <button className="danger" title="Delete" onClick={(e) => { e.stopPropagation(); onDelete(card) }}>×</button>
+      <div className="kcard-top">
+        <div className="kcard-title">{card.title}</div>
+        <button className="icon-btn" title="Delete" aria-label="Delete card" onClick={(e) => { e.stopPropagation(); onDelete(card) }}>×</button>
       </div>
-      {card.description && <p>{card.description}</p>}
+      {card.description && <div className="kcard-desc">{card.description}</div>}
     </div>
   )
 }

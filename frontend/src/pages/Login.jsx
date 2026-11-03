@@ -17,7 +17,7 @@ export default function Login({ onLoggedIn }) {
       const me = await api('/api/me')
       onLoggedIn(me.username)
     } catch (err) {
-      setError(err.status === 401 ? 'Wrong username or password' : err.message)
+      setError(err.status === 401 ? "Username or password doesn't match. Check both and try again." : err.message)
     } finally {
       setBusy(false)
     }
@@ -25,16 +25,19 @@ export default function Login({ onLoggedIn }) {
 
   return (
     <div className="login-page">
-      <form className="login glass" onSubmit={submit}>
+      <form className="login" onSubmit={submit}>
         <Logo size={56} wordmark={false} />
-        <h1>Welcome back, captain</h1>
-        <p className="muted">Pick up where your agents left off.</p>
-        <input placeholder="Username" autoFocus autoComplete="username" value={username}
+        <h1>Ready when you are</h1>
+        <p className="sub">Sign in to see what your agents have finished.</p>
+        <input placeholder="Username" autoFocus autoComplete="username" value={username} aria-invalid={!!error}
           onChange={(e) => setUsername(e.target.value)} />
-        <input placeholder="Password" type="password" autoComplete="current-password" value={password}
+        <input placeholder="Password" type="password" autoComplete="current-password" value={password} aria-invalid={!!error}
           onChange={(e) => setPassword(e.target.value)} />
         {error && <p className="error">{error}</p>}
-        <button className="primary" type="submit" disabled={busy || !username || !password}>Set sail</button>
+        <button className="primary" type="submit" disabled={busy || !username || !password}>
+          {busy && <span className="spinner" />}
+          {busy ? 'Signing in…' : 'Sign in'}
+        </button>
       </form>
     </div>
   )

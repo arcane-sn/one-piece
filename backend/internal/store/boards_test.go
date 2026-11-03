@@ -54,6 +54,39 @@ func TestBoardNameRejectsBlankAndTooLong(t *testing.T) {
 	}
 }
 
+func TestBoardCountsByStatus(t *testing.T) {
+	s := openTemp(t)
+	b, err := s.CreateBoard("b", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(b.Counts, map[string]int{"business": 0, "agent": 0, "qa": 0, "done": 0}) {
+		t.Errorf("fresh board counts = %v", b.Counts)
+	}
+	var ids []int64
+	for _, title := range []string{"a", "b", "c"} {
+		c, _ := s.CreateCard(b.ID, title, "")
+		ids = append(ids, c.ID)
+	}
+	s.MoveCard(ids[0], "agent", 0)
+	want := map[string]int{"business": 2, "agent": 1, "qa": 0, "done": 0}
+	list, err := s.ListBoards()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(list[0].Counts, want) {
+		t.Errorf("ListBoards counts = %v, want %v", list[0].Counts, want)
+	}
+	got, _ := s.GetBoard(b.ID)
+	if !reflect.DeepEqual(got.Counts, want) {
+		t.Errorf("GetBoard counts = %v, want %v", got.Counts, want)
+	}
+	upd, _ := s.UpdateBoard(b.ID, "renamed", nil)
+	if !reflect.DeepEqual(upd.Counts, want) {
+		t.Errorf("UpdateBoard counts = %v, want %v", upd.Counts, want)
+	}
+}
+
 func TestDeleteBoardRemovesCards(t *testing.T) {
 	s := openTemp(t)
 	b, err := s.CreateBoard("b", nil)

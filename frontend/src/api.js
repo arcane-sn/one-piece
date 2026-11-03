@@ -1,3 +1,6 @@
+// Last path segment, e.g. "/Users/me/shop/web" -> "web".
+export const baseName = (p) => p.split('/').filter(Boolean).pop() || p
+
 // Thin fetch wrapper for the One Piece API.
 // The backend rejects non-GET requests without a JSON content type, so we always send it.
 export async function api(path, { method = 'GET', body } = {}) {
