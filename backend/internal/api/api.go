@@ -24,6 +24,11 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/login", s.login)
 	mux.HandleFunc("POST /api/logout", s.logout)
 	mux.HandleFunc("GET /api/me", s.me)
+	mux.HandleFunc("GET /api/boards", s.listBoards)
+	mux.HandleFunc("POST /api/boards", s.createBoard)
+	mux.HandleFunc("GET /api/boards/{id}", s.getBoard)
+	mux.HandleFunc("PUT /api/boards/{id}", s.updateBoard)
+	mux.HandleFunc("DELETE /api/boards/{id}", s.deleteBoard)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 	})
