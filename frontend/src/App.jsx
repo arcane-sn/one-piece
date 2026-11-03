@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
 import { api } from './api'
+import Board from './pages/Board'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
 
@@ -30,7 +31,7 @@ export default function App() {
       <main className="container">
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/boards/:id" element={<p>Board (Task 8)</p>} />
+          <Route path="/boards/:id" element={<Board />} />
         </Routes>
       </main>
     </BrowserRouter>
