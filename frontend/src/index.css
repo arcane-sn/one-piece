@@ -126,7 +126,10 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 .board-link .count { font-size: 12px; font-weight: 600; color: rgba(59, 36, 23, 0.6); }
 .side-head { margin: 18px 0 6px; padding: 0 4px 0 10px; display: flex; align-items: center; justify-content: space-between; }
 .side-head .side-label { margin: 0; padding: 0; }
-.side-plus { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 8px; background: rgba(255, 255, 255, 0.55); color: var(--deep); font-size: 17px; font-weight: 700; line-height: 1; }
+.side-plus { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 8px; background: rgba(255, 255, 255, 0.55); color: var(--deep); display: grid; place-items: center; }
+.side-plus::before, .side-plus::after { content: ''; grid-area: 1 / 1; background: currentColor; border-radius: 1px; }
+.side-plus::before { width: 10px; height: 2px; }
+.side-plus::after { width: 2px; height: 10px; }
 .side-plus:hover:not(:disabled) { background: rgba(255, 255, 255, 0.95); }
 .side-user { margin-top: auto; padding: 10px 6px 0; border-top: 1px solid rgba(59, 36, 23, 0.1); display: flex; align-items: center; gap: 10px; }
 .avatar { width: 32px; height: 32px; flex: none; border-radius: 50%; background: var(--aqua); display: grid; place-items: center; font-size: 13px; font-weight: 800; }

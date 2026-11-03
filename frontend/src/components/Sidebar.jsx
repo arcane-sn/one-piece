@@ -17,7 +17,7 @@ export default function Sidebar({ user, boards, onLogout, onNewBoard }) {
       </NavLink>
       <div className="side-head">
         <span className="side-label">Boards</span>
-        <button className="side-plus" title="New board" aria-label="New board" onClick={onNewBoard}>+</button>
+        <button className="side-plus" title="New board" aria-label="New board" onClick={onNewBoard} />
       </div>
       {boards.map((b, i) => (
         <NavLink key={b.id} to={`/boards/${b.id}`} className="nav-item board-link">

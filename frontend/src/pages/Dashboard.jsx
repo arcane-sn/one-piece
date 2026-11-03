@@ -36,7 +36,6 @@ export default function Dashboard({ user, boards, reload, onNew, onEdit }) {
             {boards === null ? 'Loading…' : `${plural(boards.length, 'board')} · ${plural(cards, 'card')}`}
           </div>
         </div>
-        <button className="primary" onClick={onNew}>+ New board</button>
       </div>
 
       {error && <p className="error" style={{ marginBottom: 16 }}>{error}</p>}
