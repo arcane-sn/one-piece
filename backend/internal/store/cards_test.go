@@ -25,7 +25,7 @@ func col(t *testing.T, s *Store, boardID int64, status string) []string {
 func threeCards(t *testing.T) (*Store, int64, []Card) {
 	t.Helper()
 	s := openTemp(t)
-	b, err := s.CreateBoard("b", nil)
+	b, err := s.CreateBoard("b", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

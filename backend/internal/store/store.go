@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS sessions(
   token TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   expires_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS boards(
-  id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS board_folders(
   id INTEGER PRIMARY KEY, board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
   path TEXT NOT NULL, position INTEGER NOT NULL);
@@ -45,6 +45,14 @@ func Open(path string) (*Store, error) {
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, err
+	}
+	// Databases created before boards had a description lack the column.
+	var has int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('boards') WHERE name='description'`).Scan(&has); err == nil && has == 0 {
+		if _, err := db.Exec(`ALTER TABLE boards ADD COLUMN description TEXT NOT NULL DEFAULT ''`); err != nil {
+			db.Close()
+			return nil, err
+		}
 	}
 	return &Store{DB: db}, nil
 }

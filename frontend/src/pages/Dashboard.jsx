@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api, baseName } from '../api'
-import BoardForm from '../components/BoardForm'
 import { FolderIcon } from '../components/Logo'
 import { totalCards } from '../components/Sidebar'
 
@@ -13,15 +12,8 @@ function greeting() {
 }
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 
-export default function Dashboard({ user, boards, reload }) {
-  const location = useLocation()
-  const [editing, setEditing] = useState(location.state?.newBoard ? 'new' : null) // null | 'new' | Board
+export default function Dashboard({ user, boards, reload, onNew, onEdit }) {
   const [error, setError] = useState('')
-
-  // the sidebar's "+ New board" navigates here with state
-  useEffect(() => {
-    if (location.state?.newBoard) setEditing('new')
-  }, [location.key, location.state])
 
   async function remove(b) {
     if (!window.confirm(`Delete board "${b.name}" and all its cards?`)) return
@@ -44,18 +36,10 @@ export default function Dashboard({ user, boards, reload }) {
             {boards === null ? 'Loading…' : `${plural(boards.length, 'board')} · ${plural(cards, 'card')}`}
           </div>
         </div>
-        <button className="primary" onClick={() => setEditing('new')}>+ New board</button>
+        <button className="primary" onClick={onNew}>+ New board</button>
       </div>
 
       {error && <p className="error" style={{ marginBottom: 16 }}>{error}</p>}
-      {editing && (
-        <BoardForm
-          key={editing === 'new' ? 'new' : editing.id}
-          initial={editing === 'new' ? undefined : editing}
-          onSaved={() => { setEditing(null); reload() }}
-          onCancel={() => setEditing(null)}
-        />
-      )}
 
       <div className="board-grid">
         {(boards ?? []).map((b) => (
@@ -65,6 +49,7 @@ export default function Dashboard({ user, boards, reload }) {
                 <span className="board-name">{b.name}</span>
                 <span className="board-count">{plural(totalCards(b), 'card')}</span>
               </div>
+              {b.description && <p className="board-desc">{b.description}</p>}
               {b.folders.length > 0 && (
                 <div className="chips">
                   {b.folders.map((f) => (
@@ -77,12 +62,12 @@ export default function Dashboard({ user, boards, reload }) {
               </div>
             </Link>
             <div className="board-actions">
-              <button onClick={() => setEditing(b)}>Edit</button>
+              <button onClick={() => onEdit(b)}>Edit</button>
               <button className="danger" onClick={() => remove(b)}>Delete</button>
             </div>
           </div>
         ))}
-        <button className="add-tile" onClick={() => setEditing('new')}>+ Add a product</button>
+        <button className="add-tile" onClick={onNew}>+ Add a product</button>
       </div>
 
       <div className="section-title"><span className="pulse" />Agents at work</div>

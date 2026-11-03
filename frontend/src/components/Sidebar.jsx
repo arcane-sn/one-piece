@@ -1,11 +1,10 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import Logo from './Logo'
 
 const SWATCH = ['#EA9259', '#7FC9C9', '#D65A42']
 export const totalCards = (b) => Object.values(b.counts || {}).reduce((a, n) => a + n, 0)
 
-export default function Sidebar({ user, boards, onLogout }) {
-  const navigate = useNavigate()
+export default function Sidebar({ user, boards, onLogout, onNewBoard }) {
   return (
     <aside className="sidebar">
       <NavLink to="/" className="brand-row" aria-label="One Piece home"><Logo size={28} /></NavLink>
@@ -16,7 +15,10 @@ export default function Sidebar({ user, boards, onLogout }) {
         </svg>
         <span className="grow">Dashboard</span>
       </NavLink>
-      <div className="side-label">Boards</div>
+      <div className="side-head">
+        <span className="side-label">Boards</span>
+        <button className="side-plus" title="New board" aria-label="New board" onClick={onNewBoard}>+</button>
+      </div>
       {boards.map((b, i) => (
         <NavLink key={b.id} to={`/boards/${b.id}`} className="nav-item board-link">
           <span className="swatch" style={{ background: SWATCH[i % SWATCH.length] }} />
@@ -24,7 +26,6 @@ export default function Sidebar({ user, boards, onLogout }) {
           <span className="count">{totalCards(b)}</span>
         </NavLink>
       ))}
-      <button className="side-new" onClick={() => navigate('/', { state: { newBoard: true } })}>+ New board</button>
       <div className="side-user">
         <span className="avatar">{user.charAt(0).toUpperCase()}</span>
         <span className="grow user-name">{user}</span>

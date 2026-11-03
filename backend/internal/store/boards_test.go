@@ -10,7 +10,7 @@ import (
 
 func TestFolderRejectsRelativePath(t *testing.T) {
 	s := openTemp(t)
-	if _, err := s.CreateBoard("b", []string{"relative/dir"}); !isValidation(err) {
+	if _, err := s.CreateBoard("b", "", []string{"relative/dir"}); !isValidation(err) {
 		t.Fatalf("want ValidationError, got %v", err)
 	}
 }
@@ -18,7 +18,7 @@ func TestFolderRejectsRelativePath(t *testing.T) {
 func TestFolderRejectsMissingDir(t *testing.T) {
 	s := openTemp(t)
 	missing := filepath.Join(t.TempDir(), "nope")
-	if _, err := s.CreateBoard("b", []string{missing}); !isValidation(err) {
+	if _, err := s.CreateBoard("b", "", []string{missing}); !isValidation(err) {
 		t.Fatalf("want ValidationError, got %v", err)
 	}
 }
@@ -27,7 +27,7 @@ func TestFolderRejectsFile(t *testing.T) {
 	s := openTemp(t)
 	f := filepath.Join(t.TempDir(), "file.txt")
 	os.WriteFile(f, []byte("x"), 0o644)
-	if _, err := s.CreateBoard("b", []string{f}); !isValidation(err) {
+	if _, err := s.CreateBoard("b", "", []string{f}); !isValidation(err) {
 		t.Fatalf("want ValidationError, got %v", err)
 	}
 }
@@ -36,7 +36,7 @@ func TestFolderNormalizesAndDedupes(t *testing.T) {
 	s := openTemp(t)
 	dir := t.TempDir()
 	in := []string{dir, dir + "/", filepath.Join(dir, "..", filepath.Base(dir))}
-	b, err := s.CreateBoard("b", in)
+	b, err := s.CreateBoard("b", "", in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestFolderNormalizesAndDedupes(t *testing.T) {
 func TestBoardNameRejectsBlankAndTooLong(t *testing.T) {
 	s := openTemp(t)
 	for _, name := range []string{"", "   ", strings.Repeat("a", 101)} {
-		if _, err := s.CreateBoard(name, nil); !isValidation(err) {
+		if _, err := s.CreateBoard(name, "", nil); !isValidation(err) {
 			t.Errorf("name %q: want ValidationError, got %v", name, err)
 		}
 	}
@@ -56,7 +56,7 @@ func TestBoardNameRejectsBlankAndTooLong(t *testing.T) {
 
 func TestBoardCountsByStatus(t *testing.T) {
 	s := openTemp(t)
-	b, err := s.CreateBoard("b", nil)
+	b, err := s.CreateBoard("b", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestBoardCountsByStatus(t *testing.T) {
 	if !reflect.DeepEqual(got.Counts, want) {
 		t.Errorf("GetBoard counts = %v, want %v", got.Counts, want)
 	}
-	upd, _ := s.UpdateBoard(b.ID, "renamed", nil)
+	upd, _ := s.UpdateBoard(b.ID, "renamed", "", nil)
 	if !reflect.DeepEqual(upd.Counts, want) {
 		t.Errorf("UpdateBoard counts = %v, want %v", upd.Counts, want)
 	}
@@ -89,7 +89,7 @@ func TestBoardCountsByStatus(t *testing.T) {
 
 func TestDeleteBoardRemovesCards(t *testing.T) {
 	s := openTemp(t)
-	b, err := s.CreateBoard("b", nil)
+	b, err := s.CreateBoard("b", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -17,8 +17,9 @@ func pathID(r *http.Request) (int64, error) {
 }
 
 type boardIn struct {
-	Name    string   `json:"name"`
-	Folders []string `json:"folders"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Folders     []string `json:"folders"`
 }
 
 func (s *server) listBoards(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +37,7 @@ func (s *server) createBoard(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	b, err := s.st.CreateBoard(in.Name, in.Folders)
+	b, err := s.st.CreateBoard(in.Name, in.Description, in.Folders)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -69,7 +70,7 @@ func (s *server) updateBoard(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	b, err := s.st.UpdateBoard(id, in.Name, in.Folders)
+	b, err := s.st.UpdateBoard(id, in.Name, in.Description, in.Folders)
 	if err != nil {
 		writeErr(w, err)
 		return

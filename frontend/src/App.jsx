@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { api } from './api'
+import BoardModal from './components/BoardModal'
 import Sidebar from './components/Sidebar'
 import Board from './pages/Board'
 import Dashboard from './pages/Dashboard'
@@ -8,18 +9,31 @@ import Login from './pages/Login'
 
 function Shell({ user, onLogout }) {
   const [boards, setBoards] = useState(null) // null = loading
+  const [modal, setModal] = useState(null) // null | 'new' | Board (edit)
+  const navigate = useNavigate()
   const reload = useCallback(() => api('/api/boards').then(setBoards).catch(() => setBoards((b) => b ?? [])), [])
   useEffect(() => { reload() }, [reload])
+  const closeModal = useCallback(() => setModal(null), [])
+
+  function saved(board) {
+    const created = modal === 'new'
+    setModal(null)
+    reload()
+    if (created) navigate(`/boards/${board.id}`)
+  }
 
   return (
     <>
-      <Sidebar user={user} boards={boards ?? []} onLogout={onLogout} />
+      <Sidebar user={user} boards={boards ?? []} onLogout={onLogout} onNewBoard={() => setModal('new')} />
       <main className="main">
         <Routes>
-          <Route path="/" element={<Dashboard user={user} boards={boards} reload={reload} />} />
+          <Route path="/" element={<Dashboard user={user} boards={boards} reload={reload} onNew={() => setModal('new')} onEdit={setModal} />} />
           <Route path="/boards/:id" element={<Board reloadBoards={reload} />} />
         </Routes>
       </main>
+      {modal && (
+        <BoardModal key={modal === 'new' ? 'new' : modal.id} initial={modal === 'new' ? undefined : modal} onSaved={saved} onClose={closeModal} />
+      )}
     </>
   )
 }

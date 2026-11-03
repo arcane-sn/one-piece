@@ -10,9 +10,10 @@ import (
 )
 
 type Board struct {
-	ID      int64    `json:"id"`
-	Name    string   `json:"name"`
-	Folders []string `json:"folders"`
+	ID          int64    `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Folders     []string `json:"folders"`
 	// Counts is the number of cards per status (all four keys always present).
 	Counts map[string]int `json:"counts"`
 }
@@ -56,6 +57,14 @@ func cleanName(name string) (string, error) {
 	return name, nil
 }
 
+func cleanDescription(d string) (string, error) {
+	d = strings.TrimSpace(d)
+	if utf8.RuneCountInString(d) > 500 {
+		return "", ValidationError{"description must be at most 500 characters"}
+	}
+	return d, nil
+}
+
 // cleanFolders trims, requires absolute existing directories, normalizes with
 // filepath.Clean and drops duplicates (keeping first-seen order). Blank entries are skipped.
 func cleanFolders(in []string) ([]string, error) {
@@ -90,8 +99,12 @@ func saveFolders(tx *sql.Tx, boardID int64, folders []string) error {
 	return nil
 }
 
-func (s *Store) CreateBoard(name string, folders []string) (Board, error) {
+func (s *Store) CreateBoard(name, description string, folders []string) (Board, error) {
 	name, err := cleanName(name)
+	if err != nil {
+		return Board{}, err
+	}
+	description, err = cleanDescription(description)
 	if err != nil {
 		return Board{}, err
 	}
@@ -104,7 +117,7 @@ func (s *Store) CreateBoard(name string, folders []string) (Board, error) {
 		return Board{}, err
 	}
 	defer tx.Rollback()
-	res, err := tx.Exec(`INSERT INTO boards(name) VALUES(?)`, name)
+	res, err := tx.Exec(`INSERT INTO boards(name,description) VALUES(?,?)`, name, description)
 	if err != nil {
 		return Board{}, err
 	}
@@ -115,19 +128,19 @@ func (s *Store) CreateBoard(name string, folders []string) (Board, error) {
 	if err := tx.Commit(); err != nil {
 		return Board{}, err
 	}
-	return Board{ID: id, Name: name, Folders: folders, Counts: zeroCounts()}, nil
+	return Board{ID: id, Name: name, Description: description, Folders: folders, Counts: zeroCounts()}, nil
 }
 
 func (s *Store) ListBoards() ([]Board, error) {
 	boards := []Board{}
 	idx := map[int64]int{}
-	rows, err := s.DB.Query(`SELECT id,name FROM boards ORDER BY id`)
+	rows, err := s.DB.Query(`SELECT id,name,description FROM boards ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
 		b := Board{Folders: []string{}, Counts: zeroCounts()}
-		if err := rows.Scan(&b.ID, &b.Name); err != nil {
+		if err := rows.Scan(&b.ID, &b.Name, &b.Description); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -168,7 +181,7 @@ func (s *Store) ListBoards() ([]Board, error) {
 
 func (s *Store) GetBoard(id int64) (Board, error) {
 	b := Board{ID: id, Folders: []string{}, Counts: zeroCounts()}
-	err := s.DB.QueryRow(`SELECT name FROM boards WHERE id=?`, id).Scan(&b.Name)
+	err := s.DB.QueryRow(`SELECT name,description FROM boards WHERE id=?`, id).Scan(&b.Name, &b.Description)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Board{}, ErrNotFound
 	}
@@ -201,8 +214,12 @@ func (s *Store) GetBoard(id int64) (Board, error) {
 	return b, nil
 }
 
-func (s *Store) UpdateBoard(id int64, name string, folders []string) (Board, error) {
+func (s *Store) UpdateBoard(id int64, name, description string, folders []string) (Board, error) {
 	name, err := cleanName(name)
+	if err != nil {
+		return Board{}, err
+	}
+	description, err = cleanDescription(description)
 	if err != nil {
 		return Board{}, err
 	}
@@ -215,7 +232,7 @@ func (s *Store) UpdateBoard(id int64, name string, folders []string) (Board, err
 		return Board{}, err
 	}
 	defer tx.Rollback()
-	res, err := tx.Exec(`UPDATE boards SET name=? WHERE id=?`, name, id)
+	res, err := tx.Exec(`UPDATE boards SET name=?, description=? WHERE id=?`, name, description, id)
 	if err != nil {
 		return Board{}, err
 	}
