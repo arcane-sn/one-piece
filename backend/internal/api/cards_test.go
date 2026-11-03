@@ -76,3 +76,23 @@ func TestCardOnMissingBoardIs404(t *testing.T) {
 		t.Errorf("create: %d, want 404", resp.StatusCode)
 	}
 }
+
+func TestCardDeadlineOverAPI(t *testing.T) {
+	s := newTestServer(t)
+	c := s.login(t)
+	bp := newBoardPath(t, s, c)
+
+	resp, body := s.req(t, "POST", bp+"/cards", map[string]string{"title": "x", "deadline": "2026-12-31"}, c)
+	var card store.Card
+	json.Unmarshal(body, &card)
+	if resp.StatusCode != 201 || card.Deadline != "2026-12-31" {
+		t.Fatalf("create: %d %s", resp.StatusCode, body)
+	}
+	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
+	if resp, _ = s.req(t, "PUT", cp, map[string]string{"title": "x", "deadline": "nope"}, c); resp.StatusCode != 400 {
+		t.Fatalf("bad deadline should be 400, got %d", resp.StatusCode)
+	}
+	if resp, _ = s.req(t, "POST", bp+"/cards", map[string]string{"title": "y", "deadline": "nope"}, c); resp.StatusCode != 400 {
+		t.Fatalf("bad deadline on create should be 400, got %d", resp.StatusCode)
+	}
+}

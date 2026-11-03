@@ -65,7 +65,7 @@ func TestBoardCountsByStatus(t *testing.T) {
 	}
 	var ids []int64
 	for _, title := range []string{"a", "b", "c"} {
-		c, _ := s.CreateCard(b.ID, title, "")
+		c, _ := s.CreateCard(b.ID, title, "", "")
 		ids = append(ids, c.ID)
 	}
 	s.MoveCard(ids[0], "agent", 0)

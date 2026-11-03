@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -12,6 +13,7 @@ type Card struct {
 	BoardID     int64  `json:"boardId"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
+	Deadline    string `json:"deadline"` // "" or YYYY-MM-DD
 	Status      string `json:"status"`
 	Position    int    `json:"position"`
 }
@@ -26,6 +28,18 @@ func validStatus(s string) bool {
 		}
 	}
 	return false
+}
+
+// cleanDeadline accepts "" (no deadline) or a strict YYYY-MM-DD date.
+func cleanDeadline(d string) (string, error) {
+	d = strings.TrimSpace(d)
+	if d == "" {
+		return "", nil
+	}
+	if t, err := time.Parse("2006-01-02", d); err != nil || t.Format("2006-01-02") != d {
+		return "", ValidationError{"deadline must be a date like 2026-12-31"}
+	}
+	return d, nil
 }
 
 func cleanCard(title, desc string) (string, string, error) {
@@ -43,11 +57,11 @@ type queryer interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
-const cardCols = `id,board_id,title,description,status,position`
+const cardCols = `id,board_id,title,description,deadline,status,position`
 
 func scanCard(row *sql.Row) (Card, error) {
 	var c Card
-	err := row.Scan(&c.ID, &c.BoardID, &c.Title, &c.Description, &c.Status, &c.Position)
+	err := row.Scan(&c.ID, &c.BoardID, &c.Title, &c.Description, &c.Deadline, &c.Status, &c.Position)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Card{}, ErrNotFound
 	}
@@ -58,7 +72,7 @@ func getCard(q queryer, id int64) (Card, error) {
 	return scanCard(q.QueryRow(`SELECT `+cardCols+` FROM cards WHERE id=?`, id))
 }
 
-func (s *Store) CreateCard(boardID int64, title, description string) (Card, error) {
+func (s *Store) CreateCard(boardID int64, title, description, deadline string) (Card, error) {
 	if _, err := s.GetBoard(boardID); err != nil {
 		return Card{}, err
 	}
@@ -66,9 +80,12 @@ func (s *Store) CreateCard(boardID int64, title, description string) (Card, erro
 	if err != nil {
 		return Card{}, err
 	}
-	res, err := s.DB.Exec(`INSERT INTO cards(board_id,title,description,status,position)
-		VALUES(?,?,?,'business',(SELECT COALESCE(MAX(position)+1,0) FROM cards WHERE board_id=? AND status='business'))`,
-		boardID, title, description, boardID)
+	if deadline, err = cleanDeadline(deadline); err != nil {
+		return Card{}, err
+	}
+	res, err := s.DB.Exec(`INSERT INTO cards(board_id,title,description,deadline,status,position)
+		VALUES(?,?,?,?,'business',(SELECT COALESCE(MAX(position)+1,0) FROM cards WHERE board_id=? AND status='business'))`,
+		boardID, title, description, deadline, boardID)
 	if err != nil {
 		return Card{}, err
 	}
@@ -89,7 +106,7 @@ func (s *Store) ListCards(boardID int64) ([]Card, error) {
 	cards := []Card{}
 	for rows.Next() {
 		var c Card
-		if err := rows.Scan(&c.ID, &c.BoardID, &c.Title, &c.Description, &c.Status, &c.Position); err != nil {
+		if err := rows.Scan(&c.ID, &c.BoardID, &c.Title, &c.Description, &c.Deadline, &c.Status, &c.Position); err != nil {
 			return nil, err
 		}
 		cards = append(cards, c)
@@ -97,12 +114,15 @@ func (s *Store) ListCards(boardID int64) ([]Card, error) {
 	return cards, rows.Err()
 }
 
-func (s *Store) UpdateCard(id int64, title, description string) (Card, error) {
+func (s *Store) UpdateCard(id int64, title, description, deadline string) (Card, error) {
 	title, description, err := cleanCard(title, description)
 	if err != nil {
 		return Card{}, err
 	}
-	res, err := s.DB.Exec(`UPDATE cards SET title=?, description=? WHERE id=?`, title, description, id)
+	if deadline, err = cleanDeadline(deadline); err != nil {
+		return Card{}, err
+	}
+	res, err := s.DB.Exec(`UPDATE cards SET title=?, description=?, deadline=? WHERE id=?`, title, description, deadline, id)
 	if err != nil {
 		return Card{}, err
 	}

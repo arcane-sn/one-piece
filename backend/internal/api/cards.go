@@ -5,6 +5,7 @@ import "net/http"
 type cardIn struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
+	Deadline    string `json:"deadline"`
 }
 
 func (s *server) listCards(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +33,7 @@ func (s *server) createCard(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	c, err := s.st.CreateCard(id, in.Title, in.Description)
+	c, err := s.st.CreateCard(id, in.Title, in.Description, in.Deadline)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -51,7 +52,7 @@ func (s *server) updateCard(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	c, err := s.st.UpdateCard(id, in.Title, in.Description)
+	c, err := s.st.UpdateCard(id, in.Title, in.Description, in.Deadline)
 	if err != nil {
 		writeErr(w, err)
 		return

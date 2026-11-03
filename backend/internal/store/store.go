@@ -30,9 +30,22 @@ CREATE TABLE IF NOT EXISTS board_folders(
   path TEXT NOT NULL, position INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS cards(
   id INTEGER PRIMARY KEY, board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
-  title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', deadline TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL, position INTEGER NOT NULL);
 `
+
+// addColumn adds table.column (with the given DDL type/default) when it is missing.
+func addColumn(db *sql.DB, table, column, ddl string) error {
+	var has int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name=?`, table, column).Scan(&has); err != nil {
+		return err
+	}
+	if has > 0 {
+		return nil
+	}
+	_, err := db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + ddl)
+	return err
+}
 
 // Open opens (creating if needed) the database at path and migrates it.
 func Open(path string) (*Store, error) {
@@ -46,10 +59,12 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	// Databases created before boards had a description lack the column.
-	var has int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('boards') WHERE name='description'`).Scan(&has); err == nil && has == 0 {
-		if _, err := db.Exec(`ALTER TABLE boards ADD COLUMN description TEXT NOT NULL DEFAULT ''`); err != nil {
+	// Databases created before these columns existed lack them.
+	for _, m := range [][3]string{
+		{"boards", "description", "TEXT NOT NULL DEFAULT ''"},
+		{"cards", "deadline", "TEXT NOT NULL DEFAULT ''"},
+	} {
+		if err := addColumn(db, m[0], m[1], m[2]); err != nil {
 			db.Close()
 			return nil, err
 		}

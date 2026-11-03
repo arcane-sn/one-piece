@@ -31,7 +31,7 @@ func threeCards(t *testing.T) (*Store, int64, []Card) {
 	}
 	var cs []Card
 	for _, title := range []string{"a", "b", "c"} {
-		c, err := s.CreateCard(b.ID, title, "")
+		c, err := s.CreateCard(b.ID, title, "", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,10 +53,10 @@ func TestCreateCardStartsInBusinessAtEnd(t *testing.T) {
 func TestCardTitleRejectsBlankAndTooLong(t *testing.T) {
 	s, bid, cs := threeCards(t)
 	for _, title := range []string{"", "   ", strings.Repeat("x", 201)} {
-		if _, err := s.CreateCard(bid, title, ""); !isValidation(err) {
+		if _, err := s.CreateCard(bid, title, "", ""); !isValidation(err) {
 			t.Errorf("create %q: want ValidationError, got %v", title, err)
 		}
-		if _, err := s.UpdateCard(cs[0].ID, title, ""); !isValidation(err) {
+		if _, err := s.UpdateCard(cs[0].ID, title, "", ""); !isValidation(err) {
 			t.Errorf("update %q: want ValidationError, got %v", title, err)
 		}
 	}
@@ -106,7 +106,7 @@ func TestMoveUnknownStatusRejected(t *testing.T) {
 
 func TestCreateCardOnMissingBoardIsNotFound(t *testing.T) {
 	s := openTemp(t)
-	if _, err := s.CreateCard(42, "x", ""); err != ErrNotFound {
+	if _, err := s.CreateCard(42, "x", "", ""); err != ErrNotFound {
 		t.Errorf("got %v, want ErrNotFound", err)
 	}
 }
