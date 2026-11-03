@@ -12,7 +12,7 @@ export default function Dashboard() {
   useEffect(() => { load() }, [])
 
   async function remove(b) {
-    if (!window.confirm(`Hapus board "${b.name}" beserta semua kartunya?`)) return
+    if (!window.confirm(`Delete board "${b.name}" and all its cards?`)) return
     try {
       await api(`/api/boards/${b.id}`, { method: 'DELETE' })
       load()
@@ -23,10 +23,10 @@ export default function Dashboard() {
 
   return (
     <>
-      <h2>Board</h2>
+      <h2>Boards</h2>
       {error && <p className="error">{error}</p>}
       {boards === null ? (
-        <p className="muted">Memuat…</p>
+        <p className="muted">Loading…</p>
       ) : (
         <div className="board-list">
           {boards.map((b) => (
@@ -34,12 +34,12 @@ export default function Dashboard() {
               <Link to={`/boards/${b.id}`}><strong>{b.name}</strong></Link>
               {b.folders.map((f) => <small key={f}>{f}</small>)}
               <div className="row" style={{ marginTop: '.5rem' }}>
-                <button onClick={() => setEditing(b)}>Ubah</button>
-                <button className="danger" onClick={() => remove(b)}>Hapus</button>
+                <button onClick={() => setEditing(b)}>Edit</button>
+                <button className="danger" onClick={() => remove(b)}>Delete</button>
               </div>
             </div>
           ))}
-          {boards.length === 0 && <p className="muted">Belum ada board.</p>}
+          {boards.length === 0 && <p className="muted" style={{ gridColumn: '1 / -1' }}>No boards yet. Create one for your first product.</p>}
         </div>
       )}
       {editing ? (
@@ -50,11 +50,11 @@ export default function Dashboard() {
           onCancel={() => setEditing(null)}
         />
       ) : (
-        <button className="primary" onClick={() => setEditing('new')}>+ Board baru</button>
+        <button className="primary" onClick={() => setEditing('new')}>+ New board</button>
       )}
 
-      <h2 style={{ marginTop: '2rem' }}>Sedang dikerjakan Agent</h2>
-      <p className="muted">Belum ada Agent yang berjalan</p>
+      <h2 style={{ marginTop: '2rem' }}>Agents at work</h2>
+      <p className="muted">All quiet on deck. No agents are running.</p>
     </>
   )
 }

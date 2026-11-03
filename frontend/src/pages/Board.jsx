@@ -23,9 +23,9 @@ function AddCard({ onAdd }) {
   }
   return (
     <form className="form" onSubmit={submit}>
-      <input placeholder="Judul kartu" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <textarea rows={2} placeholder="Deskripsi (opsional)" value={desc} onChange={(e) => setDesc(e.target.value)} />
-      <button type="submit" disabled={!title.trim()}>+ Tambah kartu</button>
+      <input placeholder="Card title" value={title} onChange={(e) => setTitle(e.target.value)} />
+      <textarea rows={2} placeholder="Description (optional)" value={desc} onChange={(e) => setDesc(e.target.value)} />
+      <button type="submit" disabled={!title.trim()}>+ Add card</button>
     </form>
   )
 }
@@ -104,18 +104,18 @@ export default function Board() {
   if (board === false) {
     return (
       <>
-        <p>Board tidak ditemukan.</p>
-        <Link to="/">← Kembali ke dashboard</Link>
+        <p>Board not found.</p>
+        <Link to="/">← Back to dashboard</Link>
       </>
     )
   }
-  if (board === null) return error ? <p className="error">{error}</p> : <p className="muted">Memuat…</p>
+  if (board === null) return error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>
 
   return (
     <>
       <Link to="/">← Dashboard</Link>
       <h2>{board.name}</h2>
-      <p className="muted">{board.folders.length ? board.folders.join(' · ') : 'Belum ada folder'}</p>
+      <p className="muted">{board.folders.length ? board.folders.join(' · ') : 'No folders yet'}</p>
       {error && <p className="error">{error}</p>}
       <div className="columns">
         {COLUMNS.map(([status, label]) => (

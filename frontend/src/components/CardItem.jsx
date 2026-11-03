@@ -22,8 +22,8 @@ export default function CardItem({ card, onSave, onDelete, onDropOn }) {
         <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} />
         <textarea rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} />
         <div className="row">
-          <button className="primary" type="submit" disabled={!title.trim()}>Simpan</button>
-          <button type="button" onClick={cancel}>Batal</button>
+          <button className="primary" type="submit" disabled={!title.trim()}>Save</button>
+          <button type="button" onClick={cancel}>Cancel</button>
         </div>
       </form>
     )
@@ -39,7 +39,7 @@ export default function CardItem({ card, onSave, onDelete, onDropOn }) {
     >
       <div className="row">
         <strong>{card.title}</strong>
-        <button className="danger" title="Hapus" onClick={(e) => { e.stopPropagation(); onDelete(card) }}>×</button>
+        <button className="danger" title="Delete" onClick={(e) => { e.stopPropagation(); onDelete(card) }}>×</button>
       </div>
       {card.description && <p>{card.description}</p>}
     </div>

@@ -60,10 +60,12 @@ button.danger { color: var(--danger); }
 .login p { margin: 0; text-align: center; }
 .login input { background: rgba(255, 255, 255, .6); }
 .login button.primary { width: 100%; padding: .6rem; margin-top: .2rem; }
-.login-icon {
-  width: 46px; height: 46px; margin: 0 auto .25rem; display: grid; place-items: center; color: var(--accent);
-  background: #fff; border-radius: 13px; box-shadow: 0 6px 16px rgba(184, 69, 46, .18);
-}
+.logo { display: inline-flex; align-items: center; gap: .55rem; }
+.logo-word { font-weight: 700; font-size: 1.1rem; letter-spacing: -.01em; color: var(--text); }
+.logo-word b { color: var(--accent); margin-left: .18em; }
+.brand { display: inline-flex; }
+.login .logo { align-self: center; margin-bottom: .25rem; }
+.login .logo svg { filter: drop-shadow(0 8px 14px rgba(184, 69, 46, .3)); }
 
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .8rem 1rem; }
 .board-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .8rem; margin: .8rem 0 1.5rem; }

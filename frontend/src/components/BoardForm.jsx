@@ -27,14 +27,14 @@ export default function BoardForm({ initial, onSaved, onCancel }) {
 
   return (
     <form className="form panel" onSubmit={submit}>
-      <h3>{initial ? 'Ubah board' : 'Board baru'}</h3>
-      <input placeholder="Nama product" autoFocus value={name} onChange={(e) => setName(e.target.value)} />
-      <textarea rows={4} placeholder={'Folder (satu path absolut per baris)\n/Users/me/app/frontend\n/Users/me/app/backend'}
+      <h3>{initial ? 'Edit board' : 'New board'}</h3>
+      <input placeholder="Product name" autoFocus value={name} onChange={(e) => setName(e.target.value)} />
+      <textarea rows={4} placeholder={'Folders (one absolute path per line)\n/Users/me/app/frontend\n/Users/me/app/backend'}
         value={folders} onChange={(e) => setFolders(e.target.value)} />
       {error && <p className="error">{error}</p>}
       <div className="row">
-        <button className="primary" type="submit" disabled={busy || !name.trim()}>Simpan</button>
-        <button type="button" onClick={onCancel}>Batal</button>
+        <button className="primary" type="submit" disabled={busy || !name.trim()}>Save</button>
+        <button type="button" onClick={onCancel}>Cancel</button>
       </div>
     </form>
   )

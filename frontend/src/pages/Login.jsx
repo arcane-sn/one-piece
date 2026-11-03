@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api'
+import Logo from '../components/Logo'
 
 export default function Login({ onLoggedIn }) {
   const [username, setUsername] = useState('')
@@ -16,7 +17,7 @@ export default function Login({ onLoggedIn }) {
       const me = await api('/api/me')
       onLoggedIn(me.username)
     } catch (err) {
-      setError(err.status === 401 ? 'Username atau password salah' : err.message)
+      setError(err.status === 401 ? 'Wrong username or password' : err.message)
     } finally {
       setBusy(false)
     }
@@ -25,20 +26,15 @@ export default function Login({ onLoggedIn }) {
   return (
     <div className="login-page">
       <form className="login glass" onSubmit={submit}>
-        <div className="login-icon" aria-hidden="true">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-            <path d="M10 17l5-5-5-5M15 12H3" />
-          </svg>
-        </div>
-        <h1>Masuk ke One Piece</h1>
-        <p className="muted">Satu tempat untuk semua pekerjaan Agent.</p>
+        <Logo size={56} wordmark={false} />
+        <h1>Welcome back, captain</h1>
+        <p className="muted">Pick up where your agents left off.</p>
         <input placeholder="Username" autoFocus autoComplete="username" value={username}
           onChange={(e) => setUsername(e.target.value)} />
         <input placeholder="Password" type="password" autoComplete="current-password" value={password}
           onChange={(e) => setPassword(e.target.value)} />
         {error && <p className="error">{error}</p>}
-        <button className="primary" type="submit" disabled={busy || !username || !password}>Masuk</button>
+        <button className="primary" type="submit" disabled={busy || !username || !password}>Set sail</button>
       </form>
     </div>
   )
