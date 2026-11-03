@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, baseName } from '../api'
 import Column from '../components/Column'
+import TicketModal from '../components/TicketModal'
 import { FolderIcon } from '../components/Logo'
 
 const COLUMNS = [
@@ -11,37 +12,12 @@ const COLUMNS = [
   ['done', 'Done', '#7FC9C9'],
 ]
 
-function AddCard({ onAdd }) {
-  const [open, setOpen] = useState(false)
-  const [title, setTitle] = useState('')
-  const [desc, setDesc] = useState('')
-
-  async function submit(e) {
-    e.preventDefault()
-    if (await onAdd(title, desc)) {
-      setTitle('')
-      setDesc('')
-      setOpen(false)
-    }
-  }
-  if (!open) return <button className="add-card" onClick={() => setOpen(true)}>+ Add card</button>
-  return (
-    <form className="form" onSubmit={submit}>
-      <input autoFocus placeholder="Card title" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <textarea rows={2} placeholder="Description (optional)" value={desc} onChange={(e) => setDesc(e.target.value)} />
-      <div className="row">
-        <button className="primary" type="submit" disabled={!title.trim()} style={{ height: 36 }}>Add card</button>
-        <button type="button" onClick={() => setOpen(false)}>Cancel</button>
-      </div>
-    </form>
-  )
-}
-
 export default function Board({ reloadBoards }) {
   const { id } = useParams()
   const [board, setBoard] = useState(null) // null = loading, false = not found
   const [cards, setCards] = useState([])
   const [error, setError] = useState('')
+  const [ticket, setTicket] = useState(null) // null | 'new' | Card
 
   const load = useCallback(async () => {
     try {
@@ -55,35 +31,15 @@ export default function Board({ reloadBoards }) {
   }, [id])
   useEffect(() => { load() }, [load])
 
-  async function guarded(fn) {
-    setError('')
-    try {
-      await fn()
-      reloadBoards() // keep sidebar counts fresh
-      return true
-    } catch (e) {
-      setError(e.message)
-      return false
-    }
+  const upsert = (card) => {
+    setCards((cs) => (cs.some((x) => x.id === card.id) ? cs.map((x) => (x.id === card.id ? card : x)) : [...cs, card]))
+    reloadBoards()
   }
-
-  const addCard = (title, description) =>
-    guarded(async () => {
-      const c = await api(`/api/boards/${id}/cards`, { method: 'POST', body: { title, description } })
-      setCards((cs) => [...cs, c])
-    })
-
-  const saveCard = (cardId, title, description) =>
-    guarded(async () => {
-      const c = await api(`/api/cards/${cardId}`, { method: 'PUT', body: { title, description } })
-      setCards((cs) => cs.map((x) => (x.id === cardId ? c : x)))
-    })
-
-  const deleteCard = (card) =>
-    guarded(async () => {
-      await api(`/api/cards/${card.id}`, { method: 'DELETE' })
-      setCards((cs) => cs.filter((x) => x.id !== card.id))
-    })
+  const removed = (card) => {
+    setCards((cs) => cs.filter((x) => x.id !== card.id))
+    setTicket(null)
+    reloadBoards()
+  }
 
   // index = insertion index in the target column as currently displayed.
   async function moveCard(cardId, status, index) {
@@ -143,12 +99,21 @@ export default function Board({ reloadBoards }) {
             dot={dot}
             cards={cards.filter((c) => c.status === status).sort((a, b) => a.position - b.position)}
             onMove={moveCard}
-            onSave={saveCard}
-            onDelete={deleteCard}
-            footer={status === 'business' ? <AddCard onAdd={addCard} /> : null}
+            onOpen={setTicket}
+            footer={status === 'business' ? <button className="add-card" onClick={() => setTicket('new')}>+ Add card</button> : null}
           />
         ))}
       </div>
+      {ticket && (
+        <TicketModal
+          key={ticket === 'new' ? 'new' : ticket.id}
+          boardId={id}
+          card={ticket === 'new' ? undefined : ticket}
+          onChanged={upsert}
+          onDeleted={removed}
+          onClose={() => setTicket(null)}
+        />
+      )}
     </>
   )
 }

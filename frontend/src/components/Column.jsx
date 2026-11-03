@@ -4,7 +4,7 @@ import Logo from './Logo'
 
 // One kanban column. Dropping on a card inserts before it; dropping on the
 // column itself appends to the end.
-export default function Column({ status, label, dot, cards, onMove, onSave, onDelete, footer }) {
+export default function Column({ status, label, dot, cards, onMove, onOpen, footer }) {
   const [over, setOver] = useState(false)
 
   function drop(e, index) {
@@ -30,7 +30,7 @@ export default function Column({ status, label, dot, cards, onMove, onSave, onDe
         <span className="col-count">{cards.length}</span>
       </div>
       {cards.map((c, i) => (
-        <CardItem key={c.id} card={c} onSave={onSave} onDelete={onDelete} onDropOn={(e) => drop(e, i)} />
+        <CardItem key={c.id} card={c} onOpen={onOpen} onDropOn={(e) => drop(e, i)} />
       ))}
       {cards.length === 0 && (
         <div className="col-empty">
