@@ -1,6 +1,6 @@
 module github.com/arcane-sn/one-piece/backend
 
-go 1.27.3
+go 1.26.0
 
 require (
 	golang.org/x/crypto v0.58.0
