@@ -1,8 +1,52 @@
+import { useEffect, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { Placeholder } from '@tiptap/extensions'
+
+const STYLES = [
+  ['p', 'Paragraph', 'rte-opt-p'],
+  ['1', 'Heading 1', 'rte-opt-h1'],
+  ['2', 'Heading 2', 'rte-opt-h2'],
+  ['3', 'Heading 3', 'rte-opt-h3'],
+]
+
+// Custom dropdown (the native <select> clashes with the rest of the UI).
+function StyleMenu({ value, onPick }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const away = (e) => !ref.current?.contains(e.target) && setOpen(false)
+    const esc = (e) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false) } }
+    document.addEventListener('mousedown', away)
+    window.addEventListener('keydown', esc, true)
+    return () => { document.removeEventListener('mousedown', away); window.removeEventListener('keydown', esc, true) }
+  }, [open])
+  const label = STYLES.find((s) => s[0] === value)?.[1] ?? 'Paragraph'
+  return (
+    <div className="rte-menu" ref={ref}>
+      <button type="button" className="rte-style" aria-haspopup="menu" aria-expanded={open} aria-label="Text Style"
+        onMouseDown={(e) => { e.preventDefault(); setOpen((o) => !o) }}>
+        {label}
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </button>
+      {open && (
+        <ul className="rte-pop" role="menu">
+          {STYLES.map(([v, name, cls]) => (
+            <li key={v} role="none">
+              <button type="button" role="menuitemradio" aria-checked={v === value} className={cls + (v === value ? ' on' : '')}
+                onMouseDown={(e) => { e.preventDefault(); setOpen(false); onPick(v) }}>
+                {name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 // WYSIWYG editor (Tiptap). The value is Markdown, so it stays readable for
 // `claude -p` and for plain-text previews.
@@ -20,6 +64,10 @@ export default function RichEditor({ value, onChange, placeholder }) {
     shouldRerenderOnTransaction: true, // keeps toolbar "active" states in sync
     onUpdate: ({ editor: ed }) => onChange(ed.getMarkdown().trimEnd()),
   })
+  // Pick up value changes made outside the editor (e.g. AI-generated text).
+  useEffect(() => {
+    if (editor && value !== editor.getMarkdown().trimEnd()) editor.commands.setContent(value, { contentType: 'markdown' })
+  }, [value, editor])
   if (!editor) return null
 
   const run = (fn) => (e) => {
@@ -46,21 +94,14 @@ export default function RichEditor({ value, onChange, placeholder }) {
   return (
     <div className="rte">
       <div className="rte-toolbar" role="toolbar" aria-label="Formatting">
-        <select
-          aria-label="Text Style"
+        <StyleMenu
           value={heading}
-          onChange={(e) => {
-            const v = e.target.value
+          onPick={(v) => {
             const c = editor.chain().focus()
             if (v === 'p') c.setParagraph().run()
             else c.setHeading({ level: Number(v) }).run()
           }}
-        >
-          <option value="p">Paragraph</option>
-          <option value="1">Heading 1</option>
-          <option value="2">Heading 2</option>
-          <option value="3">Heading 3</option>
-        </select>
+        />
         <span className="rte-sep" />
         <Btn label="Bold" active={editor.isActive('bold')} onRun={(c) => c.toggleBold()}><b>B</b></Btn>
         <Btn label="Italic" active={editor.isActive('italic')} onRun={(c) => c.toggleItalic()}><i>I</i></Btn>

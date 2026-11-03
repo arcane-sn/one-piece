@@ -262,3 +262,23 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 .rte-content pre code { padding: 0; background: none; color: inherit; }
 .rte-content hr { border: 0; border-top: 1px solid rgba(59, 36, 23, 0.2); }
 .rte-content a { color: var(--deep); text-decoration: underline; }
+
+/* ticket: generate button, prompt modal */
+.field-row { display: flex; align-items: center; justify-content: space-between; }
+.field-row > span { font-size: 12.5px; font-weight: 700; }
+.ai-btn { height: 26px; padding: 0 10px; border: 0; border-radius: 999px; background: rgba(214, 90, 66, 0.12); color: var(--deep); font-size: 12px; font-weight: 700; }
+.ai-btn:hover:not(:disabled) { background: rgba(214, 90, 66, 0.22); }
+.prompt-backdrop { z-index: 60; }
+.prompt-modal { width: min(560px, 100%); }
+.prompt-status { display: flex; align-items: center; gap: 8px; margin: 0; }
+.prompt-result { margin: 0; max-height: 240px; overflow: auto; padding: 12px 14px; border-radius: 12px; background: rgba(255, 255, 255, 0.85); border: 1px solid rgba(59, 36, 23, 0.12); font: 12.5px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+
+/* custom text-style dropdown */
+.rte-menu { position: relative; }
+.rte-style { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: rgba(255, 255, 255, 0.8); font-size: 13px; font-weight: 600; color: var(--brown); }
+.rte-style:hover { background: #fff; }
+.rte-pop { position: absolute; z-index: 5; top: 34px; left: 0; min-width: 160px; margin: 0; padding: 6px; list-style: none; border-radius: 12px; background: rgba(255, 250, 243, 0.98); border: 1px solid var(--glass-border); box-shadow: 0 16px 32px -12px rgba(120, 60, 20, 0.45); }
+.rte-pop button { display: block; width: 100%; height: auto; padding: 7px 10px; border: 0; border-radius: 8px; background: none; text-align: left; color: var(--brown); }
+.rte-pop button:hover { background: rgba(234, 146, 89, 0.2); }
+.rte-pop button.on { background: rgba(234, 146, 89, 0.32); }
+.rte-opt-p { font-size: 13.5px; font-weight: 500; } .rte-opt-h1 { font-size: 18px; font-weight: 800; } .rte-opt-h2 { font-size: 16px; font-weight: 800; } .rte-opt-h3 { font-size: 14px; font-weight: 800; }

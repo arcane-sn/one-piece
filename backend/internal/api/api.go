@@ -28,6 +28,7 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/logout", s.logout)
 	mux.HandleFunc("GET /api/me", s.me)
 	mux.HandleFunc("POST /api/pick-folder", s.pickFolder)
+	mux.HandleFunc("POST /api/generate-description", s.generateDescription)
 	mux.HandleFunc("GET /api/boards", s.listBoards)
 	mux.HandleFunc("POST /api/boards", s.createBoard)
 	mux.HandleFunc("GET /api/boards/{id}", s.getBoard)

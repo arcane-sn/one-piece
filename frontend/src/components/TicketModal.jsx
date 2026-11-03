@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import PromptModal from './PromptModal'
 import RichEditor from './RichEditor'
 
 const STATUS_LABEL = { business: 'Business', agent: 'Agent', qa: 'QA', done: 'Done' }
@@ -14,6 +15,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [promptOpen, setPromptOpen] = useState(false)
   const titleRef = useRef(null)
 
   const dirty =
@@ -31,10 +33,10 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
   }, [card])
 
   useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && requestClose()
+    const onKey = (e) => e.key === 'Escape' && !promptOpen && requestClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [requestClose])
+  }, [requestClose, promptOpen])
 
   async function save(e) {
     e.preventDefault()
@@ -74,6 +76,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
   }
 
   return (
+    <>
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && requestClose()}>
       <form className="modal ticket" role="dialog" aria-modal="true" aria-label={current ? 'Edit Ticket' : 'New Ticket'} onSubmit={save}>
         <div className="ticket-head">
@@ -88,7 +91,12 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
               <input ref={titleRef} placeholder="What needs to happen?" maxLength={200} value={title} onChange={edit(setTitle)} />
             </label>
             <div className="field">
-              <span>Description</span>
+              <div className="field-row">
+                <span>Description</span>
+                <button type="button" className="ai-btn" title="Generate Description With Claude" onClick={() => setPromptOpen(true)}>
+                  <span aria-hidden="true">✦</span> Generate
+                </button>
+              </div>
               <RichEditor value={description} placeholder="Describe the change and what “done” looks like."
                 onChange={(v) => { setDescription(v); setSaved(false) }} />
             </div>
@@ -105,7 +113,6 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
               {deadline && <button type="button" className="link" onClick={() => { setDeadline(''); setSaved(false) }}>Clear Deadline</button>}
             </div>
             <div className="field">
-              <span>Approval</span>
               <button type="button" disabled title="Available after Claude review">Approve</button>
               <p className="hint">Unlocks once Claude has reviewed this ticket.</p>
             </div>
@@ -124,5 +131,15 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
         </div>
       </form>
     </div>
+    {promptOpen && (
+      <PromptModal
+        boardId={boardId}
+        title={title}
+        description={description}
+        onUse={(md) => { setDescription(md); setSaved(false); setPromptOpen(false) }}
+        onClose={() => setPromptOpen(false)}
+      />
+    )}
+    </>
   )
 }

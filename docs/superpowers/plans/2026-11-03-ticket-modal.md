@@ -145,3 +145,11 @@ Requested by the user after Task 3: "Description harus bisa di edit kaya paragra
 - Description editor: Tiptap 3 (`@tiptap/react`, `starter-kit`, `markdown`, `extension-list` for task lists, `extensions` for placeholder) in `components/RichEditor.jsx`; toolbar: text style (paragraph/H1-3), bold, italic, strike, inline code, bullet/numbered/task list, quote, code block, divider, link, undo/redo.
 - Ruling: the description is stored as **Markdown** in the existing `description` column (no schema change): readable for `claude -p`, no HTML sanitising needed, plain-text preview on cards via a small stripper. Costs if wrong: tables/images are not supported yet; old plain-text descriptions render as Markdown paragraphs.
 - Title Case applied to headings, buttons, field labels, empty-state titles; sentences, placeholders and confirm messages stay sentence case.
+
+### Task 5 (added during execution): Generate description with Claude, custom style dropdown
+
+Requested by the user: remove the redundant "Approval" label; a small button at the end of the Description title row opens a Prompt modal that generates the description; the native dropdown in the editor toolbar looked bad.
+
+- `POST /api/generate-description` `{prompt, title, description, boardId}` → `{description}` (Markdown). `runClaude` runs `claude -p --tools "" --no-session-persistence --setting-sources project` with a system prompt asking for Summary/Context/Requirements/Definition of Done/Out of Scope and a small, manageable scope; cwd is an empty temp dir. Stubbed in tests (`generate_test.go`). Failure or empty output → 502.
+- `PromptModal.jsx` (idea → draft preview → Use This Draft / Regenerate), `RichEditor` syncs external value changes, toolbar text-style is a custom menu.
+- Ruling: the draft replaces the current description only after the user presses "Use This Draft" (a hint warns when a description already exists). Costs if wrong: no merge/append mode.
