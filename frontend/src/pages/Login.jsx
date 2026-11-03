@@ -23,14 +23,23 @@ export default function Login({ onLoggedIn }) {
   }
 
   return (
-    <form className="login" onSubmit={submit}>
-      <h1>One Piece</h1>
-      <input placeholder="Username" autoFocus autoComplete="username" value={username}
-        onChange={(e) => setUsername(e.target.value)} />
-      <input placeholder="Password" type="password" autoComplete="current-password" value={password}
-        onChange={(e) => setPassword(e.target.value)} />
-      {error && <p className="error">{error}</p>}
-      <button type="submit" disabled={busy || !username || !password}>Masuk</button>
-    </form>
+    <div className="login-page">
+      <form className="login glass" onSubmit={submit}>
+        <div className="login-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+            <path d="M10 17l5-5-5-5M15 12H3" />
+          </svg>
+        </div>
+        <h1>Masuk ke One Piece</h1>
+        <p className="muted">Satu tempat untuk semua pekerjaan Agent.</p>
+        <input placeholder="Username" autoFocus autoComplete="username" value={username}
+          onChange={(e) => setUsername(e.target.value)} />
+        <input placeholder="Password" type="password" autoComplete="current-password" value={password}
+          onChange={(e) => setPassword(e.target.value)} />
+        {error && <p className="error">{error}</p>}
+        <button className="primary" type="submit" disabled={busy || !username || !password}>Masuk</button>
+      </form>
+    </div>
   )
 }
