@@ -106,3 +106,6 @@ func (s *Store) SetApproved(cardID int64, approved bool) (Card, error) {
 	}
 	return getCard(s.DB, cardID)
 }
+
+// GetCard returns one card by id, or ErrNotFound.
+func (s *Store) GetCard(id int64) (Card, error) { return getCard(s.DB, id) }

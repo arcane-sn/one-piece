@@ -23,6 +23,9 @@ type server struct {
 // New builds the handler: /api/* (authenticated) plus static files from staticDir.
 func New(st *store.Store, staticDir string) http.Handler {
 	s := &server{st: st, static: staticDir}
+	if err := st.FailRunningReviews(); err != nil { // reviews cut short by a previous shutdown
+		log.Printf("sweeping stale reviews: %v", err)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/login", s.login)
 	mux.HandleFunc("POST /api/logout", s.logout)
@@ -38,6 +41,9 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/boards/{id}/cards", s.createCard)
 	mux.HandleFunc("PUT /api/cards/{id}", s.updateCard)
 	mux.HandleFunc("POST /api/cards/{id}/move", s.moveCard)
+	mux.HandleFunc("GET /api/cards/{id}/review", s.getReview)
+	mux.HandleFunc("POST /api/cards/{id}/review", s.postReview)
+	mux.HandleFunc("POST /api/cards/{id}/approve", s.approveCard)
 	mux.HandleFunc("DELETE /api/cards/{id}", s.deleteCard)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
