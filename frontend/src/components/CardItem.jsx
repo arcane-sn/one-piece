@@ -1,5 +1,5 @@
 // Markdown -> one short plain-text line for the card preview.
-const plain = (md) => md.replace(/```[\s\S]*?```/g, ' ').replace(/[#>*_`~\[\]()!-]+/g, ' ').replace(/\s+/g, ' ').trim()
+const plain = (md) => md.replace(/```[\s\S]*?```/g, ' ').replace(/[#>*_`~\\[\]()!-]+/g, ' ').replace(/\s+/g, ' ').trim()
 
 // A draggable kanban card; click opens the ticket modal.
 export default function CardItem({ card, onOpen, onDropOn }) {
