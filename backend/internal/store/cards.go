@@ -22,7 +22,7 @@ type Card struct {
 }
 
 // Statuses are the kanban columns, in display order.
-var Statuses = []string{"business", "agent", "qa", "done"}
+var Statuses = []string{"draft", "business", "agent", "qa", "done"}
 
 func validStatus(s string) bool {
 	for _, v := range Statuses {
@@ -101,7 +101,7 @@ func (s *Store) ListCards(boardID int64) ([]Card, error) {
 		return nil, err
 	}
 	rows, err := s.DB.Query(`SELECT `+cardCols+` FROM cards WHERE board_id=?
-		ORDER BY CASE status WHEN 'business' THEN 0 WHEN 'agent' THEN 1 WHEN 'qa' THEN 2 ELSE 3 END, position`, boardID)
+		ORDER BY CASE status WHEN 'draft' THEN 0 WHEN 'business' THEN 1 WHEN 'agent' THEN 2 WHEN 'qa' THEN 3 ELSE 4 END, position`, boardID)
 	if err != nil {
 		return nil, err
 	}
@@ -181,6 +181,9 @@ func (s *Store) MoveCard(id int64, status string, position int) (Card, error) {
 	if err != nil {
 		return Card{}, err
 	}
+	if err := checkMove(tx, c, status); err != nil {
+		return Card{}, err
+	}
 	target, err := columnIDs(tx, c.BoardID, status, id)
 	if err != nil {
 		return Card{}, err
@@ -199,11 +202,36 @@ func (s *Store) MoveCard(id int64, status string, position int) (Card, error) {
 			return Card{}, err
 		}
 	}
+	if status == "draft" { // parked in the backlog: approval no longer holds (reviews and flows are kept)
+		if _, err := tx.Exec(`UPDATE cards SET approved=0 WHERE id=?`, id); err != nil {
+			return Card{}, err
+		}
+	}
 	moved, err := getCard(tx, id)
 	if err != nil {
 		return Card{}, err
 	}
 	return moved, tx.Commit()
+}
+
+// checkMove enforces the Draft rules: Draft only leads to Business, Draft is only entered
+// from Business, and a card whose review is running cannot be parked in Draft.
+func checkMove(tx *sql.Tx, c Card, to string) error {
+	switch {
+	case c.Status == "draft" && to != "draft" && to != "business":
+		return ConflictError{"A Draft ticket can only move to Business."}
+	case to == "draft" && c.Status != "draft" && c.Status != "business":
+		return ConflictError{"Only Business tickets can be moved back to Draft."}
+	case to == "draft" && c.Status != "draft":
+		var running int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM card_reviews WHERE card_id=? AND status='running'`, c.ID).Scan(&running); err != nil {
+			return err
+		}
+		if running > 0 {
+			return ConflictError{"This ticket is being reviewed. Try again when the review finishes."}
+		}
+	}
+	return nil
 }
 
 func (s *Store) DeleteCard(id int64) error {

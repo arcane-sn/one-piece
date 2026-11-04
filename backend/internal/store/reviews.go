@@ -89,6 +89,9 @@ func (s *Store) SetApproved(cardID int64, approved bool) (Card, error) {
 		return Card{}, err
 	}
 	if approved {
+		if c.Status == "draft" {
+			return Card{}, ConflictError{"Draft tickets can't be approved. Move it to Business first."}
+		}
 		r, err := s.LatestReview(cardID)
 		if errors.Is(err, ErrNotFound) || (err == nil && (r.Status != "done" || r.Verdict != "pass" || r.ContentVersion != c.ContentVersion)) {
 			return Card{}, ConflictError{"Approval needs a passing Claude review of the current ticket."}

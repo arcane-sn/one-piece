@@ -60,7 +60,7 @@ func TestBoardCountsByStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(b.Counts, map[string]int{"business": 0, "agent": 0, "qa": 0, "done": 0}) {
+	if !reflect.DeepEqual(b.Counts, map[string]int{"draft": 0, "business": 0, "agent": 0, "qa": 0, "done": 0}) {
 		t.Errorf("fresh board counts = %v", b.Counts)
 	}
 	var ids []int64
@@ -69,7 +69,7 @@ func TestBoardCountsByStatus(t *testing.T) {
 		ids = append(ids, c.ID)
 	}
 	s.MoveCard(ids[0], "agent", 0)
-	want := map[string]int{"business": 2, "agent": 1, "qa": 0, "done": 0}
+	want := map[string]int{"draft": 0, "business": 2, "agent": 1, "qa": 0, "done": 0}
 	list, err := s.ListBoards()
 	if err != nil {
 		t.Fatal(err)
