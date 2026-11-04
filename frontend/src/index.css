@@ -314,3 +314,16 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 .rte-content input[type='checkbox'] { width: 16px; height: 16px; min-height: 0; padding: 0; margin: 0; border-radius: 4px; box-shadow: none; accent-color: var(--orange); }
 .rte-content li > p, .rte-content li > div > p { margin: 0; }
 .rte-content li + li { margin-top: 4px; }
+
+/* Business flows */
+.flow-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.flow-list button { width: 100%; text-align: left; padding: 9px 14px; border-radius: 12px; font-weight: 600; background: rgba(255, 255, 255, 0.7); border: 1px solid rgba(59, 36, 23, 0.12); cursor: pointer; }
+.flow-list button:hover { background: #fff; }
+.flow-backdrop { z-index: 60; }
+.modal.flow-modal { width: min(1180px, 100%); height: calc(100vh - 32px); }
+.flow-split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, 2fr) 3fr; gap: 16px; }
+.flow-src, .flow-view { min-height: 0; display: flex; flex-direction: column; }
+.flow-src textarea { flex: 1; min-height: 240px; resize: none; font: 12.5px/1.6 ui-monospace, Menlo, monospace; white-space: pre; }
+.flow-canvas { flex: 1; min-height: 240px; overflow: auto; border-radius: 12px; background: #fff; border: 1px solid rgba(59, 36, 23, 0.12); }
+.flow-warn { font-style: normal; color: #b45309; }
+@media (max-width: 760px) { .flow-split { grid-template-columns: 1fr; } }

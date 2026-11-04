@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import PromptModal from './PromptModal'
+import FlowsSection from './FlowsSection'
 import RichEditor from './RichEditor'
 import { ReviewComment, ReviewSide, useReview } from './ReviewPanel'
 
@@ -17,6 +18,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [promptOpen, setPromptOpen] = useState(false)
+  const [flowOpen, setFlowOpen] = useState(false)
   const titleRef = useRef(null)
   const { review, refresh, start } = useReview(current?.id)
 
@@ -35,10 +37,10 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
   }, [card])
 
   useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && !promptOpen && requestClose()
+    const onKey = (e) => e.key === 'Escape' && !promptOpen && !flowOpen && requestClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [requestClose, promptOpen])
+  }, [requestClose, promptOpen, flowOpen])
 
   async function save(e) {
     e.preventDefault()
@@ -89,6 +91,21 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
     }
   }
 
+  // A flow changed on the server: pick up the new content version, then follow the new review.
+  async function flowsChanged() {
+    try {
+      const cards = await api(`/api/boards/${boardId}/cards`)
+      const next = cards.find((c) => c.id === current.id)
+      if (next) {
+        setCurrent((c) => ({ ...c, contentVersion: next.contentVersion, approved: next.approved }))
+        onChanged(next)
+      }
+    } catch {
+      // the next save or review poll corrects this
+    }
+    refresh()
+  }
+
   async function startReview() {
     setError('')
     try {
@@ -128,6 +145,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
               <RichEditor value={description} placeholder="Describe the change and what “done” looks like."
                 onChange={(v) => { setDescription(v); setSaved(false) }} />
             </div>
+            <FlowsSection card={current} onChanged={flowsChanged} onModal={setFlowOpen} />
             <ReviewComment card={current} review={review} />
           </div>
 
