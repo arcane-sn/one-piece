@@ -22,7 +22,7 @@ Development: jalankan backend (`cd backend && go run ./cmd/server`) dan frontend
 
 ## Sudah ada
 
-Login, dashboard, kanban, review tiket oleh Claude (live log + approval gate), Business Flow (swimlane), tugas Agent dan kasus QA hasil generate.
+Login, dashboard, kanban, review tiket oleh Claude (live log + approval gate), Business Flow (swimlane), tugas Agent dan kasus QA hasil generate, edit board dari halaman board, kolom Draft (backlog), dan chat Brainstorming per board (dokumen rencana MD berversi + kartu Draft dari Claude). Dokumen rencana disimpan di `backend/plans/` (di-ignore git).
 
 ## Belum ada (slice berikutnya)
 

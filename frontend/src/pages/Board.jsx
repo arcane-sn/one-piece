@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api, baseName } from '../api'
 import Column from '../components/Column'
 import BoardModal from '../components/BoardModal'
+import BrainstormModal from '../components/BrainstormModal'
 import TicketModal from '../components/TicketModal'
 import { FolderIcon } from '../components/Logo'
 
@@ -21,6 +22,7 @@ export default function Board({ reloadBoards }) {
   const [error, setError] = useState('')
   const [ticket, setTicket] = useState(null) // null | 'new' | Card
   const [editing, setEditing] = useState(false)
+  const [brainstorm, setBrainstorm] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -90,6 +92,7 @@ export default function Board({ reloadBoards }) {
           {board.folders.map((f) => (
             <span className="chip soft" key={f} title={f}><FolderIcon />{baseName(f)}</span>
           ))}
+          <button onClick={() => setBrainstorm(true)}>Brainstorming</button>
           <button onClick={() => setEditing(true)}>Edit Board</button>
         </div>
       </div>
@@ -108,6 +111,7 @@ export default function Board({ reloadBoards }) {
           />
         ))}
       </div>
+      {brainstorm && <BrainstormModal boardId={id} onCardsChanged={load} onClose={() => setBrainstorm(false)} />}
       {editing && (
         <BoardModal
           initial={board}

@@ -50,7 +50,7 @@ function StyleMenu({ value, onPick }) {
 
 // WYSIWYG editor (Tiptap). The value is Markdown, so it stays readable for
 // `claude -p` and for plain-text previews.
-export default function RichEditor({ value, onChange, placeholder }) {
+export default function RichEditor({ value, onChange, placeholder, readOnly = false }) {
   const ref = useRef(null)
   const editor = useEditor({
     extensions: [
@@ -62,6 +62,7 @@ export default function RichEditor({ value, onChange, placeholder }) {
     ],
     content: value,
     contentType: 'markdown',
+    editable: !readOnly,
     editorProps: {
       // Plain-text paste is treated as Markdown ("- [ ] x" becomes a task list, "## T" a heading).
       handlePaste: (_view, event) => {
@@ -106,7 +107,7 @@ export default function RichEditor({ value, onChange, placeholder }) {
   const heading = editor.isActive('heading') ? String(editor.getAttributes('heading').level) : 'p'
 
   return (
-    <div className="rte">
+    <div className={'rte' + (readOnly ? ' ro' : '')}>
       <div className="rte-toolbar" role="toolbar" aria-label="Formatting">
         <StyleMenu
           value={heading}
