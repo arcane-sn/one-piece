@@ -190,7 +190,7 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 .bs-versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 18vh; overflow-y: auto; }
 .bs-versions li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.6); font-size: 13px; }
 .bs-versions button { height: 28px; padding: 0 10px; font-size: 12px; }
-.columns { display: grid; grid-template-columns: repeat(4, minmax(240px, 1fr)); gap: 16px; align-items: start; overflow-x: auto; padding-bottom: 8px; }
+.columns { display: grid; grid-template-columns: repeat(5, minmax(240px, 1fr)); gap: 16px; align-items: start; overflow-x: auto; padding-bottom: 8px; }
 .column {
   display: flex; flex-direction: column; gap: 10px; min-height: 220px; padding: 14px; border-radius: 18px;
   background: rgba(176, 227, 227, 0.5); border: 1.5px solid rgba(255, 255, 255, 0.7); transition: background 0.15s, border-color 0.15s;

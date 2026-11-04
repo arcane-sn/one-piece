@@ -39,7 +39,8 @@ type brainstormRun struct {
 	System, Prompt, SessionID string
 	Exe, DB, PlanPath         string // Exe: space-free path of the server binary; DB, PlanPath: absolute
 	BoardID                   int64
-	Dirs                      []string // board folders, read-only
+	Dirs                      []string     // board folders, read-only
+	OnSession                 func(string) // called once, as soon as the CLI announces its session id
 }
 
 // runBrainstorm runs one `claude -p` turn and returns the session id for --resume.
@@ -89,7 +90,7 @@ var runBrainstorm = func(ctx context.Context, in brainstormRun, onText func(stri
 		return "", err
 	}
 	var final, sessionID string
-	var isErr bool
+	var isErr, announced bool
 	sc := bufio.NewScanner(out)
 	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	for sc.Scan() {
@@ -107,6 +108,10 @@ var runBrainstorm = func(ctx context.Context, in brainstormRun, onText func(stri
 		}
 		if json.Unmarshal(sc.Bytes(), &ev) != nil {
 			continue
+		}
+		if ev.SessionID != "" && !announced && in.OnSession != nil { // a stopped turn must still be resumable
+			announced = true
+			in.OnSession(ev.SessionID)
 		}
 		switch ev.Type {
 		case "assistant":
@@ -260,10 +265,15 @@ func (s *server) runTurn(ctx context.Context, cancel context.CancelFunc, b store
 		wrote = true
 		s.st.AppendBrainstormText(msgID, t)
 	}
+	var announced string // session id the CLI reported, even if the turn never finishes
+	run.OnSession = func(id string) { announced = id }
+	fresh := st.SessionID == ""
 	sid, err := runBrainstorm(ctx, run, onText)
-	if err != nil && st.SessionID != "" && ctx.Err() == nil { // the stored session is unusable: start fresh
+	// Only a dead session may restart, and only before anything happened: replaying a turn that already
+	// wrote text (or created Drafts) would do its work twice.
+	if err != nil && !fresh && !wrote && ctx.Err() == nil && strings.Contains(err.Error(), "No conversation found") {
 		log.Printf("brainstorm board %d: resume failed (%v), starting a fresh session", b.ID, err)
-		run.SessionID = ""
+		run.SessionID, fresh, announced = "", true, ""
 		run.Prompt = brainstormPrompt(b, exe, run.PlanPath, index, store.BrainstormState{}, text)
 		sid, err = runBrainstorm(ctx, run, onText)
 	}
@@ -288,6 +298,8 @@ func (s *server) runTurn(ctx context.Context, cancel context.CancelFunc, b store
 	if status == "done" { // Claude may have created Drafts itself: its own changes count as seen
 		cards, _ = s.st.ListCards(b.ID)
 		s.st.SetBrainstormState(b.ID, store.BrainstormState{SessionID: sid, SentIndex: store.TicketIndex(cards)})
+	} else if fresh && announced != "" { // a stopped/failed first turn: keep its session so the chat keeps its context
+		s.st.SetBrainstormState(b.ID, store.BrainstormState{SessionID: announced, SentIndex: index})
 	}
 	s.snapshotPlan(b.ID)
 	s.st.FinishBrainstormMessage(msgID, status)

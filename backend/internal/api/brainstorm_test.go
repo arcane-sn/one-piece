@@ -183,6 +183,64 @@ func TestBrainstormResumeFailureFallsBackToFreshSession(t *testing.T) {
 	}
 }
 
+func TestBrainstormResumeErrorAfterOutputDoesNotRerun(t *testing.T) {
+	calls := useBrainstorm(t, func(_ context.Context, _ brainstormRun, onText func(string)) (string, error) {
+		onText("part")
+		return "", errors.New("max turns reached")
+	})
+	s, bp, ck, bid := bsSetup(t)
+	s.St.SetBrainstormState(bid, store.BrainstormState{SessionID: "s1"})
+	bsSend(t, s, bp, ck, "go")
+	v := bsIdle(t, s, bp, ck)
+	if len(*calls) != 1 {
+		t.Fatalf("a turn that already produced output must not be replayed (it would duplicate Drafts): %d calls", len(*calls))
+	}
+	if a := v.Messages[1]; a.Status != "failed" || a.Text != "part" {
+		t.Fatalf("assistant = %+v", a)
+	}
+}
+
+func TestBrainstormOtherResumeErrorsDoNotFallBack(t *testing.T) {
+	calls := useBrainstorm(t, func(context.Context, brainstormRun, func(string)) (string, error) {
+		return "", errors.New("claude: overloaded")
+	})
+	s, bp, ck, bid := bsSetup(t)
+	s.St.SetBrainstormState(bid, store.BrainstormState{SessionID: "s1"})
+	bsSend(t, s, bp, ck, "go")
+	v := bsIdle(t, s, bp, ck)
+	if len(*calls) != 1 || v.Messages[1].Status != "failed" {
+		t.Fatalf("only a dead session may fall back: %d calls, %+v", len(*calls), v.Messages[1])
+	}
+}
+
+func TestBrainstormStopKeepsFirstSessionForResume(t *testing.T) {
+	started := make(chan struct{}, 1)
+	calls := useBrainstorm(t, func(ctx context.Context, in brainstormRun, onText func(string)) (string, error) {
+		if in.SessionID != "" { // the follow-up turn
+			onText("ok")
+			return in.SessionID, nil
+		}
+		in.OnSession("sess-x") // the CLI announces its session id before the final result
+		onText("partial")
+		started <- struct{}{}
+		<-ctx.Done()
+		return "", ctx.Err()
+	})
+	s, bp, ck, bid := bsSetup(t)
+	bsSend(t, s, bp, ck, "first")
+	<-started
+	s.req(t, "POST", bp+"/brainstorm/stop", map[string]any{}, ck)
+	bsIdle(t, s, bp, ck)
+	if st, _ := s.St.GetBrainstormState(bid); st.SessionID != "sess-x" {
+		t.Fatalf("a stopped first turn must keep its session so the chat has context: %+v", st)
+	}
+	bsSend(t, s, bp, ck, "second")
+	bsIdle(t, s, bp, ck)
+	if len(*calls) != 2 || (*calls)[1].SessionID != "sess-x" {
+		t.Fatalf("the follow-up must resume the stopped session: %+v", *calls)
+	}
+}
+
 func TestBrainstormResumeSendsOnlyTicketChanges(t *testing.T) {
 	calls := useBrainstorm(t, func(_ context.Context, _ brainstormRun, onText func(string)) (string, error) {
 		onText("ok")
