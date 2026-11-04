@@ -98,3 +98,22 @@ func TestItemStatusLogAndTechnicalFlows(t *testing.T) {
 		t.Fatalf("deleting an item should delete its technical flows: %v", err)
 	}
 }
+
+func TestSaveItemIsAtomicAndVersionIsKept(t *testing.T) {
+	s, c := newCard(t)
+	out, _ := s.ReplaceItems(c.ID, []Item{{Kind: "agent", Title: "A1", Version: 3}})
+	if out[0].Version != 3 {
+		t.Fatalf("version = %d, want 3", out[0].Version)
+	}
+	it, err := s.SaveItem(out[0].ID, "A1b", "body", "doing", []string{"Edited by you", "Status: doing"})
+	if err != nil || it.Title != "A1b" || it.Status != "doing" || len(it.Log) != 2 || it.Version != 3 {
+		t.Fatalf("save = %+v, %v", it, err)
+	}
+	if _, err := s.SaveItem(out[0].ID, "A1c", "", "bogus", []string{"x"}); err == nil {
+		t.Fatal("bad status should fail")
+	}
+	got, _ := s.GetItem(out[0].ID)
+	if got.Title != "A1b" || len(got.Log) != 2 {
+		t.Fatalf("failed save must change nothing: %+v", got)
+	}
+}

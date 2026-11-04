@@ -77,6 +77,9 @@ export default function ItemsSection({ card, onModal }) {
               <li key={i.id}>
                 <button type="button" onClick={() => open(i)}>
                   <span>{i.title}</span>
+                  {i.version > 0 && i.version < card.contentVersion && (
+                    <span className="item-status stale" title="The ticket changed after Claude generated this. Regenerate to refresh.">Outdated</span>
+                  )}
                   <span className={'item-status ' + i.status}>{STATUS[i.status]}</span>
                 </button>
               </li>

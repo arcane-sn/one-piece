@@ -351,7 +351,7 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 .items-title { font-weight: 700; }
 .flow-list button { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .item-status { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(59, 36, 23, 0.08); }
-.item-status.doing { background: #fde7c3; } .item-status.done { background: #c8ecd6; }
+.item-status.doing { background: #fde7c3; } .item-status.done { background: #c8ecd6; } .item-status.stale { background: #f6d2cc; margin-left: auto; margin-right: 8px; }
 .status-seg { display: flex; gap: 4px; }
 .status-seg button { flex: 1; height: 32px; padding: 0 6px; font-size: 12px; }
 .status-seg button.on { background: var(--orange); color: var(--brown); border-color: transparent; }

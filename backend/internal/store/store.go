@@ -84,6 +84,7 @@ func Open(path string) (*Store, error) {
 		{"cards", "approved", "INTEGER NOT NULL DEFAULT 0"},
 		{"cards", "content_version", "INTEGER NOT NULL DEFAULT 1"},
 		{"card_flows", "item_id", "INTEGER NOT NULL DEFAULT 0"}, // 0 = Business Flow of the card, else Technical Flow of that item
+		{"card_items", "version", "INTEGER NOT NULL DEFAULT 0"}, // ticket content_version it was generated from; 0 = added by hand
 	} {
 		if err := addColumn(db, m[0], m[1], m[2]); err != nil {
 			db.Close()

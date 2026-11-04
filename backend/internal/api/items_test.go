@@ -121,3 +121,24 @@ func TestGenerateItemsSplitAndFailure(t *testing.T) {
 		t.Fatalf("unreadable reply: %d, want 502", resp.StatusCode)
 	}
 }
+
+func TestGeneratedItemsRememberTicketVersion(t *testing.T) {
+	useStub(t, passing, nil)
+	s := newTestServer(t)
+	ck := s.login(t)
+	bp := newBoardPath(t, s, ck)
+	_, body := s.req(t, "POST", bp+"/cards", map[string]any{"title": "Login"}, ck)
+	var card store.Card
+	json.Unmarshal(body, &card)
+	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
+	reviewWaiter(t, s, cp, ck)("done")
+	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
+	defer func(f func(context.Context, string, string) (string, error)) { runClaude = f }(runClaude)
+	runClaude = func(context.Context, string, string) (string, error) { return itemsReply, nil }
+	_, body = s.req(t, "POST", cp+"/generate-items", map[string]any{}, ck)
+	var out struct{ Items []store.Item }
+	json.Unmarshal(body, &out)
+	if len(out.Items) == 0 || out.Items[0].Version != card.ContentVersion || card.ContentVersion == 0 {
+		t.Fatalf("items = %+v, card version %d", out.Items, card.ContentVersion)
+	}
+}

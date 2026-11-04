@@ -17,14 +17,15 @@ type Item struct {
 	Position int      `json:"position"`
 	Status   string   `json:"status"` // todo | doing | done
 	Log      []string `json:"log"`
+	Version  int      `json:"version"` // ticket version it was generated from; 0 = added by hand
 }
 
-const itemCols = `id,card_id,kind,title,body,position,status,log`
+const itemCols = `id,card_id,kind,title,body,position,status,log,version`
 
 func scanItem(sc interface{ Scan(...any) error }) (Item, error) {
 	var i Item
 	var log string
-	if err := sc.Scan(&i.ID, &i.CardID, &i.Kind, &i.Title, &i.Body, &i.Position, &i.Status, &log); err != nil {
+	if err := sc.Scan(&i.ID, &i.CardID, &i.Kind, &i.Title, &i.Body, &i.Position, &i.Status, &log, &i.Version); err != nil {
 		return Item{}, err
 	}
 	if json.Unmarshal([]byte(log), &i.Log) != nil || i.Log == nil {
@@ -72,18 +73,18 @@ func (s *Store) GetItem(id int64) (Item, error) {
 	return i, err
 }
 
-func insertItem(tx *sql.Tx, cardID int64, kind, title, body string, log []string) (Item, error) {
+func insertItem(tx *sql.Tx, cardID int64, kind, title, body string, log []string, version int) (Item, error) {
 	if log == nil {
 		log = []string{}
 	}
 	lj, _ := json.Marshal(log)
-	res, err := tx.Exec(`INSERT INTO card_items(card_id,kind,title,body,position,log)
-		VALUES(?,?,?,?,(SELECT COALESCE(MAX(position)+1,0) FROM card_items WHERE card_id=? AND kind=?),?)`, cardID, kind, title, body, cardID, kind, string(lj))
+	res, err := tx.Exec(`INSERT INTO card_items(card_id,kind,title,body,position,log,version)
+		VALUES(?,?,?,?,(SELECT COALESCE(MAX(position)+1,0) FROM card_items WHERE card_id=? AND kind=?),?,?)`, cardID, kind, title, body, cardID, kind, string(lj), version)
 	if err != nil {
 		return Item{}, err
 	}
 	id, _ := res.LastInsertId()
-	it := Item{ID: id, CardID: cardID, Kind: kind, Title: title, Body: body, Status: "todo", Log: log}
+	it := Item{ID: id, CardID: cardID, Kind: kind, Title: title, Body: body, Status: "todo", Log: log, Version: version}
 	err = tx.QueryRow(`SELECT position FROM card_items WHERE id=?`, id).Scan(&it.Position)
 	return it, err
 }
@@ -105,7 +106,7 @@ func (s *Store) CreateItem(cardID int64, kind, title, body string) (Item, error)
 	if n == 0 {
 		return Item{}, ErrNotFound
 	}
-	it, err := insertItem(tx, cardID, kind, title, body, nil)
+	it, err := insertItem(tx, cardID, kind, title, body, nil, 0)
 	if err != nil {
 		return Item{}, err
 	}
@@ -158,13 +159,41 @@ func (s *Store) ReplaceItems(cardID int64, items []Item) ([]Item, error) {
 		if err != nil {
 			return nil, err
 		}
-		it, err := insertItem(tx, cardID, in.Kind, title, body, in.Log)
+		it, err := insertItem(tx, cardID, in.Kind, title, body, in.Log, in.Version)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, it)
 	}
 	return out, tx.Commit()
+}
+
+// SaveItem updates title, body, status and appends log lines in one transaction.
+// An empty status keeps the current one.
+func (s *Store) SaveItem(id int64, title, body, status string, logLines []string) (Item, error) {
+	it, err := s.GetItem(id)
+	if err != nil {
+		return Item{}, err
+	}
+	if title, body, err = cleanItem(it.Kind, title, body); err != nil {
+		return Item{}, err
+	}
+	if status == "" {
+		status = it.Status
+	}
+	if status != "todo" && status != "doing" && status != "done" {
+		return Item{}, ValidationError{"status must be todo, doing or done"}
+	}
+	it.Log = append(it.Log, logLines...)
+	if len(it.Log) > 200 {
+		it.Log = it.Log[len(it.Log)-200:]
+	}
+	lj, _ := json.Marshal(it.Log)
+	if _, err := s.DB.Exec(`UPDATE card_items SET title=?,body=?,status=?,log=? WHERE id=?`, title, body, status, string(lj), id); err != nil {
+		return Item{}, err
+	}
+	it.Title, it.Body, it.Status = title, body, status
+	return it, nil
 }
 
 // SetItemStatus moves an item between todo, doing and done.
