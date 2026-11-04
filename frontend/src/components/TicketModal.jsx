@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import PromptModal from './PromptModal'
 import FlowsSection from './FlowsSection'
+import ItemsSection from './ItemsSection'
 import RichEditor from './RichEditor'
 import { ReviewComment, ReviewSide, useReview } from './ReviewPanel'
 
@@ -145,7 +146,8 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
               <RichEditor value={description} placeholder="Describe the change and what “done” looks like."
                 onChange={(v) => { setDescription(v); setSaved(false) }} />
             </div>
-            <FlowsSection card={current} onChanged={flowsChanged} onModal={setFlowOpen} />
+            <FlowsSection parent={current ? `/api/cards/${current.id}` : null} emptyHint="No flow yet. Claude asks for at least one before approval." onChanged={flowsChanged} onModal={setFlowOpen} />
+            <ItemsSection card={current} onModal={setFlowOpen} />
             <ReviewComment card={current} review={review} />
           </div>
 

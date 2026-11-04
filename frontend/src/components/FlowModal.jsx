@@ -13,7 +13,7 @@ App --> User: Shows the dashboard
 `
 
 // Business Flow editor: swimlane text on the left, live diagram on the right.
-export default function FlowModal({ cardId, flow, onSaved, onDeleted, onClose }) {
+export default function FlowModal({ createPath, flow, onSaved, onDeleted, onClose }) {
   const [title, setTitle] = useState(flow?.title ?? '')
   const [source, setSource] = useState(flow?.source ?? SAMPLE)
   const [busy, setBusy] = useState(false)
@@ -58,7 +58,7 @@ export default function FlowModal({ cardId, flow, onSaved, onDeleted, onClose })
     try {
       const f = flow
         ? await api(`/api/flows/${flow.id}`, { method: 'PUT', body })
-        : await api(`/api/cards/${cardId}/flows`, { method: 'POST', body })
+        : await api(createPath, { method: 'POST', body })
       onSaved(f)
     } catch (err) {
       setError(err.message)

@@ -2,21 +2,21 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import FlowModal from './FlowModal'
 
-// "Business Flow" list under the description. `onChanged` runs after any change
-// (the server bumped the ticket's version and started a new review).
-export default function FlowsSection({ card, onChanged, onModal }) {
+// Swimlane flow list. `parent` is "/api/cards/{id}" (Business Flow) or "/api/items/{id}"
+// (Technical Flow); null until the parent exists. `onChanged` runs after any change.
+export default function FlowsSection({ parent, label = 'Business Flow', emptyHint, onChanged, onModal }) {
   const [flows, setFlows] = useState([])
   const [editing, setEditing] = useState(null) // null | 'new' | flow
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
-    if (!card?.id) return
+    if (!parent) return
     try {
-      setFlows(await api(`/api/cards/${card.id}/flows`))
+      setFlows(await api(`${parent}/flows`))
     } catch (err) {
       setError(err.message)
     }
-  }, [card?.id])
+  }, [parent])
   useEffect(() => { load() }, [load])
 
   const open = (v) => { setEditing(v); onModal(!!v) }
@@ -25,14 +25,14 @@ export default function FlowsSection({ card, onChanged, onModal }) {
   return (
     <div className="field">
       <div className="field-row">
-        <span>Business Flow</span>
-        <button type="button" className="ai-btn" disabled={!card} title={card ? 'Add A Swimlane Flow' : 'Create the ticket first'} onClick={() => open('new')}>
+        <span>{label}</span>
+        <button type="button" className="ai-btn" disabled={!parent} title={parent ? 'Add A Swimlane Flow' : 'Save first'} onClick={() => open('new')}>
           + Add Flow
         </button>
       </div>
       {error && <p className="error">{error}</p>}
       {flows.length === 0 ? (
-        <p className="hint">{card ? 'No flow yet. Claude asks for at least one before approval.' : 'Create the ticket first, then add its flow.'}</p>
+        <p className="hint">{parent ? (emptyHint || 'No flow yet.') : 'Save first, then add a flow.'}</p>
       ) : (
         <ul className="flow-list">
           {flows.map((f) => (
@@ -43,7 +43,7 @@ export default function FlowsSection({ card, onChanged, onModal }) {
         </ul>
       )}
       {editing && (
-        <FlowModal cardId={card.id} flow={editing === 'new' ? null : editing} onSaved={done} onDeleted={done} onClose={() => open(null)} />
+        <FlowModal createPath={`${parent}/flows`} flow={editing === 'new' ? null : editing} onSaved={done} onDeleted={done} onClose={() => open(null)} />
       )}
     </div>
   )

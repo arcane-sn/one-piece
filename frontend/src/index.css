@@ -345,3 +345,13 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 .flow-src, .flow-view { min-height: 0; display: flex; flex-direction: column; }
 .flow-warn { font-style: normal; color: #b45309; }
 @media (max-width: 760px) { .flow-split { grid-template-columns: 1fr; } }
+
+/* Agent tasks and QA cases */
+.item-backdrop { z-index: 55; }
+.items-title { font-weight: 700; }
+.flow-list button { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.item-status { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(59, 36, 23, 0.08); }
+.item-status.doing { background: #fde7c3; } .item-status.done { background: #c8ecd6; }
+.status-seg { display: flex; gap: 4px; }
+.status-seg button { flex: 1; height: 32px; padding: 0 6px; font-size: 12px; }
+.status-seg button.on { background: var(--orange); color: var(--brown); border-color: transparent; }
