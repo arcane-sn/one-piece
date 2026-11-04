@@ -321,9 +321,27 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 .flow-list button:hover { background: #fff; }
 .flow-backdrop { z-index: 60; }
 .modal.flow-modal { width: min(1180px, 100%); height: calc(100vh - 32px); }
-.flow-split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, 2fr) 3fr; gap: 16px; }
+.flow-split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, 2fr) 3fr; gap: 0; border: 1px solid #e3e1dc; border-radius: 12px; overflow: hidden; background: #fff; }
+.flow-split > .field { gap: 0; }
+.flow-split > .field > span { padding: 8px 14px; font-size: 12px; background: #faf9f6; border-bottom: 1px solid #e3e1dc; }
+.flow-view { border-left: 2px dashed #d9d6cf; }
+.flow-src .hint { margin: 0; padding: 6px 14px; border-top: 1px solid #e3e1dc; background: #faf9f6; }
+.sl-ed { position: relative; flex: 1; min-height: 240px; overflow: hidden; background: #fff; }
+.sl-hl, .sl-src { position: absolute; inset: 0; margin: 0; border: 0; padding: 16px 16px 40px 20px; font: 13px/20px ui-monospace, 'SF Mono', Menlo, Consolas, monospace; tab-size: 2; white-space: pre; letter-spacing: 0; border-radius: 0; }
+.sl-hl { pointer-events: none; color: #222; width: max-content; min-width: 100%; inset: 0 auto auto 0; }
+.sl-hl i { font-style: normal; } .sl-hl .kw, .sl-hl .op { font-weight: 700; } .sl-hl .nb { color: #8a6a14; } .sl-hl .cm { color: #1d3fbf; }
+.sl-src { width: 100%; height: 100%; resize: none; background: transparent; color: transparent; -webkit-text-fill-color: transparent; caret-color: #222; overflow: auto; box-shadow: none; }
+.sl-src:focus { box-shadow: none; }
+.sl-out { position: relative; flex: 1; min-height: 240px; background: #fff; }
+.sl-scroll { position: absolute; inset: 0; overflow: auto; padding: 24px; }
+.sl-svg svg { display: block; }
+.sl-zoom { position: absolute; top: 8px; right: 18px; z-index: 5; display: flex; align-items: center; gap: 2px; background: rgba(255, 255, 255, 0.92); border: 1px solid #e3e1dc; border-radius: 8px; padding: 2px; }
+.sl-zoom button { width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; }
+.sl-zoom button:hover:not(:disabled) { background: #f3f1ec; }
+.sl-zoom output { min-width: 42px; text-align: center; font: 12px 'Source Sans 3', system-ui, sans-serif; color: #6a6862; }
+.sl-empty { color: #6a6862; max-width: 44ch; margin: 12vh auto 0; text-align: center; }
+.sl-empty code { font: 13px ui-monospace, Menlo, monospace; background: #f3f1ec; padding: 2px 6px; border-radius: 4px; color: #222; }
+.modal-actions button, .modal-actions button.primary { height: 40px; width: 120px; padding: 0; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; }
 .flow-src, .flow-view { min-height: 0; display: flex; flex-direction: column; }
-.flow-src textarea { flex: 1; min-height: 240px; resize: none; font: 12.5px/1.6 ui-monospace, Menlo, monospace; white-space: pre; }
-.flow-canvas { flex: 1; min-height: 240px; overflow: auto; border-radius: 12px; background: #fff; border: 1px solid rgba(59, 36, 23, 0.12); }
 .flow-warn { font-style: normal; color: #b45309; }
 @media (max-width: 760px) { .flow-split { grid-template-columns: 1fr; } }

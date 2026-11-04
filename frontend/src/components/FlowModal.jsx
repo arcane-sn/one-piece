@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
-import { build, parse } from '../lib/swimlanes'
+import { build, hl, parse } from '../lib/swimlanes'
 
 const SAMPLE = `title: Sign In
 autonumber
@@ -17,16 +17,25 @@ export default function FlowModal({ cardId, flow, onSaved, onDeleted, onClose })
   const [title, setTitle] = useState(flow?.title ?? '')
   const [source, setSource] = useState(flow?.source ?? SAMPLE)
   const [busy, setBusy] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const [fontsTick, setFontsTick] = useState(0)
+  const [scroll, setScroll] = useState({ top: 0, left: 0 })
   const [error, setError] = useState('')
+
+  useEffect(() => { document.fonts?.ready.then(() => setFontsTick(1)) }, []) // text is measured with the swimlane fonts
 
   const diagram = useMemo(() => {
     try {
       const P = parse(source)
-      return { out: build(P), bad: P.bad?.length ?? 0 }
+      return { out: build(P), bad: P.bad?.length ?? 0, notes: P.noteRows }
     } catch {
       return { out: null, bad: 0, broken: true }
     }
-  }, [source])
+  }, [source, fontsTick])
+  const highlighted = useMemo(
+    () => source.split('\n').map((l, i) => hl(l, diagram.notes?.has(i))).join('\n') + '\n',
+    [source, diagram.notes],
+  )
 
   const dirty = title !== (flow?.title ?? '') || source !== (flow?.source ?? SAMPLE)
   const close = () => {
@@ -81,17 +90,29 @@ export default function FlowModal({ cardId, flow, onSaved, onDeleted, onClose })
           <input autoFocus placeholder="e.g. Owner signs in" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <div className="flow-split">
-          <label className="field flow-src">
+          <div className="field flow-src">
             <span>Swimlanes</span>
-            <textarea spellCheck={false} value={source} onChange={(e) => setSource(e.target.value)} />
+            <div className="sl-ed">
+              <pre className="sl-hl" aria-hidden="true" style={{ transform: `translate(${-scroll.left}px, ${-scroll.top}px)` }} dangerouslySetInnerHTML={{ __html: highlighted }} />
+              <textarea className="sl-src" spellCheck={false} wrap="off" aria-label="Swimlane source" value={source}
+                onChange={(e) => setSource(e.target.value)}
+                onScroll={(e) => setScroll({ top: e.target.scrollTop, left: e.target.scrollLeft })} />
+            </div>
             <p className="hint">One step per line: <code>User -&gt; App: message</code>. Arrows: -&gt; --&gt; -&gt;&gt; &lt;- =&gt; -x. Also <code>note:</code>, <code>if:</code>/<code>else:</code>/<code>end</code>, <code>autonumber</code>.</p>
-          </label>
+          </div>
           <div className="field flow-view">
             <span>Preview{diagram.bad > 0 && <em className="flow-warn"> · {diagram.bad} line{diagram.bad > 1 ? 's' : ''} not understood</em>}</span>
-            <div className="flow-canvas">
-              {diagram.out
-                ? <div dangerouslySetInnerHTML={{ __html: diagram.out.svg }} />
-                : <p className="muted">{diagram.broken ? 'This text cannot be drawn yet.' : 'Add a step like User -> App: hello to see the diagram.'}</p>}
+            <div className="sl-out">
+              <div className="sl-zoom" role="group" aria-label="Zoom">
+                <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(0.3, +(z - 0.1).toFixed(2)))}>−</button>
+                <output>{Math.round(zoom * 100)}%</output>
+                <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(2)))}>+</button>
+              </div>
+              <div className="sl-scroll">
+                {diagram.out
+                  ? <div className="sl-svg" style={{ zoom }} dangerouslySetInnerHTML={{ __html: diagram.out.svg }} />
+                  : <p className="sl-empty">{diagram.broken ? 'This text cannot be drawn yet.' : <>No diagram yet. Type <code>Alice -&gt; Bob: hello</code> in the editor.</>}</p>}
+              </div>
             </div>
           </div>
         </div>
