@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, baseName } from '../api'
 import Column from '../components/Column'
+import BoardModal from '../components/BoardModal'
 import TicketModal from '../components/TicketModal'
 import { FolderIcon } from '../components/Logo'
 
@@ -18,6 +19,7 @@ export default function Board({ reloadBoards }) {
   const [cards, setCards] = useState([])
   const [error, setError] = useState('')
   const [ticket, setTicket] = useState(null) // null | 'new' | Card
+  const [editing, setEditing] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -87,6 +89,7 @@ export default function Board({ reloadBoards }) {
           {board.folders.map((f) => (
             <span className="chip soft" key={f} title={f}><FolderIcon />{baseName(f)}</span>
           ))}
+          <button onClick={() => setEditing(true)}>Edit Board</button>
         </div>
       </div>
       {error && <p className="error" style={{ marginBottom: 16 }}>{error}</p>}
@@ -104,6 +107,13 @@ export default function Board({ reloadBoards }) {
           />
         ))}
       </div>
+      {editing && (
+        <BoardModal
+          initial={board}
+          onSaved={(b) => { setBoard(b); setEditing(false); reloadBoards() }}
+          onClose={() => setEditing(false)}
+        />
+      )}
       {ticket && (
         <TicketModal
           key={ticket === 'new' ? 'new' : ticket.id}

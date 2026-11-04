@@ -170,6 +170,7 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 
 /* kanban */
 .chips.right { justify-content: flex-end; }
+.chips button { height: 30px; padding: 0 10px; font-size: 12px; }
 .columns { display: grid; grid-template-columns: repeat(4, minmax(240px, 1fr)); gap: 16px; align-items: start; overflow-x: auto; padding-bottom: 8px; }
 .column {
   display: flex; flex-direction: column; gap: 10px; min-height: 220px; padding: 14px; border-radius: 18px;
