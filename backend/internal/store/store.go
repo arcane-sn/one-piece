@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS card_reviews(
   content_version INTEGER NOT NULL, status TEXT NOT NULL,
   verdict TEXT NOT NULL DEFAULT '', summary TEXT NOT NULL DEFAULT '', missing TEXT NOT NULL DEFAULT '[]',
   log TEXT NOT NULL DEFAULT '', error TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS card_flows(
+  id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  title TEXT NOT NULL, source TEXT NOT NULL DEFAULT '', position INTEGER NOT NULL DEFAULT 0);
 `
 
 // addColumn adds table.column (with the given DDL type/default) when it is missing.

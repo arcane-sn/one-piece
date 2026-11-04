@@ -23,10 +23,11 @@ Judge only these things:
 1. The title and description are clear: a developer could tell what to build.
 2. There is a testable Definition of Done (concrete, checkable outcomes).
 3. The scope is small and manageable: one focused change, not a whole application.
+4. At least one Business Flow (swimlane diagram, written as text) is attached and it matches the description: it shows who does what, in order. A ticket with no Business Flow is "needs_work".
 You may use Read, Grep and Glob on the listed product folders to check how the product works today. Keep it short (a handful of tool calls at most).
 Your final message must be ONLY one JSON object and nothing else:
 {"verdict":"pass"|"needs_work","summary":"one or two sentences","missing":["each concrete thing that is missing or wrong"]}
-Use "pass" only when all three points hold; then "missing" is an empty array. With "needs_work", list at least one item in "missing".
+Use "pass" only when all four points hold; then "missing" is an empty array. With "needs_work", list at least one item in "missing".
 Write in the same language as the ticket.`
 
 // streamClaude runs `claude -p` with read-only tools on dirs and reports progress lines
@@ -174,6 +175,13 @@ func (s *server) runReview(r store.Review, c store.Card) {
 		fmt.Fprintf(&msg, "Deadline: %s\n", c.Deadline)
 	}
 	fmt.Fprintf(&msg, "\nTicket description (Markdown):\n%s\n", c.Description)
+	flows, _ := s.st.ListFlows(c.ID)
+	if len(flows) == 0 {
+		msg.WriteString("\nBusiness Flows: none attached.\n")
+	}
+	for _, f := range flows {
+		fmt.Fprintf(&msg, "\nBusiness Flow \"%s\" (swimlane text):\n%s\n", f.Title, f.Source)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
