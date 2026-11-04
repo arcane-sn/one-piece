@@ -20,8 +20,12 @@ Development: jalankan backend (`cd backend && go run ./cmd/server`) dan frontend
 - Server hanya mau listen di loopback (`127.0.0.1`, `localhost`, `::1`); alamat lain ditolak saat start.
 - **Repo ini public.** Jangan commit password, token, `.env`, atau file `*.db` (sudah di `.gitignore`).
 
+## Sudah ada
+
+Login, dashboard, kanban, review tiket oleh Claude (live log + approval gate), Business Flow (swimlane), tugas Agent dan kasus QA hasil generate.
+
 ## Belum ada (slice berikutnya)
 
-Review tiket (DoD + swimlane), tiket Agent/QA, eksekusi `claude -p` dengan live log, integrasi swim-lanes dan drawdb.
+Eksekusi tugas Agent/QA oleh `claude -p`, integrasi drawdb.
 
 Desain: `docs/superpowers/specs/`. Rencana: `docs/superpowers/plans/`.
