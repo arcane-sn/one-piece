@@ -152,10 +152,11 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border-radius: 8px; background: rgba(176, 227, 227, 0.55); font-size: 12px; font-weight: 600; }
 .chip.soft { background: rgba(255, 255, 255, 0.6); }
 .statbar { display: flex; gap: 2px; height: 6px; border-radius: 3px; overflow: hidden; background: rgba(59, 36, 23, 0.08); }
-.statbar span:nth-child(1) { background: var(--orange); }
-.statbar span:nth-child(2) { background: var(--red); }
-.statbar span:nth-child(3) { background: var(--aqua); }
-.statbar span:nth-child(4) { background: rgba(59, 36, 23, 0.25); }
+.statbar span:nth-child(1) { background: #9A8F86; }
+.statbar span:nth-child(2) { background: var(--orange); }
+.statbar span:nth-child(3) { background: var(--red); }
+.statbar span:nth-child(4) { background: var(--aqua); }
+.statbar span:nth-child(5) { background: rgba(59, 36, 23, 0.25); }
 .board-card { position: relative; }
 .board-actions { position: absolute; top: 14px; right: 14px; display: flex; gap: 6px; opacity: 0; transition: opacity 0.15s; }
 .board-actions button { height: 30px; padding: 0 10px; font-size: 12px; }

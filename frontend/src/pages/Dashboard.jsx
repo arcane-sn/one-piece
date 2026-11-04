@@ -4,7 +4,7 @@ import { api, baseName } from '../api'
 import { FolderIcon } from '../components/Logo'
 import { totalCards } from '../components/Sidebar'
 
-const STATUSES = ['business', 'agent', 'qa', 'done']
+const STATUSES = ['draft', 'business', 'agent', 'qa', 'done']
 
 function greeting() {
   const h = new Date().getHours()

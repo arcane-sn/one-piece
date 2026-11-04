@@ -104,6 +104,9 @@ func (s *server) deleteCard(w http.ResponseWriter, r *http.Request) {
 
 // reviewQuietly starts a review for the saved card; a failure to start must not fail the save.
 func (s *server) reviewQuietly(c store.Card) {
+	if c.Status == "draft" {
+		return
+	}
 	if _, err := s.startReview(c); err != nil {
 		log.Printf("starting review of card %d: %v", c.ID, err)
 	}

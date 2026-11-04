@@ -146,6 +146,9 @@ func parseVerdict(text string) (verdict, error) {
 // startReview begins a review of the card's current content unless one for this
 // version already exists (running or done). A failed review is retried.
 func (s *server) startReview(c store.Card) (store.Review, error) {
+	if c.Status == "draft" {
+		return store.Review{}, store.ConflictError{Msg: "Draft tickets are not reviewed. Move it to Business first."}
+	}
 	if r, err := s.st.LatestReview(c.ID); err == nil && r.ContentVersion == c.ContentVersion && r.Status != "failed" {
 		return r, nil
 	}

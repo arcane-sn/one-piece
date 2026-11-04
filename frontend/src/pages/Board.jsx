@@ -7,6 +7,7 @@ import TicketModal from '../components/TicketModal'
 import { FolderIcon } from '../components/Logo'
 
 const COLUMNS = [
+  ['draft', 'Draft', '#9A8F86'],
   ['business', 'Business', '#EA9259'],
   ['agent', 'Agent', '#D65A42'],
   ['qa', 'QA', '#3B2417'],

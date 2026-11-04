@@ -6,7 +6,7 @@ import ItemsSection from './ItemsSection'
 import RichEditor from './RichEditor'
 import { ReviewComment, ReviewSide, useReview } from './ReviewPanel'
 
-const STATUS_LABEL = { business: 'Business', agent: 'Agent', qa: 'QA', done: 'Done' }
+const STATUS_LABEL = { draft: 'Draft', business: 'Business', agent: 'Agent', qa: 'QA', done: 'Done' }
 
 // Jira-style ticket modal: create (no `card`) or edit. Title/description on the
 // left, a details panel (status, deadline, approval) on the right.
@@ -116,6 +116,8 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
     }
   }
 
+  const isDraft = current?.status === 'draft' // drafts have no review, flows, or approval
+
   const edit = (setter) => (e) => {
     setter(e.target.value)
     setSaved(false)
@@ -146,9 +148,9 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
               <RichEditor value={description} placeholder="Describe the change and what “done” looks like."
                 onChange={(v) => { setDescription(v); setSaved(false) }} />
             </div>
-            <FlowsSection parent={current ? `/api/cards/${current.id}` : null} emptyHint="No flow yet. Claude asks for at least one before approval." onChanged={flowsChanged} onModal={setFlowOpen} />
-            <ItemsSection card={current} onModal={setFlowOpen} />
-            <ReviewComment card={current} review={review} />
+            {!isDraft && <FlowsSection parent={current ? `/api/cards/${current.id}` : null} emptyHint="No flow yet. Claude asks for at least one before approval." onChanged={flowsChanged} onModal={setFlowOpen} />}
+            {!isDraft && <ItemsSection card={current} onModal={setFlowOpen} />}
+            {!isDraft && <ReviewComment card={current} review={review} />}
           </div>
 
           <aside className="ticket-side">
@@ -166,7 +168,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
                 )}
               </div>
             </div>
-            <ReviewSide card={current} review={review} unsaved={contentChanged} busy={busy} onStart={startReview} onApprove={approve} />
+            {!isDraft && <ReviewSide card={current} review={review} unsaved={contentChanged} busy={busy} onStart={startReview} onApprove={approve} />}
           </aside>
         </div>
 
