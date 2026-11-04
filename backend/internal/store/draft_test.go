@@ -59,6 +59,50 @@ func TestMoveToDraftBlockedWhileReviewRuns(t *testing.T) {
 	}
 }
 
+func TestCreateDraftLandsInDraftAtEnd(t *testing.T) {
+	s, bid := newBoard(t)
+	a, err := s.CreateDraft(bid, "A", "first")
+	if err != nil || a.Status != "draft" || a.Position != 0 || a.Description != "first" {
+		t.Fatalf("a = %+v, %v", a, err)
+	}
+	if b, _ := s.CreateDraft(bid, "B", ""); b.Position != 1 {
+		t.Fatalf("second draft should be at position 1: %+v", b)
+	}
+	if _, err := s.CreateDraft(bid, "  ", ""); !isValidation(err) {
+		t.Fatalf("blank title: want ValidationError, got %v", err)
+	}
+}
+
+func TestUpdateDraftRejectsNonDraftAndOtherBoard(t *testing.T) {
+	s, bid := newBoard(t)
+	other, _ := s.CreateBoard("other", "", nil)
+	biz, _ := s.CreateCard(bid, "Biz", "", "")
+	if _, err := s.UpdateDraft(bid, biz.ID, "x", ""); !isConflict(err) {
+		t.Errorf("non-draft card: want ConflictError, got %v", err)
+	}
+	d, _ := s.CreateDraft(bid, "D", "old")
+	if _, err := s.UpdateDraft(other.ID, d.ID, "x", ""); !isConflict(err) {
+		t.Errorf("other board's draft: want ConflictError, got %v", err)
+	}
+	u, err := s.UpdateDraft(bid, d.ID, "D2", "new")
+	if err != nil || u.Title != "D2" || u.Description != "new" || u.ContentVersion != d.ContentVersion+1 {
+		t.Errorf("own draft update = %+v, %v", u, err)
+	}
+	if got, _ := s.GetCard(biz.ID); got.Title != "Biz" {
+		t.Errorf("business card must stay untouched, got %+v", got)
+	}
+}
+
+func TestTicketIndexLines(t *testing.T) {
+	if got := TicketIndex(nil); got != "" {
+		t.Fatalf("empty index = %q", got)
+	}
+	got := TicketIndex([]Card{{ID: 1, Status: "draft", Title: "A"}, {ID: 2, Status: "business", Title: "B"}})
+	if got != "#1 draft A\n#2 business B" {
+		t.Fatalf("index = %q", got)
+	}
+}
+
 func TestSetApprovedRejectsDraft(t *testing.T) {
 	s, _, cs := threeCards(t)
 	s.MoveCard(cs[0].ID, "draft", 0)

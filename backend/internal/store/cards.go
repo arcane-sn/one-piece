@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -94,6 +95,47 @@ func (s *Store) CreateCard(boardID int64, title, description, deadline string) (
 	}
 	id, _ := res.LastInsertId()
 	return getCard(s.DB, id)
+}
+
+// CreateDraft adds a card at the end of the board's Draft column.
+func (s *Store) CreateDraft(boardID int64, title, description string) (Card, error) {
+	if _, err := s.GetBoard(boardID); err != nil {
+		return Card{}, err
+	}
+	title, description, err := cleanCard(title, description)
+	if err != nil {
+		return Card{}, err
+	}
+	res, err := s.DB.Exec(`INSERT INTO cards(board_id,title,description,status,position)
+		VALUES(?,?,?,'draft',(SELECT COALESCE(MAX(position)+1,0) FROM cards WHERE board_id=? AND status='draft'))`,
+		boardID, title, description, boardID)
+	if err != nil {
+		return Card{}, err
+	}
+	id, _ := res.LastInsertId()
+	return getCard(s.DB, id)
+}
+
+// UpdateDraft edits a card only if it is a Draft of the given board; anything else is a ConflictError.
+// ponytail: check-then-update is not atomic; a card moved out of Draft in that instant would still be edited. Fine for one local user.
+func (s *Store) UpdateDraft(boardID, id int64, title, description string) (Card, error) {
+	c, err := getCard(s.DB, id)
+	if err != nil {
+		return Card{}, err
+	}
+	if c.BoardID != boardID || c.Status != "draft" {
+		return Card{}, ConflictError{"Only Draft tickets of this board can be changed here."}
+	}
+	return s.UpdateCard(id, title, description, c.Deadline)
+}
+
+// TicketIndex renders one "#id status title" line per card; "" when there are none.
+func TicketIndex(cards []Card) string {
+	lines := make([]string, 0, len(cards))
+	for _, c := range cards {
+		lines = append(lines, "#"+strconv.FormatInt(c.ID, 10)+" "+c.Status+" "+c.Title)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (s *Store) ListCards(boardID int64) ([]Card, error) {

@@ -40,6 +40,12 @@ func main() {
 		createUser(os.Args[2:])
 		return
 	}
+	if len(os.Args) > 1 && agentCommands[os.Args[1]] {
+		if err := runAgentCLI(os.Args[1:], os.Getenv, os.Stdin, os.Stdout); err != nil {
+			fatal("%v", err)
+		}
+		return
+	}
 	fs := flag.NewFlagSet("server", flag.ExitOnError)
 	addr := fs.String("addr", "127.0.0.1:5300", "listen address (loopback only)")
 	db := fs.String("db", "one-piece.db", "SQLite file")
