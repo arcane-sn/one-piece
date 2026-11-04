@@ -4,6 +4,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"path/filepath"
 
 	_ "modernc.org/sqlite"
 )
@@ -20,7 +21,10 @@ type ConflictError struct{ Msg string }
 
 func (e ConflictError) Error() string { return e.Msg }
 
-type Store struct{ DB *sql.DB }
+type Store struct {
+	DB  *sql.DB
+	Dir string // folder of the database file; per-board plan documents live under it
+}
 
 const schema = `
 CREATE TABLE IF NOT EXISTS users(
@@ -50,6 +54,17 @@ CREATE TABLE IF NOT EXISTS card_items(
   id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
   kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', position INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'todo', log TEXT NOT NULL DEFAULT '[]');
+CREATE TABLE IF NOT EXISTS brainstorm_messages(
+  id INTEGER PRIMARY KEY, board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+  role TEXT NOT NULL, text TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'done',
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
+CREATE TABLE IF NOT EXISTS brainstorm_state(
+  board_id INTEGER PRIMARY KEY REFERENCES boards(id) ON DELETE CASCADE,
+  session_id TEXT NOT NULL DEFAULT '', sent_index TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS plan_versions(
+  id INTEGER PRIMARY KEY, board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL, content TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
 `
 
 // addColumn adds table.column (with the given DDL type/default) when it is missing.
@@ -67,7 +82,7 @@ func addColumn(db *sql.DB, table, column, ddl string) error {
 
 // Open opens (creating if needed) the database at path and migrates it.
 func Open(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
 		return nil, err
 	}
@@ -91,5 +106,5 @@ func Open(path string) (*Store, error) {
 			return nil, err
 		}
 	}
-	return &Store{DB: db}, nil
+	return &Store{DB: db, Dir: filepath.Dir(path)}, nil
 }
