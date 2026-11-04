@@ -49,6 +49,13 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/cards/{id}/flows", s.createFlow)
 	mux.HandleFunc("PUT /api/flows/{id}", s.updateFlow)
 	mux.HandleFunc("DELETE /api/flows/{id}", s.deleteFlow)
+	mux.HandleFunc("GET /api/cards/{id}/items", s.listItems)
+	mux.HandleFunc("POST /api/cards/{id}/items", s.createItem)
+	mux.HandleFunc("POST /api/cards/{id}/generate-items", s.generateItems)
+	mux.HandleFunc("PUT /api/items/{id}", s.updateItem)
+	mux.HandleFunc("DELETE /api/items/{id}", s.deleteItem)
+	mux.HandleFunc("GET /api/items/{id}/flows", s.listItemFlows)
+	mux.HandleFunc("POST /api/items/{id}/flows", s.createItemFlow)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 	})

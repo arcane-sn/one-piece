@@ -61,7 +61,9 @@ func (s *server) updateFlow(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	s.reviewCard(f.CardID)
+	if f.ItemID == 0 { // Technical Flows are not part of the reviewed ticket
+		s.reviewCard(f.CardID)
+	}
 	writeJSON(w, http.StatusOK, f)
 }
 
@@ -80,7 +82,9 @@ func (s *server) deleteFlow(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	s.reviewCard(f.CardID)
+	if f.ItemID == 0 {
+		s.reviewCard(f.CardID)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

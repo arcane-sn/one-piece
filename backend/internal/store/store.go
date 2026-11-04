@@ -46,6 +46,10 @@ CREATE TABLE IF NOT EXISTS card_reviews(
 CREATE TABLE IF NOT EXISTS card_flows(
   id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
   title TEXT NOT NULL, source TEXT NOT NULL DEFAULT '', position INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS card_items(
+  id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', position INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'todo', log TEXT NOT NULL DEFAULT '[]');
 `
 
 // addColumn adds table.column (with the given DDL type/default) when it is missing.
@@ -79,6 +83,7 @@ func Open(path string) (*Store, error) {
 		{"cards", "deadline", "TEXT NOT NULL DEFAULT ''"},
 		{"cards", "approved", "INTEGER NOT NULL DEFAULT 0"},
 		{"cards", "content_version", "INTEGER NOT NULL DEFAULT 1"},
+		{"card_flows", "item_id", "INTEGER NOT NULL DEFAULT 0"}, // 0 = Business Flow of the card, else Technical Flow of that item
 	} {
 		if err := addColumn(db, m[0], m[1], m[2]); err != nil {
 			db.Close()
