@@ -111,6 +111,18 @@ func TestOpenUsesWAL(t *testing.T) {
 	}
 }
 
+func TestStoreDirAndPathAreAbsoluteForARelativeDBName(t *testing.T) {
+	t.Chdir(t.TempDir())
+	s, err := Open("rel.db") // how start.sh runs it: a bare file name
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.DB.Close()
+	if !filepath.IsAbs(s.Dir) || !filepath.IsAbs(s.Path) || filepath.Base(s.Path) != "rel.db" || !filepath.IsAbs(s.PlanPath(1)) {
+		t.Fatalf("Dir=%q Path=%q PlanPath=%q must all be absolute", s.Dir, s.Path, s.PlanPath(1))
+	}
+}
+
 func TestPlanPathLivesNextToTheDatabase(t *testing.T) {
 	s := openTemp(t)
 	want := filepath.Join(s.Dir, "plans", "board-7.md")

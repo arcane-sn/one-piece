@@ -22,8 +22,9 @@ type ConflictError struct{ Msg string }
 func (e ConflictError) Error() string { return e.Msg }
 
 type Store struct {
-	DB  *sql.DB
-	Dir string // folder of the database file; per-board plan documents live under it
+	DB   *sql.DB
+	Path string // absolute path of the database file
+	Dir  string // its folder; per-board plan documents live under it
 }
 
 const schema = `
@@ -106,5 +107,10 @@ func Open(path string) (*Store, error) {
 			return nil, err
 		}
 	}
-	return &Store{DB: db, Dir: filepath.Dir(path)}, nil
+	abs, err := filepath.Abs(path) // Claude's file permissions need absolute paths
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	return &Store{DB: db, Path: abs, Dir: filepath.Dir(abs)}, nil
 }

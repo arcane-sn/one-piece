@@ -15,5 +15,8 @@ func TestMain(m *testing.M) {
 	runClaude = func(context.Context, string, string) (string, error) {
 		return "", errors.New("claude is stubbed in tests")
 	}
+	runBrainstorm = func(context.Context, brainstormRun, func(string)) (string, error) {
+		return "", errors.New("claude is stubbed in tests")
+	}
 	os.Exit(m.Run())
 }

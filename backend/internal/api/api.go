@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
@@ -18,13 +20,18 @@ import (
 type server struct {
 	st     *store.Store
 	static string
+	mu     sync.Mutex
+	turns  map[int64]context.CancelFunc // running brainstorm turns by board id
 }
 
 // New builds the handler: /api/* (authenticated) plus static files from staticDir.
 func New(st *store.Store, staticDir string) http.Handler {
-	s := &server{st: st, static: staticDir}
+	s := &server{st: st, static: staticDir, turns: map[int64]context.CancelFunc{}}
 	if err := st.FailRunningReviews(); err != nil { // reviews cut short by a previous shutdown
 		log.Printf("sweeping stale reviews: %v", err)
+	}
+	if err := st.FailRunningBrainstorm(); err != nil { // chat replies cut short by a previous shutdown
+		log.Printf("sweeping stale brainstorm replies: %v", err)
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/login", s.login)
@@ -37,6 +44,12 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/boards/{id}", s.getBoard)
 	mux.HandleFunc("PUT /api/boards/{id}", s.updateBoard)
 	mux.HandleFunc("DELETE /api/boards/{id}", s.deleteBoard)
+	mux.HandleFunc("GET /api/boards/{id}/brainstorm", s.getBrainstorm)
+	mux.HandleFunc("POST /api/boards/{id}/brainstorm/messages", s.postBrainstormMessage)
+	mux.HandleFunc("POST /api/boards/{id}/brainstorm/stop", s.stopBrainstorm)
+	mux.HandleFunc("POST /api/boards/{id}/brainstorm/new", s.newBrainstorm)
+	mux.HandleFunc("GET /api/boards/{id}/plan/{v}", s.getPlanVersion)
+	mux.HandleFunc("POST /api/boards/{id}/plan/{v}/restore", s.restorePlan)
 	mux.HandleFunc("GET /api/boards/{id}/cards", s.listCards)
 	mux.HandleFunc("POST /api/boards/{id}/cards", s.createCard)
 	mux.HandleFunc("PUT /api/cards/{id}", s.updateCard)

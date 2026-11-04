@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/arcane-sn/one-piece/backend/internal/store"
@@ -84,9 +85,11 @@ func (s *server) deleteBoard(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	s.stopTurn(id)
 	if err := s.st.DeleteBoard(id); err != nil {
 		writeErr(w, err)
 		return
 	}
+	os.Remove(s.st.PlanPath(id)) // the plan document goes with its board
 	w.WriteHeader(http.StatusNoContent)
 }
