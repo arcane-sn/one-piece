@@ -160,3 +160,24 @@ func TestBackfillIdents(t *testing.T) {
 		t.Fatalf("continue = %q %q", c.Ident, it.Ident)
 	}
 }
+
+// A key an earlier ticket identifier still uses must not be handed to another board: two boards on one
+// master folder would otherwise get the same ticket id and the same feature branch name.
+func TestRetiredBoardKeyIsNotReusedByAnotherBoard(t *testing.T) {
+	s := openTemp(t)
+	a, _ := s.CreateBoard("Midas", "", nil)
+	s.CreateCard(a.ID, "One", "", "") // MID-1
+	if _, err := s.SetBoardKey(a.ID, "XYZ"); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := s.CreateBoard("Midas Two", "", nil)
+	if b.Key == "MID" {
+		t.Fatalf("new board reused the retired key MID")
+	}
+	if _, err := s.SetBoardKey(b.ID, "MID"); !errors.As(err, &ValidationError{}) {
+		t.Fatalf("taking the retired key: err = %v", err)
+	}
+	if _, err := s.SetBoardKey(a.ID, "MID"); err != nil {
+		t.Fatalf("the owner board may go back to its own old key: %v", err)
+	}
+}

@@ -58,7 +58,9 @@ func DeriveKey(name string, taken map[string]bool) string {
 }
 
 func (s *Store) takenKeys(exceptID int64) (map[string]bool, error) {
-	rows, err := s.DB.Query(`SELECT key FROM boards WHERE id!=? AND key!=''`, exceptID)
+	// keys of other boards, plus keys still used as the prefix of their tickets' identifiers (after a rename)
+	rows, err := s.DB.Query(`SELECT key FROM boards WHERE id!=? AND key!=''
+		UNION SELECT substr(ident,1,instr(ident,'-')-1) FROM cards WHERE board_id!=? AND instr(ident,'-')>0`, exceptID, exceptID)
 	if err != nil {
 		return nil, err
 	}
