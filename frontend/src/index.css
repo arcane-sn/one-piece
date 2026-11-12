@@ -484,3 +484,6 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 /* A spinner inside running text (e.g. the kanban card title) must be a box, not an inline span. */
 .spinner { display: inline-block; flex-shrink: 0; vertical-align: middle; }
 .kcard-title .spinner { width: 12px; height: 12px; border-width: 2px; margin-left: 6px; }
+
+/* Spinner inside the small pill buttons ("Thinking…"): a fixed 11px circle left of the label. */
+.ai-btn .spinner { width: 11px; height: 11px; border-width: 2px; margin-right: 5px; vertical-align: -1px; }

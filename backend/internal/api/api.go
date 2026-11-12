@@ -119,6 +119,7 @@ func (s *server) spa() http.Handler {
 			files.ServeHTTP(w, r)
 			return
 		}
+		w.Header().Set("Cache-Control", "no-cache") // index.html names the hashed assets: always revalidate so a rebuild shows up
 		http.ServeFile(w, r, filepath.Join(s.static, "index.html"))
 	})
 }
