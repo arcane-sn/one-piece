@@ -3,6 +3,7 @@ import { api } from '../api'
 import PromptModal from './PromptModal'
 import FlowsSection from './FlowsSection'
 import ItemsSection from './ItemsSection'
+import BranchingSection from './BranchingSection'
 import RichEditor from './RichEditor'
 import { ReviewComment, ReviewSide, useReview } from './ReviewPanel'
 
@@ -149,6 +150,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
                 onChange={(v) => { setDescription(v); setSaved(false) }} />
             </div>
             {!isDraft && <FlowsSection parent={current ? `/api/cards/${current.id}` : null} emptyHint="No flow yet. Claude asks for at least one before approval." onChanged={flowsChanged} onModal={setFlowOpen} />}
+            {!isDraft && current && <BranchingSection cardId={current.id} onModal={setFlowOpen} />}
             {!isDraft && <ItemsSection card={current} onModal={setFlowOpen} />}
             {!isDraft && <ReviewComment card={current} review={review} />}
           </div>

@@ -8,6 +8,8 @@ export default function BoardModal({ initial, onSaved, onClose }) {
   const [name, setName] = useState(initial?.name ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [key, setKey] = useState(initial?.key ?? '')
+  const [prefix, setPrefix] = useState(initial?.branchPrefix ?? 'feature/')
+  const [devBranch, setDevBranch] = useState(initial?.devBranch ?? 'dev')
   const [folders, setFolders] = useState(initial?.folders ?? [])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -38,7 +40,7 @@ export default function BoardModal({ initial, onSaved, onClose }) {
     e.preventDefault()
     setBusy(true)
     setError('')
-    const body = { name, description, folders, ...(initial && key ? { key } : {}) }
+    const body = { name, description, folders, ...(initial && key ? { key } : {}), ...(initial ? { branchPrefix: prefix, devBranch } : {}) }
     try {
       const saved = initial
         ? await api(`/api/boards/${initial.id}`, { method: 'PUT', body })
@@ -75,6 +77,19 @@ export default function BoardModal({ initial, onSaved, onClose }) {
             <input className="key-input" maxLength={5} value={key}
               onChange={(e) => setKey(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} />
           </label>
+        )}
+
+        {initial && (
+          <div className="field-pair">
+            <label className="field">
+              <span>Branch Prefix</span>
+              <input className="key-input wide" value={prefix} onChange={(e) => setPrefix(e.target.value.toLowerCase().replace(/\s/g, ''))} />
+            </label>
+            <label className="field">
+              <span>Dev Branch</span>
+              <input className="key-input wide" value={devBranch} onChange={(e) => setDevBranch(e.target.value.replace(/\s/g, ''))} />
+            </label>
+          </div>
         )}
 
         <div className="field">

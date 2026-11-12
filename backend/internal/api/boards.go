@@ -23,6 +23,9 @@ type boardIn struct {
 	Description string   `json:"description"`
 	Folders     []string `json:"folders"`
 	Key         string   `json:"key"` // optional; changes the prefix of new ticket identifiers
+	// optional; how new branch plans are named (either one alone keeps the other as it is)
+	BranchPrefix string `json:"branchPrefix"`
+	DevBranch    string `json:"devBranch"`
 }
 
 func (s *server) listBoards(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +79,16 @@ func (s *server) updateBoard(w http.ResponseWriter, r *http.Request) {
 	b, err := s.st.UpdateBoard(id, in.Name, in.Description, in.Folders)
 	if err == nil && in.Key != "" {
 		b, err = s.st.SetBoardKey(id, strings.ToUpper(strings.TrimSpace(in.Key)))
+	}
+	if err == nil && (in.BranchPrefix != "" || in.DevBranch != "") {
+		prefix, dev := in.BranchPrefix, in.DevBranch
+		if prefix == "" {
+			prefix = b.BranchPrefix
+		}
+		if dev == "" {
+			dev = b.DevBranch
+		}
+		b, err = s.st.SetBoardBranchDefaults(id, prefix, dev)
 	}
 	if err != nil {
 		writeErr(w, err)

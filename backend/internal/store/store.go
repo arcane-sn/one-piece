@@ -55,6 +55,11 @@ CREATE TABLE IF NOT EXISTS card_items(
   id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
   kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', position INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'todo', log TEXT NOT NULL DEFAULT '[]');
+CREATE TABLE IF NOT EXISTS card_branches(
+  id INTEGER PRIMARY KEY, card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  repo TEXT NOT NULL, base_branch TEXT NOT NULL, feature_branch TEXT NOT NULL, dev_branch TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'planned', pr_url TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '',
+  UNIQUE(card_id, repo));
 CREATE TABLE IF NOT EXISTS brainstorm_messages(
   id INTEGER PRIMARY KEY, board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
   role TEXT NOT NULL, text TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'done',
@@ -99,17 +104,19 @@ func Open(path string) (*Store, error) {
 		{"cards", "deadline", "TEXT NOT NULL DEFAULT ''"},
 		{"cards", "approved", "INTEGER NOT NULL DEFAULT 0"},
 		{"cards", "content_version", "INTEGER NOT NULL DEFAULT 1"},
-		{"card_flows", "item_id", "INTEGER NOT NULL DEFAULT 0"},    // 0 = Business Flow of the card, else Technical Flow of that item
-		{"card_items", "version", "INTEGER NOT NULL DEFAULT 0"},    // ticket content_version it was generated from; 0 = added by hand
-		{"card_items", "failure", "TEXT NOT NULL DEFAULT ''"},      // QA: why the last run failed; "" = not failed
-		{"card_items", "failure_desc", "TEXT NOT NULL DEFAULT ''"}, // QA: the detailed explanation behind failure (the one-line issue)
-		{"card_items", "fix_for", "INTEGER NOT NULL DEFAULT 0"},    // Agent: id of the failed QA item this [FIX] task is for
-		{"boards", "key", "TEXT NOT NULL DEFAULT ''"},              // prefix of ticket identifiers, e.g. MID
-		{"boards", "card_seq", "INTEGER NOT NULL DEFAULT 0"},       // last ticket number handed out; never reused
-		{"cards", "ident", "TEXT NOT NULL DEFAULT ''"},             // e.g. MID-12; fixed once assigned
-		{"cards", "task_seq", "INTEGER NOT NULL DEFAULT 0"},        // last Agent Task number handed out
-		{"cards", "qa_seq", "INTEGER NOT NULL DEFAULT 0"},          // last QA Test Case number handed out
-		{"card_items", "ident", "TEXT NOT NULL DEFAULT ''"},        // e.g. MID-12-T3 / MID-12-QA1
+		{"card_flows", "item_id", "INTEGER NOT NULL DEFAULT 0"},         // 0 = Business Flow of the card, else Technical Flow of that item
+		{"card_items", "version", "INTEGER NOT NULL DEFAULT 0"},         // ticket content_version it was generated from; 0 = added by hand
+		{"card_items", "failure", "TEXT NOT NULL DEFAULT ''"},           // QA: why the last run failed; "" = not failed
+		{"card_items", "failure_desc", "TEXT NOT NULL DEFAULT ''"},      // QA: the detailed explanation behind failure (the one-line issue)
+		{"card_items", "fix_for", "INTEGER NOT NULL DEFAULT 0"},         // Agent: id of the failed QA item this [FIX] task is for
+		{"boards", "key", "TEXT NOT NULL DEFAULT ''"},                   // prefix of ticket identifiers, e.g. MID
+		{"boards", "card_seq", "INTEGER NOT NULL DEFAULT 0"},            // last ticket number handed out; never reused
+		{"boards", "branch_prefix", "TEXT NOT NULL DEFAULT 'feature/'"}, // new tickets branch off as {prefix}{ident}
+		{"boards", "dev_branch", "TEXT NOT NULL DEFAULT 'dev'"},         // the shared branch the -dev branch is cut from
+		{"cards", "ident", "TEXT NOT NULL DEFAULT ''"},                  // e.g. MID-12; fixed once assigned
+		{"cards", "task_seq", "INTEGER NOT NULL DEFAULT 0"},             // last Agent Task number handed out
+		{"cards", "qa_seq", "INTEGER NOT NULL DEFAULT 0"},               // last QA Test Case number handed out
+		{"card_items", "ident", "TEXT NOT NULL DEFAULT ''"},             // e.g. MID-12-T3 / MID-12-QA1
 	} {
 		if err := addColumn(db, m[0], m[1], m[2]); err != nil {
 			db.Close()
