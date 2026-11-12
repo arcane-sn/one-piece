@@ -107,6 +107,15 @@ func (s *server) runnable(it store.Item, gate bool) (store.Card, store.Board, er
 	if fi, err := os.Stat(b.Folders[0]); err != nil || !fi.IsDir() {
 		return c, b, store.ConflictError{Msg: "Folder not found: " + b.Folders[0]}
 	}
+	if it.Kind == "agent" { // Agent Tasks work in the ticket's branched repos, which must be on their feature branch
+		repos, err := s.ticketRepos(c.ID)
+		if err == nil {
+			err = checkOnFeature(repos)
+		}
+		if err != nil {
+			return c, b, err
+		}
+	}
 	return c, b, nil
 }
 
@@ -267,10 +276,18 @@ func (s *server) executeItem(ctx context.Context, it store.Item, c store.Card, b
 	logLine := func(line string) { s.st.AppendItemLog(it.ID, line) }
 	var final string
 	var err error
+	var repos []store.Branch
 	if it.Kind == "qa" {
 		final, err = streamClaude(ctx, qaSystemPrompt, msg.String(), b.Folders, logLine)
 	} else {
-		final, err = agentRun(ctx, b.Folders[0], b.Folders[1:], runSystemPrompt, msg.String(), logLine)
+		cwd, dirs := b.Folders[0], b.Folders[1:]
+		if repos, _ = s.ticketRepos(c.ID); len(repos) > 0 { // write scope: the registered repos only
+			cwd, dirs = repos[0].Repo, nil
+			for _, r := range repos[1:] {
+				dirs = append(dirs, r.Repo)
+			}
+		}
+		final, err = agentRun(ctx, cwd, dirs, runSystemPrompt, msg.String(), logLine)
 	}
 	switch {
 	case errors.Is(ctx.Err(), context.Canceled):
@@ -305,6 +322,18 @@ func (s *server) executeItem(ctx context.Context, it store.Item, c store.Card, b
 		logLine("Passed: " + shorten(desc, 300))
 		s.st.SetItemStatus(it.ID, "done")
 		return runDone
+	}
+	if len(repos) > 0 {
+		changed, cerr := commitTask(repos, it)
+		if cerr != nil {
+			log.Printf("run item %d: commit failed: %v", it.ID, cerr)
+			logLine("Failed: could not commit in " + shorten(cerr.Error(), 300))
+			s.st.SetItemStatus(it.ID, "todo")
+			return runBlocked
+		}
+		if len(changed) > 0 {
+			logLine("Committed in " + strings.Join(changed, ", "))
+		}
 	}
 	logLine("Done: " + shorten(final, 400))
 	s.st.SetItemStatus(it.ID, "done")
