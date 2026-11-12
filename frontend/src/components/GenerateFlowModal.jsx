@@ -102,7 +102,7 @@ export default function GenerateFlowModal({ kind, id, createPath, onSaved, onClo
         </div>
         <label className="field">
           <span>What Should The Flow Show?</span>
-          <textarea autoFocus rows={3} maxLength={2000} placeholder={HINT[kind]} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+          <textarea autoFocus rows={6} maxLength={20000} placeholder={HINT[kind]} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
         </label>
         {busy && <p className="muted prompt-status"><span className="spinner" /> Claude is drawing the flow… You can close this and come back.</p>}
         {error && <p className="error">{error}</p>}

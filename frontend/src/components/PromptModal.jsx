@@ -49,7 +49,7 @@ export default function PromptModal({ boardId, cardId, title, description, onUse
         </div>
         <label className="field">
           <span>Your Idea</span>
-          <MentionTextarea boardId={boardId} autoFocus rows={4} maxLength={2000} placeholder="e.g. Let ops teams save filter sets on the orders page and reopen them in one click. Type @ to point Claude at a file or folder."
+          <MentionTextarea boardId={boardId} autoFocus rows={8} maxLength={20000} placeholder="e.g. Let ops teams save filter sets on the orders page and reopen them in one click. Type @ to point Claude at a file or folder."
             value={prompt} onChange={setPrompt} />
         </label>
 

@@ -60,7 +60,7 @@ func TestGenerateDescriptionValidationAndFailure(t *testing.T) {
 	if got := post(map[string]any{"prompt": "   "}, true); got != 400 {
 		t.Errorf("blank prompt: %d, want 400", got)
 	}
-	if got := post(map[string]any{"prompt": strings.Repeat("a", 2001)}, true); got != 400 {
+	if got := post(map[string]any{"prompt": strings.Repeat("a", 20001)}, true); got != 400 {
 		t.Errorf("oversized prompt: %d, want 400", got)
 	}
 	if got := post(map[string]any{"prompt": "x", "boardId": 9999}, true); got != 404 {

@@ -68,8 +68,8 @@ func (s *server) generateFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Prompt = strings.TrimSpace(in.Prompt)
-	if n := utf8.RuneCountInString(in.Prompt); n < 1 || n > 2000 {
-		writeErr(w, store.ValidationError{Msg: "prompt must be 1-2000 characters"})
+	if n := utf8.RuneCountInString(in.Prompt); n < 1 || n > 20000 {
+		writeErr(w, store.ValidationError{Msg: "prompt must be 1-20000 characters"})
 		return
 	}
 	if utf8.RuneCountInString(in.Previous) > 10000 || len(in.Problems) > 200 {
