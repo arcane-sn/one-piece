@@ -6,19 +6,7 @@ import { Markdown } from '@tiptap/markdown'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { Placeholder } from '@tiptap/extensions'
 import { api } from '../api'
-
-const readDataURL = (blob) => new Promise((resolve, reject) => {
-  const r = new FileReader()
-  r.onload = () => resolve(r.result)
-  r.onerror = () => reject(r.error)
-  r.readAsDataURL(blob)
-})
-
-// Stores an image on the server and returns its /api/uploads/... url.
-async function uploadImage(blob) {
-  const { url } = await api('/api/uploads', { method: 'POST', body: { data: await readDataURL(blob) } })
-  return url
-}
+import { uploadImage } from '../lib/upload'
 
 // Fetches the image an <img src> points to (data:, blob: or a web url the browser may read).
 async function fetchImage(src) {

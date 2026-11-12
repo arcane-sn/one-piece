@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
 import { build, parse } from '../lib/swimlanes'
+import MentionTextarea from './MentionTextarea'
 import { jobError, jobResult, useJob } from '../lib/jobs'
 
 const HINT = {
@@ -102,7 +103,7 @@ export default function GenerateFlowModal({ kind, id, createPath, onSaved, onClo
         </div>
         <label className="field">
           <span>What Should The Flow Show?</span>
-          <textarea autoFocus rows={6} maxLength={20000} placeholder={HINT[kind]} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+          <MentionTextarea autoFocus autoGrow rows={3} maxLength={20000} placeholder={HINT[kind]} value={prompt} onChange={setPrompt} />
         </label>
         {busy && <p className="muted prompt-status"><span className="spinner" /> Claude is drawing the flow… You can close this and come back.</p>}
         {error && <p className="error">{error}</p>}

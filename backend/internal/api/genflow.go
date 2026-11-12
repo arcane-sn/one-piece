@@ -117,6 +117,8 @@ func (s *server) generateFlow(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(&msg, "\nYour previous draft had lines the drawing could not read (line numbers %v). Fix them, keep the rest:\n%s\n", in.Problems, in.Previous)
 	}
 
+	imgs := s.attachedImages(in.Prompt)
+	imgNote := withImages(&msg, imgs)
 	scope, target, label := "card", card.ID, "Business Flow "+card.Ident
 	if in.Kind == "technical" {
 		scope, target, label = "item", item.ID, "Technical Flow "+item.Ident
@@ -124,7 +126,13 @@ func (s *server) generateFlow(w http.ResponseWriter, r *http.Request) {
 	reqJSON, _ := json.Marshal(map[string]any{"prompt": in.Prompt, "retry": in.Previous != ""}) // retry = Claude's second go at unreadable lines
 	s.startJob(w, store.Job{Kind: "flow", Scope: scope, TargetID: target, CardID: card.ID, Label: label, Request: string(reqJSON)}, 3*time.Minute,
 		func(ctx context.Context) (any, bool, error) {
-			out, err := runClaude(ctx, system, msg.String())
+			var out string
+			var err error
+			if len(imgs) > 0 {
+				out, err = streamClaude(ctx, system+imgNote, msg.String(), []string{s.uploadsDir()}, func(string) {})
+			} else {
+				out, err = runClaude(ctx, system, msg.String())
+			}
 			title, source := parseFlowReply(out)
 			if err != nil || !flowArrow.MatchString(source) {
 				log.Printf("generate-flow failed: err=%v source=%q", err, shorten(source, 80))

@@ -45,7 +45,7 @@ export default function PromptModal({ boardId, cardId, title, description, onUse
       <form className="modal prompt-modal" role="dialog" aria-modal="true" aria-label="Generate Description" onSubmit={generate}>
         <div className="modal-head">
           <h2>Generate Description</h2>
-          <p>Describe the idea in a sentence or two. Type @ to pick a file or folder for Claude to read. Claude drafts the ticket for you to review.</p>
+          <p>Describe the idea in a sentence or two. Type @ to pick a file or folder for Claude to read, or paste a screenshot. Claude drafts the ticket for you to review.</p>
         </div>
         <label className="field">
           <span>Your Idea</span>

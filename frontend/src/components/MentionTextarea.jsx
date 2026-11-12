@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { toast } from '../lib/toast'
+import { uploadImage } from '../lib/upload'
 
 // The "@word" being typed right before the caret, or null.
 function activeMention(text, caret) {
@@ -31,6 +33,23 @@ export default function MentionTextarea({ boardId, value, onChange, onKeyDown: o
     }, 120)
     return () => clearTimeout(t)
   }, [menu?.query, menu?.start, boardId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pasting a screenshot uploads it and puts ![](url) at the caret; the server hands the file to Claude.
+  async function onPaste(e) {
+    const img = [...(e.clipboardData?.items ?? [])].find((i) => i.kind === 'file' && i.type.startsWith('image/'))
+    if (!img) return
+    e.preventDefault()
+    const el = e.target
+    const at = el.selectionStart
+    try {
+      const url = await uploadImage(img.getAsFile())
+      const md = `![image](${url})`
+      onChange(value.slice(0, at) + md + value.slice(el.selectionEnd))
+      requestAnimationFrame(() => { el.focus(); el.setSelectionRange(at + md.length, at + md.length) })
+    } catch (err) {
+      toast(err.message || 'Could not attach the image')
+    }
+  }
 
   function sync(el) {
     const m = boardId ? activeMention(el.value, el.selectionStart) : null
@@ -80,6 +99,7 @@ export default function MentionTextarea({ boardId, value, onChange, onKeyDown: o
       <textarea ref={ta} value={value} {...rest}
         onChange={(e) => { onChange(e.target.value); sync(e.target) }}
         onKeyDown={onKeyDown}
+        onPaste={onPaste}
         onKeyUp={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') sync(e.target) }}
         onClick={(e) => sync(e.target)}
         onBlur={() => setTimeout(() => setMenu(null), 120)} />

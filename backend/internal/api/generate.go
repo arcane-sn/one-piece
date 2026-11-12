@@ -95,6 +95,11 @@ func (s *server) generateDescription(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(&msg, "\nOwner's idea:\n%s\n", in.Prompt)
 
+	imgs := s.attachedImages(in.Prompt)
+	imgNote := withImages(&msg, imgs)
+	if len(imgs) > 0 {
+		roots = append(roots, s.uploadsDir())
+	}
 	scope, target, label := "board", in.BoardID, "Description"
 	if in.CardID != 0 {
 		c, err := s.st.GetCard(in.CardID)
@@ -113,9 +118,13 @@ func (s *server) generateDescription(w http.ResponseWriter, r *http.Request) {
 		func(ctx context.Context) (any, bool, error) {
 			var out string
 			var err error
-			if len(mentioned) > 0 { // the owner pointed at code with "@": let Claude read it
-				fmt.Fprintf(&msg, "\nThe owner referenced these paths with @ (read them before writing, a handful of tool calls at most):\n- %s\n", strings.Join(mentioned, "\n- "))
-				out, err = streamClaude(ctx, descriptionSystemPrompt+codeAccessNote, msg.String(), roots, func(string) {})
+			if len(mentioned) > 0 || len(imgs) > 0 { // code pointed at with "@" or pasted images: let Claude read them
+				system := descriptionSystemPrompt + imgNote
+				if len(mentioned) > 0 {
+					fmt.Fprintf(&msg, "\nThe owner referenced these paths with @ (read them before writing, a handful of tool calls at most):\n- %s\n", strings.Join(mentioned, "\n- "))
+					system += codeAccessNote
+				}
+				out, err = streamClaude(ctx, system, msg.String(), roots, func(string) {})
 			} else {
 				out, err = runClaude(ctx, descriptionSystemPrompt, msg.String())
 			}

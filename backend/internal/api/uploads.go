@@ -77,3 +77,36 @@ func (s *server) getUpload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	http.ServeFile(w, r, filepath.Join(s.uploadsDir(), name))
 }
+
+var uploadRef = regexp.MustCompile(`/api/uploads/([0-9a-f]{64}\.(?:png|jpg|gif|webp))`)
+
+// attachedImages turns pasted-image references in text into the absolute paths of the files that
+// exist, so Claude can open them. Only names matching an upload's exact shape are ever used.
+func (s *server) attachedImages(text string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, m := range uploadRef.FindAllStringSubmatch(text, -1) {
+		p := filepath.Join(s.uploadsDir(), m[1])
+		if seen[p] {
+			continue
+		}
+		if _, err := os.Stat(p); err == nil {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// imageNote tells Claude about pasted images and lets it read them.
+const imageNote = `
+The owner pasted images (they appear as ![](/api/uploads/...) in the text). Open each listed file with Read and use what it shows. Your final message is still only the answer asked for.`
+
+// withImages appends the image files to msg and returns the note for the system prompt (empty if none).
+func withImages(msg *strings.Builder, imgs []string) string {
+	if len(imgs) == 0 {
+		return ""
+	}
+	msg.WriteString("\nPasted images (read them):\n- " + strings.Join(imgs, "\n- ") + "\n")
+	return imageNote
+}
