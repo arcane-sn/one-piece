@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { api } from './api'
 import BoardModal from './components/BoardModal'
 import Sidebar from './components/Sidebar'
+import Toaster from './components/Toaster'
 import Board from './pages/Board'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
@@ -31,6 +32,7 @@ function Shell({ user, onLogout }) {
           <Route path="/boards/:id" element={<Board reloadBoards={reload} />} />
         </Routes>
       </main>
+      <Toaster />
       {modal && (
         <BoardModal key={modal === 'new' ? 'new' : modal.id} initial={modal === 'new' ? undefined : modal} onSaved={saved} onClose={closeModal} />
       )}

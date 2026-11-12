@@ -1,9 +1,36 @@
 import { useEffect, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import Image from '@tiptap/extension-image'
 import { Markdown } from '@tiptap/markdown'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { Placeholder } from '@tiptap/extensions'
+import { api } from '../api'
+
+const readDataURL = (blob) => new Promise((resolve, reject) => {
+  const r = new FileReader()
+  r.onload = () => resolve(r.result)
+  r.onerror = () => reject(r.error)
+  r.readAsDataURL(blob)
+})
+
+// Stores an image on the server and returns its /api/uploads/... url.
+async function uploadImage(blob) {
+  const { url } = await api('/api/uploads', { method: 'POST', body: { data: await readDataURL(blob) } })
+  return url
+}
+
+// Fetches the image an <img src> points to (data:, blob: or a web url the browser may read).
+async function fetchImage(src) {
+  let res
+  try { res = await fetch(src, { credentials: 'include' }) } catch { res = await fetch(src) }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const blob = await res.blob()
+  if (!blob.type.startsWith('image/')) throw new Error('not an image')
+  return blob
+}
+
+const imageFiles = (dt) => [...(dt?.files ?? [])].filter((f) => f.type.startsWith('image/'))
 
 const STYLES = [
   ['p', 'Paragraph', 'rte-opt-p'],
@@ -48,13 +75,54 @@ function StyleMenu({ value, onPick }) {
   )
 }
 
+// Inserts pasted/dropped content whose pictures are copied to the server first. A picture that
+// cannot be read (Jira links need its login) is dropped and reported through setNotice.
+async function pasteWithImages(ed, html, files, setNotice) {
+  setNotice('Copying images…')
+  let failed = 0
+  let out = ''
+  if (html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    for (const img of [...doc.querySelectorAll('img')]) {
+      try {
+        img.setAttribute('src', await uploadImage(await fetchImage(img.getAttribute('src') ?? '')))
+        img.removeAttribute('srcset')
+      } catch {
+        failed++
+        img.remove()
+      }
+    }
+    out = doc.body.innerHTML
+  }
+  if (out && failed === 0) {
+    ed.chain().focus().insertContent(out, { contentType: 'html' }).run()
+  } else {
+    if (out) ed.chain().focus().insertContent(out, { contentType: 'html' }).run()
+    // The picture itself usually travels with the clipboard as a file when its link is unreadable.
+    for (const f of files) {
+      try {
+        ed.chain().focus().setImage({ src: await uploadImage(f) }).run()
+        failed = Math.max(0, failed - 1)
+      } catch (err) {
+        setNotice(err.message)
+        return
+      }
+    }
+  }
+  setNotice(failed > 0
+    ? `${failed} image${failed > 1 ? 's' : ''} could not be copied (the source blocks other sites). Paste the screenshot itself, or drag the image file in.`
+    : '')
+}
+
 // WYSIWYG editor (Tiptap). The value is Markdown, so it stays readable for
 // `claude -p` and for plain-text previews.
 export default function RichEditor({ value, onChange, placeholder, readOnly = false }) {
   const ref = useRef(null)
+  const [notice, setNotice] = useState('')
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ link: { openOnClick: false } }),
+      Image.configure({ allowBase64: false }),
       Markdown,
       TaskList,
       TaskItem.configure({ nested: true }),
@@ -64,14 +132,35 @@ export default function RichEditor({ value, onChange, placeholder, readOnly = fa
     contentType: 'markdown',
     editable: !readOnly,
     editorProps: {
-      // Plain-text paste is treated as Markdown ("- [ ] x" becomes a task list, "## T" a heading).
+      // Rich paste with pictures (e.g. a Jira description): copy each picture to the server first,
+      // since the source's own image links stop working outside Jira.
       handlePaste: (_view, event) => {
         const cd = event.clipboardData
-        const text = cd?.getData('text/plain')
         const ed = ref.current
+        const html = cd?.getData('text/html') ?? ''
+        const files = imageFiles(cd)
+        if (ed && (/<img[\s>]/i.test(html) || files.length)) {
+          event.preventDefault()
+          pasteWithImages(ed, html, files, setNotice)
+          return true
+        }
+        // Jira's editor copies an attachment as a bare media node with no <img> and no way to read it.
+        if (ed && !files.length && /data-node-type="media|data-testid="media-|mediasingle/i.test(html)) {
+          setNotice('This paste has an image that Jira does not hand over (the text was pasted). Right-click the image in Jira, Copy Image, and paste it here, or drag the image file in.')
+        }
+        // Plain-text paste is treated as Markdown ("- [ ] x" becomes a task list, "## T" a heading).
+        const text = cd?.getData('text/plain')
         if (!text || cd.getData('text/html') || !ed || ed.isActive('codeBlock')) return false
         event.preventDefault()
         ed.commands.insertContent(text, { contentType: 'markdown' })
+        return true
+      },
+      handleDrop: (_view, event, _slice, moved) => {
+        const files = imageFiles(event.dataTransfer)
+        const ed = ref.current
+        if (moved || !files.length || !ed) return false
+        event.preventDefault()
+        pasteWithImages(ed, '', files, setNotice)
         return true
       },
     },
@@ -136,6 +225,7 @@ export default function RichEditor({ value, onChange, placeholder, readOnly = fa
         <Btn label="Undo" disabled={!editor.can().undo()} onRun={(c) => c.undo()}>↶</Btn>
         <Btn label="Redo" disabled={!editor.can().redo()} onRun={(c) => c.redo()}>↷</Btn>
       </div>
+      {notice && <p className="rte-notice" role="status">{notice}</p>}
       <EditorContent editor={editor} className="rte-content" />
     </div>
   )

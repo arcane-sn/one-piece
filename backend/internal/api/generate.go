@@ -23,6 +23,10 @@ Keep the ticket small and manageable: one focused change that a developer can fi
 If the idea is bigger than that, describe only the smallest valuable first piece and list the rest under "Out of Scope".
 Write in the same language as the owner's idea. If an existing description is provided, improve it and keep its intent.`
 
+// codeAccessNote is added when Claude may read the code the owner referenced.
+const codeAccessNote = `
+You may read the referenced paths (Read, Grep, Glob). Ground "Context" and "Requirements" in what the code does today and name real files and functions; never invent any. Your final message is still only the description.`
+
 // runClaude asks `claude -p` for a completion without tools or project settings.
 // It is a variable so tests can stub the CLI.
 var runClaude = func(ctx context.Context, system, user string) (string, error) {
@@ -68,6 +72,7 @@ func (s *server) generateDescription(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var msg strings.Builder
+	var mentioned, roots []string
 	if in.BoardID != 0 {
 		b, err := s.st.GetBoard(in.BoardID)
 		if err != nil {
@@ -78,6 +83,7 @@ func (s *server) generateDescription(w http.ResponseWriter, r *http.Request) {
 		if b.Description != "" {
 			fmt.Fprintf(&msg, "About the product: %s\n", b.Description)
 		}
+		mentioned, roots = mentionedPaths(b.Folders, in.Prompt)
 	}
 	if t := strings.TrimSpace(in.Title); t != "" {
 		fmt.Fprintf(&msg, "Ticket title: %s\n", t)
@@ -87,9 +93,16 @@ func (s *server) generateDescription(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(&msg, "\nOwner's idea:\n%s\n", in.Prompt)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Minute)
 	defer cancel()
-	out, err := runClaude(ctx, descriptionSystemPrompt, msg.String())
+	var out string
+	var err error
+	if len(mentioned) > 0 { // the owner pointed at code with "@": let Claude read it
+		fmt.Fprintf(&msg, "\nThe owner referenced these paths with @ (read them before writing, a handful of tool calls at most):\n- %s\n", strings.Join(mentioned, "\n- "))
+		out, err = streamClaude(ctx, descriptionSystemPrompt+codeAccessNote, msg.String(), roots, func(string) {})
+	} else {
+		out, err = runClaude(ctx, descriptionSystemPrompt, msg.String())
+	}
 	out = strings.TrimSpace(out)
 	if err != nil || out == "" {
 		log.Printf("generate-description failed: err=%v empty=%v", err, out == "")

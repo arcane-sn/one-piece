@@ -9,23 +9,27 @@ import (
 
 // Item is an Agent Task (kind "agent") or QA Test Case (kind "qa") of a card.
 type Item struct {
-	ID       int64    `json:"id"`
-	CardID   int64    `json:"cardId"`
-	Kind     string   `json:"kind"`
-	Title    string   `json:"title"`
-	Body     string   `json:"body"`
-	Position int      `json:"position"`
-	Status   string   `json:"status"` // todo | doing | done
-	Log      []string `json:"log"`
-	Version  int      `json:"version"` // ticket version it was generated from; 0 = added by hand
+	ID          int64    `json:"id"`
+	CardID      int64    `json:"cardId"`
+	Kind        string   `json:"kind"`
+	Title       string   `json:"title"`
+	Body        string   `json:"body"`
+	Position    int      `json:"position"`
+	Status      string   `json:"status"` // todo | doing | done
+	Log         []string `json:"log"`
+	Version     int      `json:"version"`     // ticket version it was generated from; 0 = added by hand
+	Failure     string   `json:"failure"`     // QA: the one-line issue of the last failed run; "" when it has not failed
+	FailureDesc string   `json:"failureDesc"` // QA: the detailed explanation of that failure
+	FixFor      int64    `json:"fixFor"`      // Agent: the failed QA item this [FIX] task is for; 0 otherwise
+	Running     bool     `json:"running"`     // Claude is working on it right now; set by the API, never stored
 }
 
-const itemCols = `id,card_id,kind,title,body,position,status,log,version`
+const itemCols = `id,card_id,kind,title,body,position,status,log,version,failure,failure_desc,fix_for`
 
 func scanItem(sc interface{ Scan(...any) error }) (Item, error) {
 	var i Item
 	var log string
-	if err := sc.Scan(&i.ID, &i.CardID, &i.Kind, &i.Title, &i.Body, &i.Position, &i.Status, &log, &i.Version); err != nil {
+	if err := sc.Scan(&i.ID, &i.CardID, &i.Kind, &i.Title, &i.Body, &i.Position, &i.Status, &log, &i.Version, &i.Failure, &i.FailureDesc, &i.FixFor); err != nil {
 		return Item{}, err
 	}
 	if json.Unmarshal([]byte(log), &i.Log) != nil || i.Log == nil {
@@ -140,26 +144,28 @@ func (s *Store) DeleteItem(id int64) error {
 	return nil
 }
 
-// ReplaceItems swaps all of a card's items for the given ones, atomically.
-func (s *Store) ReplaceItems(cardID int64, items []Item) ([]Item, error) {
+// ReplaceItemsOfKind swaps a card's items of one kind for the given ones, atomically.
+// Agent "[FIX]" tasks (fix_for > 0) are kept: they record real QA findings.
+func (s *Store) ReplaceItemsOfKind(cardID int64, kind string, items []Item) ([]Item, error) {
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec("DELETE FROM card_flows WHERE item_id IN (SELECT id FROM card_items WHERE card_id=?)", cardID); err != nil {
+	const old = `FROM card_items WHERE card_id=? AND kind=? AND fix_for=0`
+	if _, err := tx.Exec("DELETE FROM card_flows WHERE item_id IN (SELECT id "+old+")", cardID, kind); err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(`DELETE FROM card_items WHERE card_id=?`, cardID); err != nil {
+	if _, err := tx.Exec("DELETE "+old, cardID, kind); err != nil {
 		return nil, err
 	}
 	out := []Item{}
 	for _, in := range items {
-		title, body, err := cleanItem(in.Kind, in.Title, in.Body)
+		title, body, err := cleanItem(kind, in.Title, in.Body)
 		if err != nil {
 			return nil, err
 		}
-		it, err := insertItem(tx, cardID, in.Kind, title, body, in.Log, in.Version)
+		it, err := insertItem(tx, cardID, kind, title, body, in.Log, in.Version)
 		if err != nil {
 			return nil, err
 		}
@@ -220,4 +226,47 @@ func (s *Store) AppendItemLog(id int64, line string) error {
 	lj, _ := json.Marshal(it.Log)
 	_, err = s.DB.Exec(`UPDATE card_items SET log=? WHERE id=?`, string(lj), id)
 	return err
+}
+
+// SetItemFailure records why a QA item failed: a one-line issue and a detailed description
+// (both "" clear it after a pass).
+func (s *Store) SetItemFailure(id int64, issue, desc string) error {
+	_, err := s.DB.Exec(`UPDATE card_items SET failure=?, failure_desc=? WHERE id=?`, issue, desc, id)
+	return err
+}
+
+// AddFixTask creates the "[FIX] <test case>" Agent Task for a failed QA item, unless one
+// for it is still open (not Done). The second result reports whether one was created.
+func (s *Store) AddFixTask(qa Item, issue, desc string) (Item, bool, error) {
+	var open, earlier int
+	if err := s.DB.QueryRow(`SELECT COALESCE(SUM(status!='done'),0), COUNT(*) FROM card_items WHERE kind='agent' AND fix_for=?`, qa.ID).Scan(&open, &earlier); err != nil {
+		return Item{}, false, err
+	}
+	if open > 0 {
+		return Item{}, false, nil
+	}
+	body := "Test case QA gagal: " + qa.Title + "\n\n"
+	if earlier > 0 {
+		body += "Perbaikan sebelumnya belum berhasil: test case ini masih gagal.\n\n"
+	}
+	body += "Issue: " + issue + "\n\nDesc: " + desc + "\n\nLangkah dan hasil yang diharapkan:\n" + qa.Body +
+		"\n\nPerbaiki kodenya supaya test case ini lolos."
+	title := "[FIX] " + qa.Title
+	if n := utf8.RuneCountInString(title); n > 200 {
+		title = string([]rune(title)[:200])
+	}
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return Item{}, false, err
+	}
+	defer tx.Rollback()
+	it, err := insertItem(tx, qa.CardID, "agent", title, body, []string{"Created because QA failed: " + qa.Title}, 0)
+	if err != nil {
+		return Item{}, false, err
+	}
+	if _, err := tx.Exec(`UPDATE card_items SET fix_for=? WHERE id=?`, qa.ID, it.ID); err != nil {
+		return Item{}, false, err
+	}
+	it.FixFor = qa.ID
+	return it, true, tx.Commit()
 }

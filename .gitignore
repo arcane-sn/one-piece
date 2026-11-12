@@ -4,6 +4,7 @@ node_modules/
 *.db-wal
 *.db-shm
 backend/plans/
+backend/uploads/
 .env
 .superpowers/
 frontend/dist/

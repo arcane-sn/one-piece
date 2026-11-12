@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom'
 import { api } from '../api'
 import FlowsSection from './FlowsSection'
 import RichEditor from './RichEditor'
+import { toast } from '../lib/toast'
 
-const STATUS = [['todo', 'To Do'], ['doing', 'Doing'], ['done', 'Done']]
+const STATUS = [['todo', 'To Do'], ['doing', 'In Progress'], ['done', 'Done']]
 const NAME = { agent: 'Agent Task', qa: 'QA Test Case' }
 
 // Agent Task / QA Test Case: title, description, Technical Flows (agent tasks only)
@@ -18,7 +19,9 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [flowOpen, setFlowOpen] = useState(false)
+  const [readMore, setReadMore] = useState(false)
   const logRef = useRef(null)
+  const running = current?.status === 'doing'
 
   const dirty = title !== (current?.title ?? '') || body !== (current?.body ?? '') || status !== (current?.status ?? 'todo')
   const close = () => {
@@ -34,6 +37,32 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
   }, [current?.log?.length])
+
+  // While a run is going, follow the item so the log and status stay live.
+  useEffect(() => {
+    if (!running) return
+    const t = setInterval(async () => {
+      try {
+        const all = await api(`/api/cards/${cardId}/items`)
+        const next = all.find((x) => x.id === current.id)
+        if (!next) return
+        setCurrent(next)
+        if (next.status !== 'doing') setStatus(next.status)
+      } catch { /* keep polling */ }
+    }, 1500)
+    return () => clearInterval(t)
+  }, [running, cardId, current?.id])
+
+  async function runOrStop(action) {
+    setError('')
+    try {
+      const next = await api(`/api/items/${current.id}/${action}`, { method: 'POST', body: {} })
+      setCurrent(next)
+      setStatus(next.status)
+    } catch (err) {
+      toast(err.message)
+    }
+  }
 
   async function save(e) {
     e.preventDefault()
@@ -97,10 +126,31 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
               <span>Status</span>
               <div className="status-seg" role="group" aria-label="Status">
                 {STATUS.map(([v, label]) => (
-                  <button key={v} type="button" className={status === v ? 'on' : ''} aria-pressed={status === v} onClick={() => setStatus(v)}>{label}</button>
+                  <button key={v} type="button" className={status === v ? 'on' : ''} aria-pressed={status === v} onClick={() => setStatus(v)}>{v === 'doing' && current?.running && <span className="spinner" aria-hidden="true" />}{label}</button>
                 ))}
               </div>
             </div>
+            {current && (
+              <div className="field">
+                <span>Run</span>
+                {running
+                  ? <button type="button" onClick={() => runOrStop('stop')}>Stop</button>
+                  : <button type="button" className="primary" disabled={dirty || current.status === 'done'} onClick={() => runOrStop('run')}>Run with Claude</button>}
+                <p className="hint">{dirty ? 'Save your changes first.' : k === 'agent' ? 'Claude edits files in the board’s first folder. Needs an approved ticket.' : 'Claude checks this against the code. Run after all Agent Tasks are Done.'}</p>
+              </div>
+            )}
+            {current?.failure && (
+              <div className="review-comment work">
+                <div className="review-comment-head">Why It Failed</div>
+                <p><strong>Issue:</strong> {current.failure}</p>
+                {current.failureDesc && (
+                  <p className="failure-desc"><strong>Desc:</strong> {current.failureDesc}</p>
+                )}
+                {current.failureDesc && (
+                  <button type="button" className="link-btn" onClick={() => { setReadMore(true); setFlowOpen(true) }}>Read more</button>
+                )}
+              </div>
+            )}
             <div className="field review-side">
               <span>Claude Log</span>
               {current?.log?.length > 0
@@ -119,6 +169,24 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
           </button>
         </div>
       </form>
+      {readMore && createPortal(
+        <div className="modal-backdrop item-backdrop" onMouseDown={(e) => e.target === e.currentTarget && (setReadMore(false), setFlowOpen(false))}>
+          <div className="modal" role="dialog" aria-modal="true" aria-label="Why it failed">
+            <div className="ticket-head">
+              <h2>Why It Failed</h2>
+              <button type="button" className="icon-btn" aria-label="Close" onClick={() => { setReadMore(false); setFlowOpen(false) }}>×</button>
+            </div>
+            <div className="failure-full">
+              <p className="failure-label">Issue</p>
+              <p>{current.failure}</p>
+              <p className="failure-label">Desc</p>
+              <p>{current.failureDesc}</p>
+            </div>
+            <div className="modal-actions"><span className="grow" /><button type="button" onClick={() => { setReadMore(false); setFlowOpen(false) }}>Close</button></div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>,
     document.body,
   )

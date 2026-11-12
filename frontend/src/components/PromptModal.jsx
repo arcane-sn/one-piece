@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import MentionTextarea from './MentionTextarea'
 
 // Small modal that asks Claude (`claude -p`, via the server) to draft a ticket
 // description from a short idea. `onUse(markdown)` hands the result back.
@@ -39,12 +40,12 @@ export default function PromptModal({ boardId, title, description, onUse, onClos
       <form className="modal prompt-modal" role="dialog" aria-modal="true" aria-label="Generate Description" onSubmit={generate}>
         <div className="modal-head">
           <h2>Generate Description</h2>
-          <p>Describe the idea in a sentence or two. Claude drafts the ticket for you to review.</p>
+          <p>Describe the idea in a sentence or two. Type @ to pick a file or folder for Claude to read. Claude drafts the ticket for you to review.</p>
         </div>
         <label className="field">
           <span>Your Idea</span>
-          <textarea autoFocus rows={4} maxLength={2000} placeholder="e.g. Let ops teams save filter sets on the orders page and reopen them in one click."
-            value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+          <MentionTextarea boardId={boardId} autoFocus rows={4} maxLength={2000} placeholder="e.g. Let ops teams save filter sets on the orders page and reopen them in one click. Type @ to point Claude at a file or folder."
+            value={prompt} onChange={setPrompt} />
         </label>
 
         {busy && <p className="muted prompt-status"><span className="spinner" /> Claude is writing…</p>}

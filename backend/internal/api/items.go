@@ -12,13 +12,22 @@ import (
 	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
 
-const itemsSystemPrompt = `You break an approved Business ticket into work for a team of coding agents and QA.
+const itemsSystemPrompt = `You break an approved Business ticket into work for a team of coding agents.
 Return ONLY one JSON object, no prose and no code fence:
-{"split":false,"reason":"","agent_tasks":[{"title":"...","body":"Markdown description with the technical approach"}],"qa_cases":[{"title":"...","body":"Markdown: steps and expected result"}]}
+{"split":false,"reason":"","agent_tasks":[{"title":"...","body":"Markdown description with the technical approach"}]}
 Rules:
-- Agent tasks: 2-6 small tasks, each one a focused change a single agent can finish; order them so earlier ones unblock later ones.
-- QA cases: 3-8 test cases covering the Definition of Done, the failure paths and the Business Flow.
-- If the ticket is too big for that (a whole application, several unrelated changes), return {"split":true,"reason":"what to split it into","agent_tasks":[],"qa_cases":[]}.
+- 2-6 small tasks, each one a focused change a single agent can finish; order them so earlier ones unblock later ones.
+- Keep each title short (one line, under about 80 characters); put the detail in the body.
+- If the ticket is too big for that (a whole application, several unrelated changes), return {"split":true,"reason":"what to split it into","agent_tasks":[]}.
+Write in the same language as the ticket.`
+
+const qaSystemPromptGen = `You write QA test cases for a Business ticket whose Agent Tasks are done.
+Return ONLY one JSON object, no prose and no code fence:
+{"qa_cases":[{"title":"...","body":"Markdown: steps and expected result"}]}
+Rules:
+- 3-8 test cases covering the Definition of Done, the failure paths and the Business Flow.
+- Keep each title short (one line, under about 80 characters); put steps and the expected result in the body.
+- Each test case must be checkable by reading the code, plus what a person would see when using the product.
 Write in the same language as the ticket.`
 
 type itemIn struct {
@@ -56,6 +65,11 @@ func (s *server) listItems(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	s.mu.Lock()
+	for i := range items {
+		_, items[i].Running = s.runs[items[i].ID]
+	}
+	s.mu.Unlock()
 	writeJSON(w, http.StatusOK, items)
 }
 
@@ -162,8 +176,9 @@ func (s *server) createItemFlow(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, f)
 }
 
-// POST /api/cards/{id}/generate-items → {"split":bool,"reason":"","items":[...]}
-// Only an approved ticket gets tasks. A "split" verdict changes nothing.
+// POST /api/cards/{id}/generate-items {"kind":"agent"|"qa"} → {"split":bool,"reason":"","items":[...]}
+// Agent Tasks come from an approved ticket; QA Test Cases only once the ticket is in the QA column.
+// Only that kind is replaced. A "split" verdict changes nothing.
 func (s *server) generateItems(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
 	if err != nil {
@@ -175,10 +190,29 @@ func (s *server) generateItems(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	if !c.Approved {
-		writeErr(w, store.ConflictError{Msg: "Approve the ticket before generating tasks."})
+	var in struct {
+		Kind string `json:"kind"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
 		return
 	}
+	if in.Kind == "" {
+		in.Kind = "agent"
+	}
+	switch {
+	case in.Kind != "agent" && in.Kind != "qa":
+		err = store.ValidationError{Msg: "kind must be agent or qa"}
+	case !c.Approved:
+		err = store.ConflictError{Msg: "Approve the ticket before generating tasks."}
+	case in.Kind == "qa" && c.Status != "qa" && c.Status != "done":
+		err = store.ConflictError{Msg: "Move the ticket to QA before generating test cases."}
+	}
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	system := itemsSystemPrompt
 	var msg strings.Builder
 	if b, err := s.st.GetBoard(c.BoardID); err == nil {
 		fmt.Fprintf(&msg, "Product: %s\n", b.Name)
@@ -191,10 +225,19 @@ func (s *server) generateItems(w http.ResponseWriter, r *http.Request) {
 	for _, f := range flows {
 		fmt.Fprintf(&msg, "\nBusiness Flow %q (swimlane text):\n%s\n", f.Title, f.Source)
 	}
+	if in.Kind == "qa" {
+		system = qaSystemPromptGen
+		existing, _ := s.st.ListItems(id)
+		for _, x := range existing {
+			if x.Kind == "agent" {
+				fmt.Fprintf(&msg, "\nAgent Task (%s): %s\n%s\n", x.Status, x.Title, x.Body)
+			}
+		}
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Minute)
 	defer cancel()
-	out, err := runClaude(ctx, itemsSystemPrompt, msg.String())
+	out, err := runClaude(ctx, system, msg.String())
 	var rep generatedItems
 	if err == nil {
 		a, b := strings.Index(out, "{"), strings.LastIndex(out, "}")
@@ -204,12 +247,12 @@ func (s *server) generateItems(w http.ResponseWriter, r *http.Request) {
 			err = json.Unmarshal([]byte(out[a:b+1]), &rep)
 		}
 	}
-	if err == nil && !rep.Split && len(rep.AgentTasks) == 0 {
-		err = fmt.Errorf("reply has no agent tasks")
+	if err == nil && !rep.Split && ((in.Kind == "agent" && len(rep.AgentTasks) == 0) || (in.Kind == "qa" && len(rep.QACases) == 0)) {
+		err = fmt.Errorf("reply has no %s items", in.Kind)
 	}
 	if err != nil {
 		log.Printf("generate-items for card %d failed: %v", id, err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "Claude could not generate tasks. Try again."})
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "Claude could not generate that. Try again."})
 		return
 	}
 	if rep.Split {
@@ -218,13 +261,16 @@ func (s *server) generateItems(w http.ResponseWriter, r *http.Request) {
 	}
 	logLine := []string{fmt.Sprintf("Generated by Claude from ticket version %d", c.ContentVersion)}
 	var ins []store.Item
-	for _, t := range rep.AgentTasks {
-		ins = append(ins, store.Item{Kind: "agent", Title: t.Title, Body: t.Body, Log: logLine, Version: c.ContentVersion})
+	if in.Kind == "agent" {
+		for _, t := range rep.AgentTasks {
+			ins = append(ins, store.Item{Title: t.Title, Body: t.Body, Log: logLine, Version: c.ContentVersion})
+		}
+	} else {
+		for _, t := range rep.QACases {
+			ins = append(ins, store.Item{Title: t.Title, Body: t.Body, Log: logLine, Version: c.ContentVersion})
+		}
 	}
-	for _, t := range rep.QACases {
-		ins = append(ins, store.Item{Kind: "qa", Title: t.Title, Body: t.Body, Log: logLine, Version: c.ContentVersion})
-	}
-	items, err := s.st.ReplaceItems(id, ins)
+	items, err := s.st.ReplaceItemsOfKind(id, in.Kind, ins)
 	if err != nil {
 		writeErr(w, err)
 		return

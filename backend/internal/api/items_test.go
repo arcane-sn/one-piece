@@ -43,14 +43,36 @@ func TestGenerateItemsNeedsApprovalThenFillsLists(t *testing.T) {
 		Items []store.Item `json:"items"`
 	}
 	json.Unmarshal(body, &out)
-	if resp.StatusCode != 200 || out.Split || len(out.Items) != 3 {
+	if resp.StatusCode != 200 || out.Split || len(out.Items) != 2 {
 		t.Fatalf("generate: %d %s", resp.StatusCode, body)
 	}
 	if !strings.Contains(gotUser, "Let the owner sign in") {
 		t.Errorf("prompt should carry the ticket:\n%s", gotUser)
 	}
-	if out.Items[0].Kind != "agent" || len(out.Items[0].Log) == 0 || out.Items[2].Kind != "qa" {
+	if out.Items[0].Kind != "agent" || len(out.Items[0].Log) == 0 || out.Items[1].Kind != "agent" {
 		t.Fatalf("items = %+v", out.Items)
+	}
+
+	// QA Test Cases are generated only once the ticket is in the QA column, and keep the Agent Tasks
+	if resp, _ := s.req(t, "POST", cp+"/generate-items", map[string]any{"kind": "qa"}, ck); resp.StatusCode != 409 {
+		t.Fatalf("generate qa before the QA column: %d, want 409", resp.StatusCode)
+	}
+	if resp, body := s.req(t, "POST", cp+"/move", map[string]any{"status": "qa", "position": 0}, ck); resp.StatusCode != 200 {
+		t.Fatalf("move to qa: %d %s", resp.StatusCode, body)
+	}
+	resp, body = s.req(t, "POST", cp+"/generate-items", map[string]any{"kind": "qa"}, ck)
+	var qaOut struct {
+		Items []store.Item `json:"items"`
+	}
+	json.Unmarshal(body, &qaOut)
+	if resp.StatusCode != 200 || len(qaOut.Items) != 1 || qaOut.Items[0].Kind != "qa" {
+		t.Fatalf("generate qa: %d %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(gotUser, "Add login endpoint") {
+		t.Errorf("qa prompt should carry the agent tasks:\n%s", gotUser)
+	}
+	if all, _ := s.St.ListItems(card.ID); len(all) != 3 {
+		t.Fatalf("generating QA must keep the Agent Tasks: %+v", all)
 	}
 
 	// edit, status, technical flow

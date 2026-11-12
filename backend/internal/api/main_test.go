@@ -18,5 +18,8 @@ func TestMain(m *testing.M) {
 	runBrainstorm = func(context.Context, brainstormRun, func(string)) (string, error) {
 		return "", errors.New("claude is stubbed in tests")
 	}
+	agentRun = func(context.Context, string, []string, string, string, func(string)) (string, error) {
+		return "", errors.New("claude is stubbed in tests")
+	}
 	os.Exit(m.Run())
 }

@@ -117,3 +117,27 @@ func TestSaveItemIsAtomicAndVersionIsKept(t *testing.T) {
 		t.Fatalf("failed save must change nothing: %+v", got)
 	}
 }
+
+// ReplaceItems is a test helper: it seeds a card's items of every kind in one call.
+func (s *Store) ReplaceItems(cardID int64, items []Item) ([]Item, error) {
+	for _, it := range items {
+		if it.Kind != "agent" && it.Kind != "qa" {
+			return nil, ValidationError{Msg: "kind must be agent or qa"}
+		}
+	}
+	out := []Item{}
+	for _, kind := range []string{"agent", "qa"} {
+		var of []Item
+		for _, it := range items {
+			if it.Kind == kind {
+				of = append(of, it)
+			}
+		}
+		got, err := s.ReplaceItemsOfKind(cardID, kind, of)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, got...)
+	}
+	return out, nil
+}

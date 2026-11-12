@@ -43,8 +43,14 @@ var streamClaude = func(ctx context.Context, system, user string, dirs []string,
 	for _, d := range dirs {
 		args = append(args, "--add-dir", d)
 	}
+	return runStream(ctx, args, tmp, user, onLog)
+}
+
+// runStream runs `claude` with args in cwd, feeding user on stdin and turning the
+// stream-json events into onLog lines. It returns Claude's final message.
+func runStream(ctx context.Context, args []string, cwd, user string, onLog func(string)) (string, error) {
 	cmd := exec.CommandContext(ctx, "claude", args...)
-	cmd.Dir = tmp
+	cmd.Dir = cwd
 	cmd.Stdin = strings.NewReader(user)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -105,6 +111,8 @@ func describeTool(name string, in map[string]any) string {
 		return "Searching for " + shorten(str("pattern"), 60)
 	case "Glob":
 		return "Listing " + shorten(str("pattern"), 60)
+	case "Edit", "Write":
+		return "Editing " + filepath.Base(str("file_path"))
 	}
 	return "Using " + name
 }

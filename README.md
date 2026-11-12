@@ -22,10 +22,10 @@ Development: jalankan backend (`cd backend && go run ./cmd/server`) dan frontend
 
 ## Sudah ada
 
-Login, dashboard, kanban, review tiket oleh Claude (live log + approval gate), Business Flow (swimlane), tugas Agent dan kasus QA hasil generate, edit board dari halaman board, kolom Draft (backlog), dan chat Brainstorming per board (dokumen rencana MD berversi + kartu Draft dari Claude). Dokumen rencana disimpan di `backend/plans/` (di-ignore git).
+Login, dashboard, kanban, review tiket oleh Claude (live log + approval gate), Business Flow (swimlane), tugas Agent dan kasus QA hasil generate, edit board dari halaman board, kolom Draft (backlog), eksekusi tugas Agent oleh `claude -p` (tombol Run di modal tugas; Claude mengedit file di folder pertama board, tanpa shell, dengan live log; Run All per tiket), eksekusi kasus QA oleh `claude -p` (Claude membaca kode, verdict pass/fail), dan chat Brainstorming per board (dokumen rencana MD berversi + kartu Draft dari Claude). Dokumen rencana disimpan di `backend/plans/` (di-ignore git).
 
 ## Belum ada (slice berikutnya)
 
-Eksekusi tugas Agent/QA oleh `claude -p`, integrasi drawdb.
+Integrasi drawdb.
 
 Desain: `docs/superpowers/specs/`. Rencana: `docs/superpowers/plans/`.

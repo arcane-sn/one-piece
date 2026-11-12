@@ -22,11 +22,13 @@ type server struct {
 	static string
 	mu     sync.Mutex
 	turns  map[int64]context.CancelFunc // running brainstorm turns by board id
+	runs   map[int64]context.CancelFunc // running Agent Task executions by item id
+	chains map[int64]context.CancelFunc // Run All chains by card id
 }
 
 // New builds the handler: /api/* (authenticated) plus static files from staticDir.
 func New(st *store.Store, staticDir string) http.Handler {
-	s := &server{st: st, static: staticDir, turns: map[int64]context.CancelFunc{}}
+	s := &server{st: st, static: staticDir, turns: map[int64]context.CancelFunc{}, runs: map[int64]context.CancelFunc{}, chains: map[int64]context.CancelFunc{}}
 	if err := st.FailRunningReviews(); err != nil { // reviews cut short by a previous shutdown
 		log.Printf("sweeping stale reviews: %v", err)
 	}
@@ -44,6 +46,7 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/boards/{id}", s.getBoard)
 	mux.HandleFunc("PUT /api/boards/{id}", s.updateBoard)
 	mux.HandleFunc("DELETE /api/boards/{id}", s.deleteBoard)
+	mux.HandleFunc("GET /api/boards/{id}/files", s.listFiles)
 	mux.HandleFunc("GET /api/boards/{id}/brainstorm", s.getBrainstorm)
 	mux.HandleFunc("POST /api/boards/{id}/brainstorm/messages", s.postBrainstormMessage)
 	mux.HandleFunc("POST /api/boards/{id}/brainstorm/stop", s.stopBrainstorm)
@@ -58,6 +61,9 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/cards/{id}/review", s.postReview)
 	mux.HandleFunc("POST /api/cards/{id}/approve", s.approveCard)
 	mux.HandleFunc("DELETE /api/cards/{id}", s.deleteCard)
+	mux.HandleFunc("POST /api/uploads", s.uploadImage)
+	mux.HandleFunc("GET /api/uploads/{name}", s.getUpload)
+	mux.HandleFunc("POST /api/flows/generate", s.generateFlow)
 	mux.HandleFunc("GET /api/cards/{id}/flows", s.listFlows)
 	mux.HandleFunc("POST /api/cards/{id}/flows", s.createFlow)
 	mux.HandleFunc("PUT /api/flows/{id}", s.updateFlow)
@@ -66,6 +72,10 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/cards/{id}/items", s.createItem)
 	mux.HandleFunc("POST /api/cards/{id}/generate-items", s.generateItems)
 	mux.HandleFunc("PUT /api/items/{id}", s.updateItem)
+	mux.HandleFunc("POST /api/cards/{id}/run-all", s.runAll)
+	mux.HandleFunc("POST /api/cards/{id}/stop-all", s.stopAll)
+	mux.HandleFunc("POST /api/items/{id}/run", s.runItem)
+	mux.HandleFunc("POST /api/items/{id}/stop", s.stopItem)
 	mux.HandleFunc("DELETE /api/items/{id}", s.deleteItem)
 	mux.HandleFunc("GET /api/items/{id}/flows", s.listItemFlows)
 	mux.HandleFunc("POST /api/items/{id}/flows", s.createItemFlow)
@@ -94,7 +104,7 @@ func (s *server) spa() http.Handler {
 }
 
 // guard enforces, for /api/*: JSON content type on mutations (cheap CSRF defence),
-// a 1 MiB body cap, and a valid session (except login).
+// a 1 MiB body cap (16 MiB for image uploads), and a valid session (except login).
 func (s *server) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
@@ -104,7 +114,11 @@ func (s *server) guard(next http.Handler) http.Handler {
 					return
 				}
 			}
-			r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+			limit := int64(1 << 20)
+			if r.URL.Path == "/api/uploads" {
+				limit = 16 << 20 // a base64 image up to 10 MB
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
 			if r.URL.Path != "/api/login" {
 				if _, ok := s.currentUser(r); !ok {
 					writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
