@@ -454,3 +454,13 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 .discuss-marker::before, .discuss-marker::after { content: ''; flex: 1; height: 1px; background: rgba(59, 36, 23, 0.16); }
 .discuss-input .mention-wrap { flex: 1; }
 .discuss-input .mention-list { position: absolute; bottom: 100%; left: 0; right: 0; margin: 0 0 6px; z-index: 5; }
+
+/* Ticket modals: header, sidebar and action bar stay put; only the main content scrolls. */
+.modal.ticket { height: min(900px, calc(100vh - 32px)); overflow: hidden; }
+.modal.ticket .ticket-body { flex: 1; min-height: 0; align-items: stretch; }
+.modal.ticket .ticket-main { overflow-y: auto; min-height: 0; padding-right: 8px; }
+.modal.ticket .ticket-side { overflow-y: auto; min-height: 0; align-self: stretch; }
+@media (max-width: 900px) {
+  .modal.ticket .ticket-body { overflow-y: auto; }
+  .modal.ticket .ticket-main, .modal.ticket .ticket-side { overflow: visible; align-self: start; }
+}
