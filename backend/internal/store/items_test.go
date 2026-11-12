@@ -32,16 +32,16 @@ func TestReplaceItemsAndValidation(t *testing.T) {
 	s, c := newCard(t)
 	s.CreateItem(c.ID, "agent", "old", "")
 	out, err := s.ReplaceItems(c.ID, []Item{{Kind: "agent", Title: "A1"}, {Kind: "agent", Title: "A2"}, {Kind: "qa", Title: "Q1"}})
-	if err != nil || len(out) != 3 || out[1].Title != "A2" || out[1].Position != 1 {
+	if err != nil || len(out) != 3 || out[1].Title != "A2" || out[1].Position != 2 {
 		t.Fatalf("replace = %+v, %v", out, err)
 	}
-	if items, _ := s.ListItems(c.ID); len(items) != 3 {
-		t.Fatalf("old items should be gone: %+v", items)
+	if items, _ := s.ListItems(c.ID); len(items) != 4 || !items[2].Superseded || items[2].Title != "old" {
+		t.Fatalf("old To Do item should be struck through, not deleted: %+v", items)
 	}
 	if _, err := s.ReplaceItems(c.ID, []Item{{Kind: "bogus", Title: "x"}}); err == nil {
 		t.Fatal("bad kind should fail")
 	}
-	if items, _ := s.ListItems(c.ID); len(items) != 3 {
+	if items, _ := s.ListItems(c.ID); len(items) != 4 {
 		t.Fatal("failed replace must keep the old items")
 	}
 	if _, err := s.CreateItem(c.ID, "qa", " ", ""); err == nil {
@@ -133,11 +133,40 @@ func (s *Store) ReplaceItems(cardID int64, items []Item) ([]Item, error) {
 				of = append(of, it)
 			}
 		}
-		got, err := s.ReplaceItemsOfKind(cardID, kind, of)
+		got, err := s.SupersedeAndAdd(cardID, kind, of)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, got...)
 	}
 	return out, nil
+}
+
+func TestSupersedeOnlyStrikesToDo(t *testing.T) {
+	s, c := newCard(t)
+	todo, _ := s.CreateItem(c.ID, "agent", "todo", "")
+	doing, _ := s.CreateItem(c.ID, "agent", "doing", "")
+	done, _ := s.CreateItem(c.ID, "agent", "done", "")
+	s.SetItemStatus(doing.ID, "doing")
+	s.SetItemStatus(done.ID, "done")
+	qa, _ := s.CreateItem(c.ID, "qa", "qa todo", "")
+	if _, err := s.SupersedeAndAdd(c.ID, "agent", []Item{{Title: "new"}}); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[int64]bool{todo.ID: true, doing.ID: false, done.ID: false, qa.ID: false} {
+		if it, _ := s.GetItem(id); it.Superseded != want {
+			t.Fatalf("item %d superseded=%v want %v", id, it.Superseded, want)
+		}
+	}
+	it, _ := s.GetItem(todo.ID)
+	if len(it.Log) == 0 || it.Log[len(it.Log)-1] != "Diganti oleh generate baru" {
+		t.Fatalf("log = %v", it.Log)
+	}
+	back, err := s.SetSuperseded(todo.ID, false)
+	if err != nil || back.Superseded {
+		t.Fatalf("restore = %+v %v", back, err)
+	}
+	if _, err := s.SetSuperseded(9999, true); err != ErrNotFound {
+		t.Fatalf("missing: %v", err)
+	}
 }

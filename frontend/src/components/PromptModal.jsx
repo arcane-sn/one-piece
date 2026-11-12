@@ -1,38 +1,43 @@
 import { useEffect, useRef, useState } from 'react'
-import { api } from '../api'
+import { jobError, jobResult, useJob } from '../lib/jobs'
 import MentionTextarea from './MentionTextarea'
 
 // Small modal that asks Claude (`claude -p`, via the server) to draft a ticket
 // description from a short idea. `onUse(markdown)` hands the result back.
-export default function PromptModal({ boardId, title, description, onUse, onClose }) {
+export default function PromptModal({ boardId, cardId, title, description, onUse, onClose }) {
+  // The job lives on the server: closing this modal does not stop it, and reopening shows its state.
+  const { job, start, consume } = useJob(cardId ? 'card' : 'board', cardId || Number(boardId), 'description')
   const [prompt, setPrompt] = useState('')
-  const [result, setResult] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const alive = useRef(true)
+  const [startError, setStartError] = useState('')
+  const busy = job?.status === 'running'
+  const result = jobResult(job)?.description ?? ''
+  const error = startError || jobError(job)
+  const filled = useRef(false)
+  useEffect(() => { // restore the idea that was sent
+    if (filled.current || !job?.request) return
+    filled.current = true
+    try { setPrompt((p) => p || JSON.parse(job.request).prompt || '') } catch { /* keep empty */ }
+  }, [job])
 
   useEffect(() => {
-    alive.current = true
     const onKey = (e) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
-    return () => {
-      alive.current = false
-      window.removeEventListener('keydown', onKey)
-    }
+    return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
   async function generate(e) {
     e.preventDefault()
-    setBusy(true)
-    setError('')
+    setStartError('')
     try {
-      const r = await api('/api/generate-description', { method: 'POST', body: { prompt, title, description, boardId: Number(boardId) } })
-      if (alive.current) setResult(r.description)
+      await start('/api/generate-description', { prompt, title, description, boardId: Number(boardId), cardId: cardId || undefined })
     } catch (err) {
-      if (alive.current) setError(err.message)
-    } finally {
-      if (alive.current) setBusy(false)
+      setStartError(err.message)
     }
+  }
+
+  async function use() {
+    await consume()
+    onUse(result)
   }
 
   return (
@@ -48,7 +53,7 @@ export default function PromptModal({ boardId, title, description, onUse, onClos
             value={prompt} onChange={setPrompt} />
         </label>
 
-        {busy && <p className="muted prompt-status"><span className="spinner" /> Claude is writing…</p>}
+        {busy && <p className="muted prompt-status"><span className="spinner" /> Claude is writing… You can close this and come back.</p>}
         {error && <p className="error">{error}</p>}
         {result && !busy && (
           <div className="field">
@@ -59,13 +64,13 @@ export default function PromptModal({ boardId, title, description, onUse, onClos
         )}
 
         <div className="modal-actions">
-          <button type="button" onClick={onClose}>Cancel</button>
+          <button type="button" onClick={onClose}>Close</button>
           <button type={result ? 'button' : 'submit'} className={result ? '' : 'primary'} disabled={busy || !prompt.trim()}
             onClick={result ? generate : undefined}>
             {result ? 'Regenerate' : 'Generate'}
           </button>
           {result && !busy && (
-            <button type="button" className="primary" onClick={() => onUse(result)}>Use This Draft</button>
+            <button type="button" className="primary" onClick={use}>Use This Draft</button>
           )}
         </div>
       </form>

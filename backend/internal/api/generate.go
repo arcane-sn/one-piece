@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -52,9 +53,10 @@ type generateIn struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	BoardID     int64  `json:"boardId"`
+	CardID      int64  `json:"cardId"` // optional: the saved ticket this description is for
 }
 
-// POST /api/generate-description → {"description": "<markdown>"}
+// POST /api/generate-description → 202 + a job whose result is {"description": "<markdown>"}
 func (s *server) generateDescription(w http.ResponseWriter, r *http.Request) {
 	var in generateIn
 	if err := decode(r, &in); err != nil {
@@ -93,21 +95,35 @@ func (s *server) generateDescription(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(&msg, "\nOwner's idea:\n%s\n", in.Prompt)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Minute)
-	defer cancel()
-	var out string
-	var err error
-	if len(mentioned) > 0 { // the owner pointed at code with "@": let Claude read it
-		fmt.Fprintf(&msg, "\nThe owner referenced these paths with @ (read them before writing, a handful of tool calls at most):\n- %s\n", strings.Join(mentioned, "\n- "))
-		out, err = streamClaude(ctx, descriptionSystemPrompt+codeAccessNote, msg.String(), roots, func(string) {})
-	} else {
-		out, err = runClaude(ctx, descriptionSystemPrompt, msg.String())
+	scope, target, label := "board", in.BoardID, "Description"
+	if in.CardID != 0 {
+		c, err := s.st.GetCard(in.CardID)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		scope, target, label = "card", c.ID, "Description "+c.Ident
 	}
-	out = strings.TrimSpace(out)
-	if err != nil || out == "" {
-		log.Printf("generate-description failed: err=%v empty=%v", err, out == "")
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "Claude could not generate a description. Try again."})
+	if target == 0 {
+		writeErr(w, store.ValidationError{Msg: "boardId or cardId is required"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"description": out})
+	reqJSON, _ := json.Marshal(map[string]string{"prompt": in.Prompt})
+	s.startJob(w, store.Job{Kind: "description", Scope: scope, TargetID: target, CardID: in.CardID, Label: label, Request: string(reqJSON)}, 4*time.Minute,
+		func(ctx context.Context) (any, bool, error) {
+			var out string
+			var err error
+			if len(mentioned) > 0 { // the owner pointed at code with "@": let Claude read it
+				fmt.Fprintf(&msg, "\nThe owner referenced these paths with @ (read them before writing, a handful of tool calls at most):\n- %s\n", strings.Join(mentioned, "\n- "))
+				out, err = streamClaude(ctx, descriptionSystemPrompt+codeAccessNote, msg.String(), roots, func(string) {})
+			} else {
+				out, err = runClaude(ctx, descriptionSystemPrompt, msg.String())
+			}
+			out = strings.TrimSpace(out)
+			if err != nil || out == "" {
+				log.Printf("generate-description failed: err=%v empty=%v", err, out == "")
+				return nil, false, fmt.Errorf("Claude could not generate a description. Try again.")
+			}
+			return map[string]string{"description": out}, false, nil
+		})
 }

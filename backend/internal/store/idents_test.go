@@ -103,7 +103,7 @@ func TestItemIdentsNeverReused(t *testing.T) {
 	if err != nil || !ok || fix.Ident != c.Ident+"-T4" {
 		t.Fatalf("fix = %+v %v %v", fix, ok, err)
 	}
-	out, err := s.ReplaceItemsOfKind(c.ID, "agent", []Item{{Title: "x"}, {Title: "y"}})
+	out, err := s.SupersedeAndAdd(c.ID, "agent", []Item{{Title: "x"}, {Title: "y"}})
 	if err != nil || out[0].Ident != c.Ident+"-T5" || out[1].Ident != c.Ident+"-T6" {
 		t.Fatalf("replace = %+v %v", out, err)
 	}

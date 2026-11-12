@@ -39,3 +39,7 @@ Login, dashboard, kanban, review tiket oleh Claude (live log + approval gate), B
 Integrasi drawdb.
 
 Desain: `docs/superpowers/specs/`. Rencana: `docs/superpowers/plans/`.
+
+## Generate Berjalan di Background
+
+Generate Agent Tasks, QA Test Cases, Flow, dan Description berjalan sebagai job di server. Modal boleh ditutup (atau pindah tiket/board): saat dibuka lagi tampil loading kalau masih jalan, atau hasilnya kalau sudah selesai. Toast muncul saat job selesai, dan kartu kanban menampilkan spinner selama ada job yang jalan. Regenerate tidak menghapus: task To Do yang lama dicoret (*Superseded*, bisa di-Restore), task baru ditambahkan.

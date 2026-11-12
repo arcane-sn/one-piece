@@ -22,15 +22,16 @@ type Item struct {
 	Failure     string   `json:"failure"`     // QA: the one-line issue of the last failed run; "" when it has not failed
 	FailureDesc string   `json:"failureDesc"` // QA: the detailed explanation of that failure
 	FixFor      int64    `json:"fixFor"`      // Agent: the failed QA item this [FIX] task is for; 0 otherwise
+	Superseded  bool     `json:"superseded"`  // struck through: replaced by a newer Generate, kept for history
 	Running     bool     `json:"running"`     // Claude is working on it right now; set by the API, never stored
 }
 
-const itemCols = `id,card_id,kind,ident,title,body,position,status,log,version,failure,failure_desc,fix_for`
+const itemCols = `id,card_id,kind,ident,title,body,position,status,log,version,failure,failure_desc,fix_for,superseded`
 
 func scanItem(sc interface{ Scan(...any) error }) (Item, error) {
 	var i Item
 	var log string
-	if err := sc.Scan(&i.ID, &i.CardID, &i.Kind, &i.Ident, &i.Title, &i.Body, &i.Position, &i.Status, &log, &i.Version, &i.Failure, &i.FailureDesc, &i.FixFor); err != nil {
+	if err := sc.Scan(&i.ID, &i.CardID, &i.Kind, &i.Ident, &i.Title, &i.Body, &i.Position, &i.Status, &log, &i.Version, &i.Failure, &i.FailureDesc, &i.FixFor, &i.Superseded); err != nil {
 		return Item{}, err
 	}
 	if json.Unmarshal([]byte(log), &i.Log) != nil || i.Log == nil {
@@ -54,7 +55,7 @@ func cleanItem(kind, title, body string) (string, string, error) {
 }
 
 func (s *Store) ListItems(cardID int64) ([]Item, error) {
-	rows, err := s.DB.Query(`SELECT `+itemCols+` FROM card_items WHERE card_id=? ORDER BY kind,position,id`, cardID)
+	rows, err := s.DB.Query(`SELECT `+itemCols+` FROM card_items WHERE card_id=? ORDER BY kind,superseded,position,id`, cardID)
 	if err != nil {
 		return nil, err
 	}
@@ -139,6 +140,7 @@ func (s *Store) UpdateItem(id int64, title, body string) (Item, error) {
 
 func (s *Store) DeleteItem(id int64) error {
 	s.DB.Exec("DELETE FROM card_flows WHERE item_id=?", id) // its Technical Flows go with it
+	s.DeleteJobsFor("item", id)
 	res, err := s.DB.Exec(`DELETE FROM card_items WHERE id=?`, id)
 	if err != nil {
 		return err
@@ -149,19 +151,16 @@ func (s *Store) DeleteItem(id int64) error {
 	return nil
 }
 
-// ReplaceItemsOfKind swaps a card's items of one kind for the given ones, atomically.
-// Agent "[FIX]" tasks (fix_for > 0) are kept: they record real QA findings.
-func (s *Store) ReplaceItemsOfKind(cardID int64, kind string, items []Item) ([]Item, error) {
+// SupersedeAndAdd strikes through a card's To Do items of one kind (nothing is deleted) and
+// appends the given ones. Items already doing or done, and [FIX] tasks, stay active.
+func (s *Store) SupersedeAndAdd(cardID int64, kind string, items []Item) ([]Item, error) {
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	const old = `FROM card_items WHERE card_id=? AND kind=? AND fix_for=0`
-	if _, err := tx.Exec("DELETE FROM card_flows WHERE item_id IN (SELECT id "+old+")", cardID, kind); err != nil {
-		return nil, err
-	}
-	if _, err := tx.Exec("DELETE "+old, cardID, kind); err != nil {
+	if _, err := tx.Exec(`UPDATE card_items SET superseded=1, log=json_insert(log,'$[#]','Diganti oleh generate baru')
+		WHERE card_id=? AND kind=? AND fix_for=0 AND status='todo' AND superseded=0`, cardID, kind); err != nil {
 		return nil, err
 	}
 	out := []Item{}
@@ -177,6 +176,22 @@ func (s *Store) ReplaceItemsOfKind(cardID int64, kind string, items []Item) ([]I
 		out = append(out, it)
 	}
 	return out, tx.Commit()
+}
+
+// SetSuperseded strikes an item through (true) or brings it back (false).
+func (s *Store) SetSuperseded(id int64, v bool) (Item, error) {
+	n := 0
+	if v {
+		n = 1
+	}
+	res, err := s.DB.Exec(`UPDATE card_items SET superseded=? WHERE id=?`, n, id)
+	if err != nil {
+		return Item{}, err
+	}
+	if c, _ := res.RowsAffected(); c == 0 {
+		return Item{}, ErrNotFound
+	}
+	return s.GetItem(id)
 }
 
 // SaveItem updates title, body, status and appends log lines in one transaction.

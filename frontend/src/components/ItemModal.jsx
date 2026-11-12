@@ -64,6 +64,16 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
     }
   }
 
+  async function restore() {
+    try {
+      const next = await api(`/api/items/${current.id}/restore`, { method: 'POST', body: {} })
+      setCurrent(next)
+      toast('Restored', 'ok')
+    } catch (err) {
+      toast(err.message)
+    }
+  }
+
   async function save(e) {
     e.preventDefault()
     e.stopPropagation() // React bubbles through the portal into the ticket form
@@ -103,7 +113,7 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
     <div className="modal-backdrop item-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <form className="modal ticket" role="dialog" aria-modal="true" aria-label={(current ? 'Edit ' : 'New ') + NAME[k]} onSubmit={save}>
         <div className="ticket-head">
-          <h2>{current ? 'Edit ' : 'New '}{NAME[k]}{current?.ident && <span className="ident">{current.ident}</span>}</h2>
+          <h2>{current ? 'Edit ' : 'New '}{NAME[k]}{current?.ident && <span className="ident">{current.ident}</span>}{current?.superseded && <span className="item-status stale">Superseded</span>}</h2>
           <button type="button" className="icon-btn" aria-label="Close" onClick={close}>×</button>
         </div>
         <div className="ticket-body">
@@ -130,7 +140,14 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
                 ))}
               </div>
             </div>
-            {current && (
+            {current?.superseded && (
+              <div className="review-comment work">
+                <div className="review-comment-head">Superseded</div>
+                <p>A newer Generate replaced this {NAME[k]}. It is kept for history and is skipped by Run and Run All.</p>
+                <button type="button" onClick={restore}>Restore</button>
+              </div>
+            )}
+            {current && !current.superseded && (
               <div className="field">
                 <span>Run</span>
                 {running

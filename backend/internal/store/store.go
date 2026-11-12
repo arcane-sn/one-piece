@@ -74,6 +74,12 @@ CREATE TABLE IF NOT EXISTS discuss_messages(
 CREATE TABLE IF NOT EXISTS discuss_state(
   card_id INTEGER PRIMARY KEY REFERENCES cards(id) ON DELETE CASCADE,
   session_id TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS jobs(
+  id INTEGER PRIMARY KEY, kind TEXT NOT NULL, scope TEXT NOT NULL, target_id INTEGER NOT NULL,
+  card_id INTEGER NOT NULL DEFAULT 0, label TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'running', request TEXT NOT NULL DEFAULT '', result TEXT NOT NULL DEFAULT '',
+  error TEXT NOT NULL DEFAULT '', seen INTEGER NOT NULL DEFAULT 0, consumed INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
 CREATE TABLE IF NOT EXISTS plan_versions(
   id INTEGER PRIMARY KEY, board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
   version INTEGER NOT NULL, content TEXT NOT NULL DEFAULT '',
@@ -124,6 +130,7 @@ func Open(path string) (*Store, error) {
 		{"cards", "task_seq", "INTEGER NOT NULL DEFAULT 0"},             // last Agent Task number handed out
 		{"cards", "qa_seq", "INTEGER NOT NULL DEFAULT 0"},               // last QA Test Case number handed out
 		{"card_items", "ident", "TEXT NOT NULL DEFAULT ''"},             // e.g. MID-12-T3 / MID-12-QA1
+		{"card_items", "superseded", "INTEGER NOT NULL DEFAULT 0"},      // 1 = struck through by a newer Generate; kept for history
 	} {
 		if err := addColumn(db, m[0], m[1], m[2]); err != nil {
 			db.Close()

@@ -69,8 +69,9 @@ func TestFilePickerAndMentions(t *testing.T) {
 		return "## Summary\nok", nil
 	}
 	body := map[string]any{"prompt": "log the send action, code in @shop-api/src/help/send.go", "boardId": 1}
-	resp, out := s.req(t, "POST", "/api/generate-description", body, ck)
-	if resp.StatusCode != 200 || len(gotDirs) != 1 || gotDirs[0] != root || !strings.Contains(gotUser, filepath.Join(root, "src/help/send.go")) {
+	code, job := s.gen(t, "/api/generate-description", body, ck)
+	resp, out := struct{ StatusCode int }{code}, job.Status+job.Error
+	if resp.StatusCode != 202 || job.Status != "done" || len(gotDirs) != 1 || gotDirs[0] != root || !strings.Contains(gotUser, filepath.Join(root, "src/help/send.go")) {
 		t.Fatalf("mention generate: %d %s dirs=%v\n%s", resp.StatusCode, out, gotDirs, gotUser)
 	}
 }

@@ -60,7 +60,7 @@ type genFlowIn struct {
 	Problems []int  `json:"problems"` // 1-based line numbers of that draft that were not understood
 }
 
-// POST /api/flows/generate → {"title","source"}: a draft flow in swimlane text, not saved yet.
+// POST /api/flows/generate → 202 + a job whose result is {"title","source"}: a draft flow in swimlane text, not saved yet.
 func (s *server) generateFlow(w http.ResponseWriter, r *http.Request) {
 	var in genFlowIn
 	if err := decode(r, &in); err != nil {
@@ -117,16 +117,21 @@ func (s *server) generateFlow(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(&msg, "\nYour previous draft had lines the drawing could not read (line numbers %v). Fix them, keep the rest:\n%s\n", in.Problems, in.Previous)
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
-	defer cancel()
-	out, err := runClaude(ctx, system, msg.String())
-	title, source := parseFlowReply(out)
-	if err != nil || !flowArrow.MatchString(source) {
-		log.Printf("generate-flow failed: err=%v source=%q", err, shorten(source, 80))
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "Claude could not draw that flow. Try again."})
-		return
+	scope, target, label := "card", card.ID, "Business Flow "+card.Ident
+	if in.Kind == "technical" {
+		scope, target, label = "item", item.ID, "Technical Flow "+item.Ident
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"title": title, "source": source})
+	reqJSON, _ := json.Marshal(map[string]any{"prompt": in.Prompt, "retry": in.Previous != ""}) // retry = Claude's second go at unreadable lines
+	s.startJob(w, store.Job{Kind: "flow", Scope: scope, TargetID: target, CardID: card.ID, Label: label, Request: string(reqJSON)}, 3*time.Minute,
+		func(ctx context.Context) (any, bool, error) {
+			out, err := runClaude(ctx, system, msg.String())
+			title, source := parseFlowReply(out)
+			if err != nil || !flowArrow.MatchString(source) {
+				log.Printf("generate-flow failed: err=%v source=%q", err, shorten(source, 80))
+				return nil, false, fmt.Errorf("Claude could not draw that flow. Try again.")
+			}
+			return map[string]string{"title": title, "source": source}, false, nil
+		})
 }
 
 // parseFlowReply reads {"title","source"} from Claude's reply, tolerating a code fence or bare swimlane text.

@@ -464,3 +464,15 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
   .modal.ticket .ticket-body { overflow-y: auto; }
   .modal.ticket .ticket-main, .modal.ticket .ticket-side { overflow: visible; align-self: start; }
 }
+
+/* Scrollbars: no track background, only a thin thumb. */
+* { scrollbar-width: thin; scrollbar-color: rgba(59, 36, 23, 0.28) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+*::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(59, 36, 23, 0.28); border-radius: 8px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(59, 36, 23, 0.45); }
+
+/* Items replaced by a newer Generate: struck through, kept for history. */
+.superseded-label { margin: 10px 0 4px; }
+.flow-list.superseded li button { opacity: 0.6; }
+.flow-list.superseded .item-title { text-decoration: line-through; }

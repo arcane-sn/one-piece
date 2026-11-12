@@ -76,6 +76,8 @@ func (s *server) runnable(it store.Item, gate bool) (store.Card, store.Board, er
 	switch {
 	case !c.Approved:
 		err = store.ConflictError{Msg: "Approve the ticket before running its tasks."}
+	case it.Superseded:
+		err = store.ConflictError{Msg: "This item was replaced by a newer Generate. Restore it first to run it."}
 	case it.Status == "done":
 		err = store.ConflictError{Msg: "This item is already done. Set it back to To Do to run it again."}
 	}
@@ -86,7 +88,7 @@ func (s *server) runnable(it store.Item, gate bool) (store.Card, store.Board, er
 		}
 		open := 0
 		for _, x := range all {
-			if x.Kind == "agent" && x.Status != "done" {
+			if x.Kind == "agent" && x.Status != "done" && !x.Superseded {
 				open++
 			}
 		}
@@ -167,7 +169,7 @@ func (s *server) runAll(w http.ResponseWriter, r *http.Request) {
 	}
 	var todo []store.Item
 	for _, it := range items {
-		if it.Kind == in.Kind && it.Status == "todo" {
+		if it.Kind == in.Kind && it.Status == "todo" && !it.Superseded {
 			todo = append(todo, it)
 		}
 	}

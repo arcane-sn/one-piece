@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import ItemModal from './ItemModal'
 import { toast } from '../lib/toast'
+import { useJob } from '../lib/jobs'
 
 const KINDS = [
   ['agent', 'Agent Tasks', 'Add Task'],
@@ -13,9 +14,13 @@ const STATUS = { todo: 'To Do', doing: 'In Progress', done: 'Done' }
 export default function ItemsSection({ card, onModal }) {
   const [items, setItems] = useState([])
   const [editing, setEditing] = useState(null) // null | {kind} (new) | item
-  const [busy, setBusy] = useState('') // '' | 'agent' | 'qa': which list Claude is generating
   const [error, setError] = useState('')
   const [split, setSplit] = useState('')
+  // Generate runs as a background job on the server: closing the ticket does not stop it.
+  const agentJob = useJob('card', card?.id, 'agent_tasks')
+  const qaJob = useJob('card', card?.id, 'qa_cases')
+  const jobs = { agent: agentJob, qa: qaJob }
+  const busy = agentJob.job?.status === 'running' ? 'agent' : qaJob.job?.status === 'running' ? 'qa' : ''
 
   const load = useCallback(async () => {
     if (!card?.id) return
@@ -48,20 +53,34 @@ export default function ItemsSection({ card, onModal }) {
   const open = (v) => { setEditing(v); onModal(!!v) }
 
   async function generate(kind) {
-    if (items.some((i) => i.kind === kind && !i.fixFor) && !window.confirm('Replace the current ' + (kind === 'qa' ? 'test cases' : 'tasks') + ' with a new set from Claude?')) return
-    setBusy(kind)
     setError('')
     setSplit('')
     try {
-      const r = await api(`/api/cards/${card.id}/generate-items`, { method: 'POST', body: { kind } })
-      if (r.split) setSplit(r.reason || 'This ticket is too big. Split it into smaller tickets.')
-      else await load()
+      await jobs[kind].start(`/api/cards/${card.id}/generate-items`, { kind })
     } catch (err) {
       toast(err.message)
-    } finally {
-      setBusy('')
     }
   }
+
+  // When a job that was running finishes, show its items (or why the ticket must be split).
+  const seenRunning = useRef({})
+  for (const kind of ['agent', 'qa']) {
+    const j = jobs[kind].job
+    if (j?.status === 'running') seenRunning.current[kind] = j.id
+  }
+  useEffect(() => {
+    for (const kind of ['agent', 'qa']) {
+      const j = jobs[kind].job
+      if (j && j.status !== 'running' && seenRunning.current[kind] === j.id) {
+        seenRunning.current[kind] = 0
+        load()
+        try {
+          const r = JSON.parse(j.result || '{}')
+          if (r.split) setSplit(r.reason || 'This ticket is too big. Split it into smaller tickets.')
+        } catch { /* no result */ }
+      }
+    }
+  }, [agentJob.job, qaJob.job]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const showQA = card?.status === 'qa' || card?.status === 'done'
   if (!card?.approved && items.length === 0) {
@@ -79,7 +98,9 @@ export default function ItemsSection({ card, onModal }) {
       {error && <p className="error">{error}</p>}
       {split && <div className="review-comment work"><div className="review-comment-head">Too Big For One Ticket</div><p>{split}</p></div>}
       {sections.map(([kind, label, add]) => {
-        const list = items.filter((i) => i.kind === kind)
+        const all = items.filter((i) => i.kind === kind)
+        const list = all.filter((i) => !i.superseded)
+        const struck = all.filter((i) => i.superseded)
         const running = list.some((i) => i.status === 'doing')
         return (
           <div className="field items-block" key={kind}>
@@ -87,7 +108,7 @@ export default function ItemsSection({ card, onModal }) {
               <span className="items-title">{label}</span>
               <span className="items-actions">
                 {card.approved && (
-                  <button type="button" className="ai-btn" disabled={!!busy || anyDoing} onClick={() => generate(kind)}>
+                  <button type="button" className="ai-btn" disabled={busy === kind || anyDoing} onClick={() => generate(kind)}>
                     <span aria-hidden="true">✦</span> {list.some((i) => !i.fixFor) ? 'Regenerate' : 'Generate'}
                   </button>
                 )}
@@ -98,7 +119,7 @@ export default function ItemsSection({ card, onModal }) {
                 <button type="button" className="ai-btn" onClick={() => open({ kind })}>+ {add}</button>
               </span>
             </div>
-            {busy === kind && <p className="muted prompt-status"><span className="spinner" /> Claude is {kind === 'qa' ? 'writing the test cases' : 'breaking the ticket down'}…</p>}
+            {busy === kind && <p className="muted prompt-status"><span className="spinner" /> Claude is {kind === 'qa' ? 'writing the test cases' : 'breaking the ticket down'}… You can close this and come back.</p>}
             {list.length === 0 && busy !== kind && (
               <p className="hint">{kind === 'qa' ? 'No test cases yet. Generate them once the Agent Tasks are done.' : 'No tasks yet.'}</p>
             )}
@@ -123,6 +144,32 @@ export default function ItemsSection({ card, onModal }) {
                 </li>
               ))}
             </ul>
+            {struck.length > 0 && (
+              <>
+                <p className="hint superseded-label">Superseded · replaced by a newer Generate</p>
+                <ul className="flow-list superseded">
+                  {struck.map((i) => (
+                <li key={i.id}>
+                  <button type="button" onClick={() => open(i)}>
+                    <span className="item-title">{i.ident && <span className="ident">{i.ident}</span>}{i.title}</span>
+                    <span className="item-tags">
+                      {i.version > 0 && i.version < card.contentVersion && (
+                        <span className="item-status stale" title="The ticket changed after Claude generated this. Regenerate to refresh.">Outdated</span>
+                      )}
+                      {i.kind === 'qa' && i.failure && i.status === 'todo' && (
+                        <span className="item-status stale" title={i.failure}>Failed</span>
+                      )}
+                      {i.status === 'todo' && !i.failure && i.log.length > 0 && /^(Failed|Blocked):/.test(i.log[i.log.length - 1]) && (
+                        <span className="item-status stale" title={i.log[i.log.length - 1]}>Blocked</span>
+                      )}
+                      <span className={'item-status ' + i.status}>{i.running && <span className="spinner" aria-hidden="true" />}{STATUS[i.status]}</span>
+                    </span>
+                  </button>
+                </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </div>
         )
       })}

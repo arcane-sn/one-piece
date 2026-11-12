@@ -290,6 +290,7 @@ func checkMove(tx *sql.Tx, c Card, to string) error {
 }
 
 func (s *Store) DeleteCard(id int64) error {
+	s.DB.Exec(`DELETE FROM jobs WHERE card_id=? OR (scope='card' AND target_id=?)`, id, id) // its Generate jobs go with it
 	res, err := s.DB.Exec(`DELETE FROM cards WHERE id=?`, id)
 	if err != nil {
 		return err

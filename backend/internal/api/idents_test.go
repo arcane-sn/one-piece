@@ -67,8 +67,8 @@ func TestPromptsCarryIdentifiers(t *testing.T) {
 		itemsUser = user
 		return `{"split":false,"agent_tasks":[{"title":"T","body":"b"}]}`, nil
 	}
-	if resp, body := s.req(t, "POST", cp+"/generate-items", map[string]any{"kind": "agent"}, ck); resp.StatusCode != 200 {
-		t.Fatalf("generate: %d %s", resp.StatusCode, body)
+	if code, job := s.gen(t, cp+"/generate-items", map[string]any{"kind": "agent"}, ck); code != 202 || job.Status != "done" {
+		t.Fatalf("generate: %d %+v", code, job)
 	}
 	if !strings.Contains(itemsUser, "Ticket ID: "+card.Ident+"\n") {
 		t.Errorf("items prompt lacks ident:\n%s", itemsUser)

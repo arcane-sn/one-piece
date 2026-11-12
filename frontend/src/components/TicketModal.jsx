@@ -201,6 +201,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
     {promptOpen && (
       <PromptModal
         boardId={boardId}
+        cardId={current?.id}
         title={title}
         description={description}
         onUse={(md) => { setDescription(md); setSaved(false); setPromptOpen(false) }}

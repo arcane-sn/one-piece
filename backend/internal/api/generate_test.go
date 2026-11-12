@@ -22,10 +22,10 @@ func TestGenerateDescription(t *testing.T) {
 	_, body := s.req(t, "POST", "/api/boards", map[string]any{"name": "Harbor App", "description": "Shipping tracker"}, c)
 	boardID := jsonInt(t, body, "id")
 
-	resp, body := s.req(t, "POST", "/api/generate-description",
+	code, job := s.gen(t, "/api/generate-description",
 		map[string]any{"prompt": "let ops save filters", "title": "Saved searches", "boardId": boardID}, c)
-	if resp.StatusCode != 200 || !strings.Contains(string(body), `"description":"## Summary\nDone."`) {
-		t.Fatalf("generate: %d %s", resp.StatusCode, body)
+	if code != 202 || job.Status != "done" || !strings.Contains(job.Result, `"description":"## Summary\nDone."`) {
+		t.Fatalf("generate: %d %+v", code, job)
 	}
 	for _, want := range []string{"let ops save filters", "Saved searches", "Harbor App", "Shipping tracker"} {
 		if !strings.Contains(gotUser, want) {
@@ -43,13 +43,19 @@ func TestGenerateDescriptionValidationAndFailure(t *testing.T) {
 	defer func(f func(context.Context, string, string) (string, error)) { runClaude = f }(runClaude)
 	runClaude = func(context.Context, string, string) (string, error) { return "x", nil }
 
+	_, b := s.req(t, "POST", "/api/boards", map[string]any{"name": "B"}, c)
+	boardID := jsonInt(t, b, "id")
 	post := func(m map[string]any, cookie bool) int {
 		ck := c
 		if !cookie {
 			ck = nil
 		}
-		resp, _ := s.req(t, "POST", "/api/generate-description", m, ck)
-		return resp.StatusCode
+		code, _ := s.gen(t, "/api/generate-description", m, ck)
+		return code
+	}
+	state := func(m map[string]any) string {
+		_, j := s.gen(t, "/api/generate-description", m, c)
+		return j.Status
 	}
 	if got := post(map[string]any{"prompt": "   "}, true); got != 400 {
 		t.Errorf("blank prompt: %d, want 400", got)
@@ -60,16 +66,19 @@ func TestGenerateDescriptionValidationAndFailure(t *testing.T) {
 	if got := post(map[string]any{"prompt": "x", "boardId": 9999}, true); got != 404 {
 		t.Errorf("unknown board: %d, want 404", got)
 	}
+	if got := post(map[string]any{"prompt": "x"}, true); got != 400 {
+		t.Errorf("no board or card to attach the job to: %d, want 400", got)
+	}
 	if got := post(map[string]any{"prompt": "x"}, false); got != 401 {
 		t.Errorf("unauthenticated: %d, want 401", got)
 	}
 	runClaude = func(context.Context, string, string) (string, error) { return "", errors.New("exit 1") }
-	if got := post(map[string]any{"prompt": "x"}, true); got != 502 {
-		t.Errorf("claude failure: %d, want 502", got)
+	if got := state(map[string]any{"prompt": "x", "boardId": boardID}); got != "error" {
+		t.Errorf("claude failure: job %q, want error", got)
 	}
 	runClaude = func(context.Context, string, string) (string, error) { return "  \n", nil }
-	if got := post(map[string]any{"prompt": "x"}, true); got != 502 {
-		t.Errorf("empty output: %d, want 502", got)
+	if got := state(map[string]any{"prompt": "x", "boardId": boardID}); got != "error" {
+		t.Errorf("empty output: job %q, want error", got)
 	}
 }
 

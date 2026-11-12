@@ -28,37 +28,37 @@ func TestGenerateFlowBusinessAndTechnical(t *testing.T) {
 		gotSystem, gotUser = system, user
 		return "```json\n" + `{"title":"Owner signs in","source":"title: Owner signs in\nautonumber\nOwner -> App: Opens login\nApp --> Owner: Shows form"}` + "\n```", nil
 	}
-	resp, body := s.req(t, "POST", "/api/flows/generate", map[string]any{"kind": "business", "id": card.ID, "prompt": "happy path and wrong password"}, ck)
+	code, job := s.gen(t, "/api/flows/generate", map[string]any{"kind": "business", "id": card.ID, "prompt": "happy path and wrong password"}, ck)
 	var out struct{ Title, Source string }
-	json.Unmarshal(body, &out)
-	if resp.StatusCode != 200 || out.Title != "Owner signs in" || !strings.HasPrefix(out.Source, "title: Owner signs in\nautonumber\nOwner -> App") {
-		t.Fatalf("business: %d %s", resp.StatusCode, body)
+	json.Unmarshal([]byte(job.Result), &out)
+	if code != 202 || job.Status != "done" || out.Title != "Owner signs in" || !strings.HasPrefix(out.Source, "title: Owner signs in\nautonumber\nOwner -> App") {
+		t.Fatalf("business: %d %+v", code, job)
 	}
 	if !strings.Contains(gotSystem, "Business Flow") || !strings.Contains(gotUser, "Let the owner sign in") || !strings.Contains(gotUser, "wrong password") {
 		t.Errorf("business prompt:\n%s\n%s", gotSystem, gotUser)
 	}
 
-	resp, body = s.req(t, "POST", "/api/flows/generate", map[string]any{"kind": "technical", "id": item.ID, "prompt": "api only",
+	code, job = s.gen(t, "/api/flows/generate", map[string]any{"kind": "technical", "id": item.ID, "prompt": "api only",
 		"previous": "bad line", "problems": []int{1}}, ck)
-	if resp.StatusCode != 200 || !strings.Contains(gotSystem, "Technical Flow") || !strings.Contains(gotUser, "POST /api/login") ||
+	if code != 202 || job.Status != "done" || job.Scope != "item" || !strings.Contains(gotSystem, "Technical Flow") || !strings.Contains(gotUser, "POST /api/login") ||
 		!strings.Contains(gotUser, "line numbers [1]") {
-		t.Fatalf("technical: %d %s\n%s\n%s", resp.StatusCode, body, gotSystem, gotUser)
+		t.Fatalf("technical: %d %+v\n%s\n%s", code, job, gotSystem, gotUser)
 	}
 
 	// bare swimlane text still works; prose without arrows is rejected
 	runClaude = func(context.Context, string, string) (string, error) {
 		return "title: Bare\nA -> B: hi", nil
 	}
-	_, body = s.req(t, "POST", "/api/flows/generate", map[string]any{"kind": "business", "id": card.ID, "prompt": "x"}, ck)
-	json.Unmarshal(body, &out)
+	_, job = s.gen(t, "/api/flows/generate", map[string]any{"kind": "business", "id": card.ID, "prompt": "x"}, ck)
+	json.Unmarshal([]byte(job.Result), &out)
 	if out.Title != "Bare" {
-		t.Fatalf("bare text: %s", body)
+		t.Fatalf("bare text: %+v", job)
 	}
 	runClaude = func(context.Context, string, string) (string, error) { return "I cannot do that", nil }
-	if resp, _ = s.req(t, "POST", "/api/flows/generate", map[string]any{"kind": "business", "id": card.ID, "prompt": "x"}, ck); resp.StatusCode != 502 {
-		t.Fatalf("prose reply: %d, want 502", resp.StatusCode)
+	if _, job = s.gen(t, "/api/flows/generate", map[string]any{"kind": "business", "id": card.ID, "prompt": "x"}, ck); job.Status != "error" {
+		t.Fatalf("prose reply: job %q, want error", job.Status)
 	}
-	if resp, _ = s.req(t, "POST", "/api/flows/generate", map[string]any{"kind": "business", "id": card.ID, "prompt": ""}, ck); resp.StatusCode != 400 {
-		t.Fatalf("empty prompt: %d, want 400", resp.StatusCode)
+	if code, _ = s.gen(t, "/api/flows/generate", map[string]any{"kind": "business", "id": card.ID, "prompt": ""}, ck); code != 400 {
+		t.Fatalf("empty prompt: %d, want 400", code)
 	}
 }

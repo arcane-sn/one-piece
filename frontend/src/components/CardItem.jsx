@@ -1,8 +1,11 @@
+import { useJobs } from '../lib/jobs'
+
 // Markdown -> one short plain-text line for the card preview.
 const plain = (md) => md.replace(/```[\s\S]*?```/g, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/[#>*_`~\\[\]()!-]+/g, ' ').replace(/\s+/g, ' ').trim()
 
 // A draggable kanban card; click opens the ticket modal.
 export default function CardItem({ card, onOpen, onDropOn }) {
+  const generating = useJobs().busyCards.has(card.id)
   return (
     <div
       className="kcard"
@@ -12,7 +15,7 @@ export default function CardItem({ card, onOpen, onDropOn }) {
       onDrop={onDropOn}
       onClick={() => onOpen(card)}
     >
-      <div className="kcard-title">{card.ident && <span className="ident">{card.ident}</span>}{card.title}</div>
+      <div className="kcard-title">{card.ident && <span className="ident">{card.ident}</span>}{card.title}{generating && <span className="spinner" title="Claude is generating" aria-label="Claude is generating" style={{ marginLeft: 6 }} />}</div>
       {card.approved && <span className="approved-chip">Approved ✓</span>}
       {plain(card.description) && <div className="kcard-desc">{plain(card.description)}</div>}
       {card.deadline && (

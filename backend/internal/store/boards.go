@@ -260,6 +260,7 @@ func (s *Store) UpdateBoard(id int64, name, description string, folders []string
 }
 
 func (s *Store) DeleteBoard(id int64) error {
+	s.DB.Exec(`DELETE FROM jobs WHERE (scope='board' AND target_id=?) OR card_id IN (SELECT id FROM cards WHERE board_id=?)`, id, id)
 	res, err := s.DB.Exec(`DELETE FROM boards WHERE id=?`, id)
 	if err != nil {
 		return err

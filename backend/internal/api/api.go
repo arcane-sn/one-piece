@@ -39,6 +39,9 @@ func New(st *store.Store, staticDir string) http.Handler {
 	if err := st.FailRunningDiscuss(); err != nil { // Discuss replies cut short by a previous shutdown
 		log.Printf("sweeping stale discuss replies: %v", err)
 	}
+	if err := st.FailRunningJobs(); err != nil { // Generate jobs cut short by a previous shutdown
+		log.Printf("sweeping stale jobs: %v", err)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/login", s.login)
 	mux.HandleFunc("POST /api/logout", s.logout)
@@ -83,6 +86,11 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/cards/{id}/items", s.listItems)
 	mux.HandleFunc("POST /api/cards/{id}/items", s.createItem)
 	mux.HandleFunc("POST /api/cards/{id}/generate-items", s.generateItems)
+	mux.HandleFunc("GET /api/jobs", s.listJobs)
+	mux.HandleFunc("GET /api/jobs/active", s.activeJobs)
+	mux.HandleFunc("POST /api/jobs/{id}/seen", s.markJob("seen"))
+	mux.HandleFunc("POST /api/jobs/{id}/consume", s.markJob("consumed"))
+	mux.HandleFunc("POST /api/items/{id}/restore", s.restoreItem)
 	mux.HandleFunc("PUT /api/items/{id}", s.updateItem)
 	mux.HandleFunc("POST /api/cards/{id}/run-all", s.runAll)
 	mux.HandleFunc("POST /api/cards/{id}/stop-all", s.stopAll)
