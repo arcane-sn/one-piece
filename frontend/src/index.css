@@ -480,3 +480,7 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 /* Idea boxes grow with their text (autoGrow), then scroll. */
 .mention-wrap textarea { resize: vertical; max-height: 55vh; white-space: pre-wrap; }
 .bs-input .mention-wrap { flex: 1; }
+
+/* A spinner inside running text (e.g. the kanban card title) must be a box, not an inline span. */
+.spinner { display: inline-block; flex-shrink: 0; vertical-align: middle; }
+.kcard-title .spinner { width: 12px; height: 12px; border-width: 2px; margin-left: 6px; }
