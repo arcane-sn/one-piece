@@ -479,3 +479,4 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 
 /* Idea boxes grow with their text (autoGrow), then scroll. */
 .mention-wrap textarea { resize: vertical; max-height: 55vh; white-space: pre-wrap; }
+.bs-input .mention-wrap { flex: 1; }
