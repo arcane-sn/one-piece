@@ -161,6 +161,7 @@ func (s *server) runDiscussTurn(ctx context.Context, cancel context.CancelFunc, 
 	rows, _ := s.st.ListBranches(c.ID)
 	run := discussRun{System: discussSystemPrompt(stage), SessionID: sid, Exe: exe, DB: s.st.Path, BoardID: b.ID, CardID: c.ID, Dirs: b.Folders}
 	run.Prompt = discussPrompt(b, c, rows, exe, stage, text, sid == "")
+	run.Dirs, run.Prompt = s.attachImages(text, run.Dirs, run.Prompt)
 	wrote := false
 	onText := func(t string) {
 		wrote = true
@@ -174,6 +175,7 @@ func (s *server) runDiscussTurn(ctx context.Context, cancel context.CancelFunc, 
 		log.Printf("discuss card %d: resume failed (%v), starting a fresh session", c.ID, err)
 		run.SessionID, fresh, announced = "", true, ""
 		run.Prompt = discussPrompt(b, c, rows, exe, stage, text, true)
+		run.Dirs, run.Prompt = s.attachImages(text, b.Folders, run.Prompt)
 		newSID, err = runDiscuss(ctx, run, onText)
 	}
 	if _, gone := s.st.GetCard(c.ID); gone != nil { // deleted while Claude was working

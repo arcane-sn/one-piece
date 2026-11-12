@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import MentionTextarea from './MentionTextarea'
 import RichEditor from './RichEditor'
 
 const NOTE = { stopped: 'Stopped', failed: 'Failed' }
@@ -100,12 +101,12 @@ export default function BrainstormModal({ boardId, onClose, onCardsChanged }) {
               ))}
             </div>
             <div className="bs-input">
-              <textarea
+              <MentionTextarea
                 rows={2}
-                placeholder="Message Claude…  (Enter sends, Shift+Enter adds a line)"
+                placeholder="Message Claude…  (Enter sends, Shift+Enter adds a line, paste a screenshot to attach it)"
                 value={text}
                 disabled={running}
-                onChange={(e) => setText(e.target.value)}
+                onChange={setText}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault()

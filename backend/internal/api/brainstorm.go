@@ -283,6 +283,7 @@ func (s *server) runTurn(ctx context.Context, cancel context.CancelFunc, b store
 	run := brainstormRun{System: brainstormSystemPrompt, SessionID: st.SessionID, Exe: exe, DB: s.st.Path,
 		PlanPath: s.st.PlanPath(b.ID), BoardID: b.ID, Dirs: b.Folders}
 	run.Prompt = brainstormPrompt(b, exe, run.PlanPath, index, st, text)
+	run.Dirs, run.Prompt = s.attachImages(text, run.Dirs, run.Prompt)
 
 	wrote := false
 	onText := func(t string) {
@@ -299,6 +300,7 @@ func (s *server) runTurn(ctx context.Context, cancel context.CancelFunc, b store
 		log.Printf("brainstorm board %d: resume failed (%v), starting a fresh session", b.ID, err)
 		run.SessionID, fresh, announced = "", true, ""
 		run.Prompt = brainstormPrompt(b, exe, run.PlanPath, index, store.BrainstormState{}, text)
+		_, run.Prompt = s.attachImages(text, nil, run.Prompt) // run.Dirs already has the uploads folder
 		sid, err = runBrainstorm(ctx, run, onText)
 	}
 	if _, gone := s.st.GetBoard(b.ID); gone != nil { // deleted while Claude was working

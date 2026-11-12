@@ -176,3 +176,44 @@ func TestPastedImagesAreHandedToClaudeForDescriptionAndFlow(t *testing.T) {
 		t.Fatalf("flow: %d %+v dirs=%v\n%s", code, job, gotDirs, gotUser)
 	}
 }
+
+func TestPastedImagesReachDiscussAndBrainstorm(t *testing.T) {
+	dcalls := useDiscuss(t, func(_ context.Context, _ discussRun, onText func(string)) (string, error) {
+		onText("ok")
+		return "sess", nil
+	})
+	bcalls := useBrainstorm(t, func(_ context.Context, _ brainstormRun, onText func(string)) (string, error) {
+		onText("ok")
+		return "sess", nil
+	})
+	s, ck, cp, card, _ := dFixture(t)
+	_, body := s.req(t, "POST", "/api/uploads", map[string]string{"data": "data:image/png;base64," + tinyPNG}, ck)
+	var up struct{ URL string }
+	json.Unmarshal(body, &up)
+	name := up.URL[len("/api/uploads/"):]
+
+	if code, b := dSend(t, s, cp, ck, "see ![]("+up.URL+")"); code != 202 {
+		t.Fatalf("discuss send: %d %s", code, b)
+	}
+	dIdle(t, s, cp, ck)
+	in := (*dcalls)[0]
+	last := in.Dirs[len(in.Dirs)-1]
+	if !strings.HasSuffix(last, "uploads") || !strings.Contains(in.Prompt, filepath.Join(last, name)) {
+		t.Fatalf("discuss: dirs=%v\n%s", in.Dirs, in.Prompt)
+	}
+
+	bp := "/api/boards/" + strconv.FormatInt(card.BoardID, 10)
+	if code := bsSend(t, s, bp, ck, "mock ![]("+up.URL+")"); code != 202 {
+		t.Fatalf("brainstorm send: %d", code)
+	}
+	for i := 0; i < 200 && len(*bcalls) == 0; i++ {
+		time.Sleep(15 * time.Millisecond)
+	}
+	if len(*bcalls) == 0 {
+		t.Fatal("brainstorm never ran")
+	}
+	bin := (*bcalls)[0]
+	if !strings.HasSuffix(bin.Dirs[len(bin.Dirs)-1], "uploads") || !strings.Contains(bin.Prompt, name) {
+		t.Fatalf("brainstorm: dirs=%v\n%s", bin.Dirs, bin.Prompt)
+	}
+}

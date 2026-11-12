@@ -110,3 +110,13 @@ func withImages(msg *strings.Builder, imgs []string) string {
 	msg.WriteString("\nPasted images (read them):\n- " + strings.Join(imgs, "\n- ") + "\n")
 	return imageNote
 }
+
+// attachImages lets a chat turn read the images pasted in text: it adds the uploads folder to the
+// readable dirs and lists the files at the end of the prompt. Without images both come back unchanged.
+func (s *server) attachImages(text string, dirs []string, prompt string) ([]string, string) {
+	imgs := s.attachedImages(text)
+	if len(imgs) == 0 {
+		return dirs, prompt
+	}
+	return append(append([]string{}, dirs...), s.uploadsDir()), prompt + "\n\nPasted images (open each with Read and use what it shows):\n- " + strings.Join(imgs, "\n- ") + "\n"
+}

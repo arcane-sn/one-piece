@@ -101,7 +101,7 @@ export default function DiscussModal({ card, boardId, onTurnDone, onClose }) {
             boardId={boardId}
             rows={2}
             maxLength={20000}
-            placeholder="Message Claude…  (@ picks a repo; Enter sends, Shift+Enter adds a line)"
+            placeholder="Message Claude…  (@ picks a repo; paste a screenshot to attach it; Enter sends, Shift+Enter adds a line)"
             value={text}
             disabled={running || !stage}
             onChange={setText}
