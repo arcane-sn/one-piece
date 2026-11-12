@@ -104,6 +104,12 @@ func Open(path string) (*Store, error) {
 		{"card_items", "failure", "TEXT NOT NULL DEFAULT ''"},      // QA: why the last run failed; "" = not failed
 		{"card_items", "failure_desc", "TEXT NOT NULL DEFAULT ''"}, // QA: the detailed explanation behind failure (the one-line issue)
 		{"card_items", "fix_for", "INTEGER NOT NULL DEFAULT 0"},    // Agent: id of the failed QA item this [FIX] task is for
+		{"boards", "key", "TEXT NOT NULL DEFAULT ''"},              // prefix of ticket identifiers, e.g. MID
+		{"boards", "card_seq", "INTEGER NOT NULL DEFAULT 0"},       // last ticket number handed out; never reused
+		{"cards", "ident", "TEXT NOT NULL DEFAULT ''"},             // e.g. MID-12; fixed once assigned
+		{"cards", "task_seq", "INTEGER NOT NULL DEFAULT 0"},        // last Agent Task number handed out
+		{"cards", "qa_seq", "INTEGER NOT NULL DEFAULT 0"},          // last QA Test Case number handed out
+		{"card_items", "ident", "TEXT NOT NULL DEFAULT ''"},        // e.g. MID-12-T3 / MID-12-QA1
 	} {
 		if err := addColumn(db, m[0], m[1], m[2]); err != nil {
 			db.Close()
@@ -115,5 +121,10 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{DB: db, Path: abs, Dir: filepath.Dir(abs)}, nil
+	s := &Store{DB: db, Path: abs, Dir: filepath.Dir(abs)}
+	if err := s.backfillIdents(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return s, nil
 }

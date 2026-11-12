@@ -12,6 +12,7 @@ type Item struct {
 	ID          int64    `json:"id"`
 	CardID      int64    `json:"cardId"`
 	Kind        string   `json:"kind"`
+	Ident       string   `json:"ident"` // e.g. MID-12-T3; generated, never changes
 	Title       string   `json:"title"`
 	Body        string   `json:"body"`
 	Position    int      `json:"position"`
@@ -24,12 +25,12 @@ type Item struct {
 	Running     bool     `json:"running"`     // Claude is working on it right now; set by the API, never stored
 }
 
-const itemCols = `id,card_id,kind,title,body,position,status,log,version,failure,failure_desc,fix_for`
+const itemCols = `id,card_id,kind,ident,title,body,position,status,log,version,failure,failure_desc,fix_for`
 
 func scanItem(sc interface{ Scan(...any) error }) (Item, error) {
 	var i Item
 	var log string
-	if err := sc.Scan(&i.ID, &i.CardID, &i.Kind, &i.Title, &i.Body, &i.Position, &i.Status, &log, &i.Version, &i.Failure, &i.FailureDesc, &i.FixFor); err != nil {
+	if err := sc.Scan(&i.ID, &i.CardID, &i.Kind, &i.Ident, &i.Title, &i.Body, &i.Position, &i.Status, &log, &i.Version, &i.Failure, &i.FailureDesc, &i.FixFor); err != nil {
 		return Item{}, err
 	}
 	if json.Unmarshal([]byte(log), &i.Log) != nil || i.Log == nil {
@@ -82,13 +83,17 @@ func insertItem(tx *sql.Tx, cardID int64, kind, title, body string, log []string
 		log = []string{}
 	}
 	lj, _ := json.Marshal(log)
-	res, err := tx.Exec(`INSERT INTO card_items(card_id,kind,title,body,position,log,version)
-		VALUES(?,?,?,?,(SELECT COALESCE(MAX(position)+1,0) FROM card_items WHERE card_id=? AND kind=?),?,?)`, cardID, kind, title, body, cardID, kind, string(lj), version)
+	ident, err := nextItemIdent(tx, cardID, kind)
+	if err != nil {
+		return Item{}, err
+	}
+	res, err := tx.Exec(`INSERT INTO card_items(card_id,kind,ident,title,body,position,log,version)
+		VALUES(?,?,?,?,?,(SELECT COALESCE(MAX(position)+1,0) FROM card_items WHERE card_id=? AND kind=?),?,?)`, cardID, kind, ident, title, body, cardID, kind, string(lj), version)
 	if err != nil {
 		return Item{}, err
 	}
 	id, _ := res.LastInsertId()
-	it := Item{ID: id, CardID: cardID, Kind: kind, Title: title, Body: body, Status: "todo", Log: log, Version: version}
+	it := Item{ID: id, CardID: cardID, Kind: kind, Ident: ident, Title: title, Body: body, Status: "todo", Log: log, Version: version}
 	err = tx.QueryRow(`SELECT position FROM card_items WHERE id=?`, id).Scan(&it.Position)
 	return it, err
 }

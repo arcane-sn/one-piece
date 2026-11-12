@@ -13,6 +13,7 @@ type Board struct {
 	ID          int64    `json:"id"`
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
+	Key         string   `json:"key"` // prefix of ticket identifiers
 	Folders     []string `json:"folders"`
 	// Counts is the number of cards per status (all four keys always present).
 	Counts map[string]int `json:"counts"`
@@ -112,12 +113,17 @@ func (s *Store) CreateBoard(name, description string, folders []string) (Board, 
 	if err != nil {
 		return Board{}, err
 	}
+	taken, err := s.takenKeys(0) // before Begin: the single connection is held by the transaction
+	if err != nil {
+		return Board{}, err
+	}
+	key := DeriveKey(name, taken)
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return Board{}, err
 	}
 	defer tx.Rollback()
-	res, err := tx.Exec(`INSERT INTO boards(name,description) VALUES(?,?)`, name, description)
+	res, err := tx.Exec(`INSERT INTO boards(name,description,key) VALUES(?,?,?)`, name, description, key)
 	if err != nil {
 		return Board{}, err
 	}
@@ -128,19 +134,19 @@ func (s *Store) CreateBoard(name, description string, folders []string) (Board, 
 	if err := tx.Commit(); err != nil {
 		return Board{}, err
 	}
-	return Board{ID: id, Name: name, Description: description, Folders: folders, Counts: zeroCounts()}, nil
+	return Board{ID: id, Name: name, Description: description, Key: key, Folders: folders, Counts: zeroCounts()}, nil
 }
 
 func (s *Store) ListBoards() ([]Board, error) {
 	boards := []Board{}
 	idx := map[int64]int{}
-	rows, err := s.DB.Query(`SELECT id,name,description FROM boards ORDER BY id`)
+	rows, err := s.DB.Query(`SELECT id,name,description,key FROM boards ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
 		b := Board{Folders: []string{}, Counts: zeroCounts()}
-		if err := rows.Scan(&b.ID, &b.Name, &b.Description); err != nil {
+		if err := rows.Scan(&b.ID, &b.Name, &b.Description, &b.Key); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -181,7 +187,7 @@ func (s *Store) ListBoards() ([]Board, error) {
 
 func (s *Store) GetBoard(id int64) (Board, error) {
 	b := Board{ID: id, Folders: []string{}, Counts: zeroCounts()}
-	err := s.DB.QueryRow(`SELECT name,description FROM boards WHERE id=?`, id).Scan(&b.Name, &b.Description)
+	err := s.DB.QueryRow(`SELECT name,description,key FROM boards WHERE id=?`, id).Scan(&b.Name, &b.Description, &b.Key)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Board{}, ErrNotFound
 	}

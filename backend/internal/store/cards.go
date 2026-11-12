@@ -12,6 +12,7 @@ import (
 type Card struct {
 	ID          int64  `json:"id"`
 	BoardID     int64  `json:"boardId"`
+	Ident       string `json:"ident"` // e.g. MID-12; generated, never changes
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Deadline    string `json:"deadline"` // "" or YYYY-MM-DD
@@ -61,11 +62,11 @@ type queryer interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
-const cardCols = `id,board_id,title,description,deadline,approved,content_version,status,position`
+const cardCols = `id,board_id,ident,title,description,deadline,approved,content_version,status,position`
 
 func scanCard(row *sql.Row) (Card, error) {
 	var c Card
-	err := row.Scan(&c.ID, &c.BoardID, &c.Title, &c.Description, &c.Deadline, &c.Approved, &c.ContentVersion, &c.Status, &c.Position)
+	err := row.Scan(&c.ID, &c.BoardID, &c.Ident, &c.Title, &c.Description, &c.Deadline, &c.Approved, &c.ContentVersion, &c.Status, &c.Position)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Card{}, ErrNotFound
 	}
@@ -87,13 +88,30 @@ func (s *Store) CreateCard(boardID int64, title, description, deadline string) (
 	if deadline, err = cleanDeadline(deadline); err != nil {
 		return Card{}, err
 	}
-	res, err := s.DB.Exec(`INSERT INTO cards(board_id,title,description,deadline,status,position)
-		VALUES(?,?,?,?,'business',(SELECT COALESCE(MAX(position)+1,0) FROM cards WHERE board_id=? AND status='business'))`,
-		boardID, title, description, deadline, boardID)
+	return s.insertCard(boardID, `INSERT INTO cards(board_id,ident,title,description,deadline,status,position)
+		VALUES(?,?,?,?,?,'business',(SELECT COALESCE(MAX(position)+1,0) FROM cards WHERE board_id=? AND status='business'))`,
+		title, description, deadline)
+}
+
+// insertCard runs the INSERT (args: board, ident, title, description, deadline, board) with a fresh identifier.
+func (s *Store) insertCard(boardID int64, query, title, description, deadline string) (Card, error) {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return Card{}, err
+	}
+	defer tx.Rollback()
+	ident, err := nextCardIdent(tx, boardID)
+	if err != nil {
+		return Card{}, err
+	}
+	res, err := tx.Exec(query, boardID, ident, title, description, deadline, boardID)
 	if err != nil {
 		return Card{}, err
 	}
 	id, _ := res.LastInsertId()
+	if err := tx.Commit(); err != nil {
+		return Card{}, err
+	}
 	return getCard(s.DB, id)
 }
 
@@ -106,14 +124,9 @@ func (s *Store) CreateDraft(boardID int64, title, description string) (Card, err
 	if err != nil {
 		return Card{}, err
 	}
-	res, err := s.DB.Exec(`INSERT INTO cards(board_id,title,description,status,position)
-		VALUES(?,?,?,'draft',(SELECT COALESCE(MAX(position)+1,0) FROM cards WHERE board_id=? AND status='draft'))`,
-		boardID, title, description, boardID)
-	if err != nil {
-		return Card{}, err
-	}
-	id, _ := res.LastInsertId()
-	return getCard(s.DB, id)
+	return s.insertCard(boardID, `INSERT INTO cards(board_id,ident,title,description,deadline,status,position)
+		VALUES(?,?,?,?,?,'draft',(SELECT COALESCE(MAX(position)+1,0) FROM cards WHERE board_id=? AND status='draft'))`,
+		title, description, "")
 }
 
 // UpdateDraft edits a card only if it is a Draft of the given board; anything else is a ConflictError.
@@ -151,7 +164,7 @@ func (s *Store) ListCards(boardID int64) ([]Card, error) {
 	cards := []Card{}
 	for rows.Next() {
 		var c Card
-		if err := rows.Scan(&c.ID, &c.BoardID, &c.Title, &c.Description, &c.Deadline, &c.Approved, &c.ContentVersion, &c.Status, &c.Position); err != nil {
+		if err := rows.Scan(&c.ID, &c.BoardID, &c.Ident, &c.Title, &c.Description, &c.Deadline, &c.Approved, &c.ContentVersion, &c.Status, &c.Position); err != nil {
 			return nil, err
 		}
 		cards = append(cards, c)
