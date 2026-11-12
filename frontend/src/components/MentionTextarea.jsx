@@ -9,7 +9,7 @@ function activeMention(text, caret) {
 
 // A textarea where typing "@" lists files and folders of the board's folders.
 // Picking one inserts "@<folder>/<path>"; the server lets Claude read what was mentioned.
-export default function MentionTextarea({ boardId, value, onChange, ...rest }) {
+export default function MentionTextarea({ boardId, value, onChange, onKeyDown: outerKeyDown, ...rest }) {
   const ta = useRef(null)
   const [menu, setMenu] = useState(null) // { start, query, items, active }
   const seq = useRef(0)
@@ -45,7 +45,13 @@ export default function MentionTextarea({ boardId, value, onChange, ...rest }) {
     })
   }
 
+  // The menu takes the keys it needs first; anything it leaves alone goes on to the caller's handler.
   function onKeyDown(e) {
+    menuKey(e)
+    if (!e.defaultPrevented) outerKeyDown?.(e)
+  }
+
+  function menuKey(e) {
     if (!menu?.items.length) {
       if (menu && e.key === 'Escape') { e.nativeEvent.stopPropagation(); setMenu(null) }
       return

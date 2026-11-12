@@ -4,6 +4,7 @@ import PromptModal from './PromptModal'
 import FlowsSection from './FlowsSection'
 import ItemsSection from './ItemsSection'
 import BranchingSection from './BranchingSection'
+import DiscussModal from './DiscussModal'
 import RichEditor from './RichEditor'
 import { ReviewComment, ReviewSide, useReview } from './ReviewPanel'
 
@@ -21,6 +22,10 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
   const [error, setError] = useState('')
   const [promptOpen, setPromptOpen] = useState(false)
   const [flowOpen, setFlowOpen] = useState(false)
+  const [discussOpen, setDiscussOpen] = useState(false)
+  const [branchTick, setBranchTick] = useState(0) // bumps when a Discuss turn ends, so Branching reloads
+  const turnDone = useCallback(() => setBranchTick((n) => n + 1), [])
+  const closeDiscuss = useCallback(() => { setDiscussOpen(false); setFlowOpen(false); setBranchTick((n) => n + 1) }, [])
   const titleRef = useRef(null)
   const { review, refresh, start } = useReview(current?.id)
 
@@ -130,6 +135,12 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
       <form className="modal ticket ticket-xl" role="dialog" aria-modal="true" aria-label={current ? 'Edit Ticket' : 'New Ticket'} onSubmit={save}>
         <div className="ticket-head">
           <h2>{current ? 'Edit Ticket' : 'New Ticket'}{current?.ident && <span className="ident">{current.ident}</span>}</h2>
+          {current && (current.status === 'business' || current.status === 'done') && (
+            <button type="button" className="ai-btn discuss-btn" title="Plan and run this ticket's branching with Claude"
+              onClick={() => { setDiscussOpen(true); setFlowOpen(true) }}>
+              <span aria-hidden="true">✦</span> Discuss
+            </button>
+          )}
           <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}>×</button>
         </div>
 
@@ -150,7 +161,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
                 onChange={(v) => { setDescription(v); setSaved(false) }} />
             </div>
             {!isDraft && <FlowsSection parent={current ? `/api/cards/${current.id}` : null} emptyHint="No flow yet. Claude asks for at least one before approval." onChanged={flowsChanged} onModal={setFlowOpen} />}
-            {!isDraft && current && <BranchingSection cardId={current.id} onModal={setFlowOpen} />}
+            {!isDraft && current && <BranchingSection cardId={current.id} reloadKey={branchTick} onModal={setFlowOpen} />}
             {!isDraft && <ItemsSection card={current} onModal={setFlowOpen} />}
             {!isDraft && <ReviewComment card={current} review={review} />}
           </div>
@@ -186,6 +197,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
         </div>
       </form>
     </div>
+    {discussOpen && <DiscussModal card={current} boardId={boardId} onTurnDone={turnDone} onClose={closeDiscuss} />}
     {promptOpen && (
       <PromptModal
         boardId={boardId}

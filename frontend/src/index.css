@@ -447,3 +447,10 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 .branch-chip.pr_open { background: rgba(127, 201, 160, 0.45); color: #1f5e48; }
 .branch-chip.blocked { background: rgba(224, 120, 100, 0.35); }
 .repo-tag { margin-left: 8px; padding: 1px 6px; border-radius: 6px; background: rgba(127, 201, 160, 0.45); color: #1f5e48; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.discuss-btn { margin-left: auto; margin-right: 8px; }
+.discuss-stage { margin: 0; font-size: 13px; font-weight: 700; color: var(--muted); }
+.discuss-marker { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.discuss-marker::before, .discuss-marker::after { content: ''; flex: 1; height: 1px; background: rgba(59, 36, 23, 0.16); }
+.discuss-input .mention-wrap { flex: 1; }
+.discuss-input .mention-list { position: absolute; bottom: 100%; left: 0; right: 0; margin: 0 0 6px; z-index: 5; }

@@ -7,14 +7,14 @@ const STATUS = [['planned', 'Planned'], ['branched', 'Branched'], ['merged_dev',
 const label = (s) => STATUS.find((x) => x[0] === s)?.[1] ?? s
 
 // Per-repo branching of one ticket: base branch, feature branch, -dev branch, status and PR link.
-export default function BranchingSection({ cardId, onModal }) {
+export default function BranchingSection({ cardId, reloadKey = 0, onModal }) {
   const [rows, setRows] = useState([])
   const [editing, setEditing] = useState(null) // null | 'new' | row
 
   const load = useCallback(async () => {
     try { setRows(await api(`/api/cards/${cardId}/branches`)) } catch (err) { toast(err.message) }
   }, [cardId])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load, reloadKey])
 
   const open = (v) => { setEditing(v); onModal?.(!!v) }
   const done = () => { open(null); load() }
