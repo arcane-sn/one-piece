@@ -7,7 +7,8 @@ import BranchingSection from './BranchingSection'
 import DiscussModal from './DiscussModal'
 import { useJobs } from '../lib/jobs'
 import RichEditor from './RichEditor'
-import { ReviewComment, ReviewSide, useReview } from './ReviewPanel'
+import ReviewChatModal from './ReviewChatModal'
+import { ReviewSide, useReview } from './ReviewPanel'
 
 const STATUS_LABEL = { draft: 'Draft', business: 'Business', agent: 'Agent', qa: 'QA', done: 'Done' }
 
@@ -25,11 +26,15 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
   const describing = useJobs().running('description', current?.id ? 'card' : 'board', current?.id || boardId)
   const [flowOpen, setFlowOpen] = useState(false)
   const [discussOpen, setDiscussOpen] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [flowTick, setFlowTick] = useState(0) // bumps when Claude may have changed the Business Flows
+  // While a Claude Review turn runs, the ticket is Claude's to edit: the editors lock and reload after.
+  const reviewing = useJobs().running('review_chat', 'card', current?.id)
   const [branchTick, setBranchTick] = useState(0) // bumps when a Discuss turn ends, so Branching reloads
   const turnDone = useCallback(() => setBranchTick((n) => n + 1), [])
   const closeDiscuss = useCallback(() => { setDiscussOpen(false); setFlowOpen(false); setBranchTick((n) => n + 1) }, [])
   const titleRef = useRef(null)
-  const { review, refresh, start } = useReview(current?.id)
+  const { review, refresh } = useReview(current?.id)
 
   const dirty =
     title !== (current?.title ?? '') ||
@@ -115,14 +120,33 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
     refresh()
   }
 
-  async function startReview() {
-    setError('')
+  // Take the ticket as the server has it (Claude's review chat edits it directly).
+  const applyCard = useCallback((next) => {
+    setCurrent((c) => ({ ...c, ...next }))
+    setTitle(next.title)
+    setDescription(next.description)
+    setDeadline(next.deadline ?? '')
+    setSaved(false)
+    onChanged(next)
+  }, [onChanged])
+  const reloadCard = useCallback(async () => {
+    if (!current?.id) return
     try {
-      await start()
-    } catch (err) {
-      setError(err.message)
+      const next = (await api(`/api/boards/${boardId}/cards`)).find((c) => c.id === current.id)
+      if (next) applyCard(next)
+    } catch {
+      // the next open or save corrects this
     }
-  }
+    setFlowTick((n) => n + 1)
+    refresh()
+  }, [current?.id, boardId, applyCard, refresh])
+  const closeReview = useCallback(() => { setReviewOpen(false); setFlowOpen(false); reloadCard() }, [reloadCard])
+  // a review turn that ended while the chat was closed: pick up what Claude changed
+  const wasReviewing = useRef(false)
+  useEffect(() => {
+    if (wasReviewing.current && !reviewing && !reviewOpen) reloadCard()
+    wasReviewing.current = !!reviewing
+  }, [reviewing, reviewOpen, reloadCard])
 
   const isDraft = current?.status === 'draft' // drafts have no review, flows, or approval
 
@@ -137,6 +161,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
       <form className="modal ticket ticket-xl" role="dialog" aria-modal="true" aria-label={current ? 'Edit Ticket' : 'New Ticket'} onSubmit={save}>
         <div className="ticket-head">
           <h2>{current ? 'Edit Ticket' : 'New Ticket'}{current?.ident && <span className="ident">{current.ident}</span>}</h2>
+          {reviewing && <span className="review-badge running ticket-lock"><span className="spinner" /> Claude is editing…</span>}
           {current && (current.status === 'business' || current.status === 'done') && (
             <button type="button" className="ai-btn discuss-btn" title="Plan and run this ticket's branching with Claude"
               onClick={() => { setDiscussOpen(true); setFlowOpen(true) }}>
@@ -150,22 +175,21 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
           <div className="ticket-main">
             <label className="field">
               <span>Title</span>
-              <input ref={titleRef} placeholder="What needs to happen?" maxLength={200} value={title} onChange={edit(setTitle)} />
+              <input ref={titleRef} placeholder="What needs to happen?" maxLength={200} value={title} readOnly={reviewing} onChange={edit(setTitle)} />
             </label>
             <div className="field">
               <div className="field-row">
                 <span>Description</span>
-                <button type="button" className="ai-btn" title="Generate Description With Claude" onClick={() => setPromptOpen(true)}>
+                <button type="button" className="ai-btn" disabled={reviewing} title="Generate Description With Claude" onClick={() => setPromptOpen(true)}>
                   {describing ? <><span className="spinner" aria-hidden="true" /> Thinking…</> : <><span aria-hidden="true">✦</span> Generate</>}
                 </button>
               </div>
               <RichEditor value={description} placeholder="Describe the change and what “done” looks like."
-                onChange={(v) => { setDescription(v); setSaved(false) }} />
+                readOnly={reviewing} onChange={(v) => { setDescription(v); setSaved(false) }} />
             </div>
-            {!isDraft && <FlowsSection parent={current ? `/api/cards/${current.id}` : null} emptyHint="No flow yet. Claude asks for at least one before approval." onChanged={flowsChanged} onModal={setFlowOpen} />}
+            {!isDraft && <FlowsSection parent={current ? `/api/cards/${current.id}` : null} locked={reviewing} reloadKey={flowTick} emptyHint="No flow yet. Claude asks for at least one before approval." onChanged={flowsChanged} onModal={setFlowOpen} />}
             {!isDraft && current && <BranchingSection cardId={current.id} reloadKey={branchTick} onModal={setFlowOpen} />}
             {!isDraft && <ItemsSection card={current} onModal={setFlowOpen} />}
-            {!isDraft && <ReviewComment card={current} review={review} />}
           </div>
 
           <aside className="ticket-side">
@@ -183,7 +207,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
                 )}
               </div>
             </div>
-            {!isDraft && <ReviewSide card={current} review={review} unsaved={contentChanged} busy={busy} onStart={startReview} onApprove={approve} />}
+            {!isDraft && <ReviewSide card={current} review={review} unsaved={contentChanged} busy={busy} reviewing={reviewing} onOpenReview={() => { setReviewOpen(true); setFlowOpen(true) }} onApprove={approve} />}
           </aside>
         </div>
 
@@ -193,12 +217,13 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
           <span className="grow" />
           {saved && !dirty && <span className="saved">Saved ✓</span>}
           <button type="button" onClick={requestClose}>Close</button>
-          <button className="primary" type="submit" disabled={busy || !title.trim() || (current && !dirty)}>
+          <button className="primary" type="submit" disabled={busy || reviewing || !title.trim() || (current && !dirty)}>
             {current ? 'Save Changes' : 'Create Ticket'}
           </button>
         </div>
       </form>
     </div>
+    {reviewOpen && <ReviewChatModal card={current} boardId={boardId} onTurnDone={reloadCard} onCardChanged={applyCard} onClose={closeReview} />}
     {discussOpen && <DiscussModal card={current} boardId={boardId} onTurnDone={turnDone} onClose={closeDiscuss} />}
     {promptOpen && (
       <PromptModal

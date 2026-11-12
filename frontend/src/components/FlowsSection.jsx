@@ -6,7 +6,7 @@ import { useJobs } from '../lib/jobs'
 
 // Swimlane flow list. `parent` is "/api/cards/{id}" (Business Flow) or "/api/items/{id}"
 // (Technical Flow); null until the parent exists. `onChanged` runs after any change.
-export default function FlowsSection({ parent, label = 'Business Flow', emptyHint, onChanged, onModal }) {
+export default function FlowsSection({ parent, label = 'Business Flow', emptyHint, onChanged, onModal, locked = false, reloadKey = 0 }) {
   const [flows, setFlows] = useState([])
   const [editing, setEditing] = useState(null) // null | 'new' | 'generate' | flow
   const target = parent?.match(/^\/api\/(cards|items)\/(\d+)$/) // which Business/Technical Flow this list belongs to
@@ -21,7 +21,7 @@ export default function FlowsSection({ parent, label = 'Business Flow', emptyHin
       setError(err.message)
     }
   }, [parent])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load, reloadKey])
 
   const open = (v) => { setEditing(v); onModal(!!v) }
   const done = () => { open(null); load(); onChanged() }
@@ -31,10 +31,10 @@ export default function FlowsSection({ parent, label = 'Business Flow', emptyHin
       <div className="field-row">
         <span>{label}</span>
         <span className="items-actions">
-          <button type="button" className="ai-btn" disabled={!parent} title={parent ? 'Describe it and let Claude draw the flow' : 'Save first'} onClick={() => open('generate')}>
+          <button type="button" className="ai-btn" disabled={!parent || locked} title={parent ? 'Describe it and let Claude draw the flow' : 'Save first'} onClick={() => open('generate')}>
             {thinking ? <><span className="spinner" aria-hidden="true" /> Thinking…</> : <><span aria-hidden="true">✦</span> Generate</>}
           </button>
-          <button type="button" className="ai-btn" disabled={!parent} title={parent ? 'Add A Swimlane Flow' : 'Save first'} onClick={() => open('new')}>
+          <button type="button" className="ai-btn" disabled={!parent || locked} title={parent ? 'Add A Swimlane Flow' : 'Save first'} onClick={() => open('new')}>
             + Add Flow
           </button>
         </span>

@@ -11,6 +11,9 @@ const REFRESH = 'op-jobs-refresh'
 export const refreshJobs = () => window.dispatchEvent(new Event(REFRESH))
 
 function finishedMessage(j) {
+  if (j.kind === 'review_chat') {
+    return j.status === 'error' ? { text: `${j.label} gagal: ${j.error}`, kind: 'error' } : { text: `${j.label} selesai`, kind: 'ok' }
+  }
   if (j.status === 'error') return { text: `Generate ${j.label} gagal: ${j.error}`, kind: 'error' }
   try {
     const r = JSON.parse(j.result || '{}')

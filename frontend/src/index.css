@@ -487,3 +487,13 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 
 /* Spinner inside the small pill buttons ("Thinking…"): a fixed 11px circle left of the label. */
 .ai-btn .spinner { width: 11px; height: 11px; border-width: 2px; margin-right: 5px; vertical-align: -1px; }
+
+/* Claude Review chat: verdict strip, change lines, lock note in the ticket header. */
+.review-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.review-strip .review-open { flex-basis: 100%; margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; }
+.review-event { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0; padding: 6px 12px; border-radius: 10px; font-size: 12.5px; background: rgba(176, 227, 227, 0.35); color: var(--muted); }
+.review-event .link { height: auto; padding: 2px 8px; }
+.review-open-btn { align-self: flex-start; margin: 2px 0 6px; }
+.ticket-lock { margin-left: auto; margin-right: 8px; }
+.rte.ro { opacity: 0.7; }
+.ticket-main input[readonly] { opacity: 0.7; }

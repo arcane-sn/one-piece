@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 
 // Latest Claude review of a card; polls while a review is running.
@@ -25,28 +25,18 @@ export function useReview(cardId) {
     return () => clearInterval(t)
   }, [review?.status, refresh])
 
-  const start = useCallback(async () => {
-    await api(`/api/cards/${cardId}/review`, { method: 'POST', body: {} })
-    refresh()
-  }, [cardId, refresh])
-
-  return { review, refresh, start }
+  return { review, refresh }
 }
 
 const isOutdated = (review, card) => !!review && !!card && review.contentVersion !== card.contentVersion
 
-// Right-hand panel: review status, live log and the Approve control.
-export function ReviewSide({ card, review, unsaved, busy, onStart, onApprove }) {
-  const logRef = useRef(null)
-  useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
-  }, [review?.log?.length])
-
+// Right-hand panel: review status, the button that opens the Claude Review chat, and the Approve control.
+export function ReviewSide({ card, review, unsaved, busy, reviewing, onOpenReview, onApprove }) {
   if (!card) {
     return (
       <div className="field review-side">
         <span>Claude Review</span>
-        <p className="hint">Create the ticket and Claude reviews it automatically.</p>
+        <p className="hint">Create the ticket, then discuss it with Claude until it passes.</p>
         <button type="button" disabled>Approve</button>
       </div>
     )
@@ -55,17 +45,17 @@ export function ReviewSide({ card, review, unsaved, busy, onStart, onApprove }) 
   const outdated = isOutdated(review, card)
   const passed = review?.status === 'done' && review.verdict === 'pass' && !outdated
   const canApprove = passed && !unsaved && !card.approved
+  const inBusiness = card.status === 'business'
 
   let badge = null
   let hint = ''
   if (review === undefined) hint = 'Loading…'
-  else if (review === null) { badge = ['idle', 'Not Reviewed']; hint = 'Start a review to unlock approval.' }
-  else if (review.status === 'running') { badge = ['running', 'Reviewing…']; hint = 'Claude is reviewing this ticket.' }
-  else if (review.status === 'failed') { badge = ['failed', 'Failed']; hint = review.error }
-  else if (outdated) { badge = ['idle', 'Outdated']; hint = 'The ticket changed. A new review is on its way.' }
+  else if (reviewing) { badge = ['running', 'Reviewing…']; hint = 'Claude is working on this ticket.' }
+  else if (review === null) { badge = ['idle', 'Not Reviewed']; hint = 'Open the review and Claude helps you get this ticket approved.' }
+  else if (outdated) { badge = ['idle', 'Outdated']; hint = 'The ticket changed since the last review. Discuss it again.' }
   else if (passed) { badge = ['pass', 'Passed']; hint = card.approved ? '' : 'Ready to approve.' }
-  else { badge = ['work', 'Needs Work']; hint = 'Fix what Claude listed, then save to review again.' }
-  if (unsaved && review?.status !== 'running') hint = 'Save your changes to get a new review.'
+  else { badge = ['work', 'Needs Work']; hint = review?.summary || 'Discuss it with Claude to fix what is open.' }
+  if (unsaved && !reviewing) hint = 'Save your changes before opening the review.'
 
   return (
     <div className="field review-side">
@@ -77,17 +67,11 @@ export function ReviewSide({ card, review, unsaved, busy, onStart, onApprove }) 
             {badge[1]}
           </span>
         )}
-        {(review === null || review?.status === 'failed') && (
-          <button type="button" className="link" disabled={busy} onClick={onStart}>
-            {review === null ? 'Start Review' : 'Retry'}
-          </button>
-        )}
       </div>
-      {review?.log?.length > 0 && (
-        <ul className="review-log" ref={logRef} aria-label="Claude log">
-          {review.log.map((l, i) => <li key={i}>{l}</li>)}
-        </ul>
-      )}
+      <button type="button" className="ai-btn review-open-btn" disabled={unsaved || !inBusiness} onClick={onOpenReview}
+        title={inBusiness ? 'Review and improve this ticket with Claude' : 'Claude Review is available while the ticket is in Business'}>
+        {reviewing ? <><span className="spinner" aria-hidden="true" /> Open Review</> : <><span aria-hidden="true">✦</span> Review With Claude</>}
+      </button>
       {card.approved ? (
         <>
           <button type="button" className="approved-btn" disabled>Approved ✓</button>
@@ -97,24 +81,6 @@ export function ReviewSide({ card, review, unsaved, busy, onStart, onApprove }) 
         <button type="button" disabled={!canApprove || busy} onClick={() => onApprove(true)}>Approve</button>
       )}
       {hint && <p className="hint">{hint}</p>}
-    </div>
-  )
-}
-
-// Claude's verdict as a comment under the description.
-export function ReviewComment({ card, review }) {
-  if (!review || review.status !== 'done' || isOutdated(review, card)) return null
-  const pass = review.verdict === 'pass'
-  return (
-    <div className={'review-comment ' + (pass ? 'pass' : 'work')}>
-      <div className="review-comment-head">
-        <span aria-hidden="true">✦</span> Claude’s Review
-        <span className={'review-badge ' + (pass ? 'pass' : 'work')}>{pass ? 'Passed' : 'Needs Work'}</span>
-      </div>
-      {review.summary && <p>{review.summary}</p>}
-      {review.missing.length > 0 && (
-        <ul>{review.missing.map((m, i) => <li key={i}>{m}</li>)}</ul>
-      )}
     </div>
   )
 }

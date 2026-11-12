@@ -160,6 +160,7 @@ export default function RichEditor({ value, onChange, placeholder, readOnly = fa
   useEffect(() => {
     if (editor && value !== editor.getMarkdown().trimEnd()) editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false })
   }, [value, editor])
+  useEffect(() => { if (editor) editor.setEditable(!readOnly) }, [readOnly, editor])
   if (!editor) return null
 
   const run = (fn) => (e) => {

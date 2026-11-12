@@ -43,3 +43,7 @@ Desain: `docs/superpowers/specs/`. Rencana: `docs/superpowers/plans/`.
 ## Generate Berjalan di Background
 
 Generate Agent Tasks, QA Test Cases, Flow, dan Description berjalan sebagai job di server. Modal boleh ditutup (atau pindah tiket/board): saat dibuka lagi tampil loading kalau masih jalan, atau hasilnya kalau sudah selesai. Toast muncul saat job selesai, dan kartu kanban menampilkan spinner selama ada job yang jalan. Regenerate tidak menghapus: task To Do yang lama dicoret (*Superseded*, bisa di-Restore), task baru ditambahkan.
+
+## Claude Review sebagai Diskusi
+
+Tombol **Review With Claude** di sidebar tiket (kolom Business) membuka chat dengan Claude. Claude membaca tiket dan kode, lalu **langsung memperbaiki** judul, deskripsi, dan Business Flow lewat perintah terbatas (`ticket-edit`, `flow-add|update|delete`); versi sebelumnya disimpan dan bisa di-**Undo** dari baris perubahan di chat. Di akhir setiap giliran Claude mencatat verdict (`pass` atau `needs_work` + poin yang masih terbuka); Approve terbuka setelah verdict `pass` untuk versi tiket yang sekarang. Review tidak lagi jalan otomatis saat save. Selama Claude bekerja, editor judul, deskripsi, dan flow terkunci, lalu tiket dimuat ulang. Chat berjalan di background (toast + spinner di kartu), mendukung paste screenshot, dan tidak boleh menjalankan git atau mengubah file produk.
