@@ -81,13 +81,13 @@ export default function GenerateFlowModal({ kind, id, createPath, onSaved, onClo
 
   async function save() {
     setSaving(true)
-    setError('')
+    setStartError('')
     try {
       const saved = await api(createPath, { method: 'POST', body: { title: title.trim(), source } })
       await consume()
       onSaved(saved)
     } catch (err) {
-      setError(err.message)
+      setStartError(err.message)
       setSaving(false)
     }
   }
