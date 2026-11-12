@@ -67,7 +67,7 @@ export default function PromptModal({ boardId, cardId, title, description, onUse
           <button type="button" onClick={onClose}>Close</button>
           <button type={result ? 'button' : 'submit'} className={result ? '' : 'primary'} disabled={busy || !prompt.trim()}
             onClick={result ? generate : undefined}>
-            {result ? 'Regenerate' : 'Generate'}
+            {busy ? <><span className="spinner" aria-hidden="true" /> Thinking…</> : result ? 'Regenerate' : 'Generate'}
           </button>
           {result && !busy && (
             <button type="button" className="primary" onClick={use}>Use This Draft</button>

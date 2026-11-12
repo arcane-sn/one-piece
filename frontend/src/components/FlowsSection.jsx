@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import FlowModal from './FlowModal'
 import GenerateFlowModal from './GenerateFlowModal'
+import { useJobs } from '../lib/jobs'
 
 // Swimlane flow list. `parent` is "/api/cards/{id}" (Business Flow) or "/api/items/{id}"
 // (Technical Flow); null until the parent exists. `onChanged` runs after any change.
@@ -10,6 +11,7 @@ export default function FlowsSection({ parent, label = 'Business Flow', emptyHin
   const [editing, setEditing] = useState(null) // null | 'new' | 'generate' | flow
   const target = parent?.match(/^\/api\/(cards|items)\/(\d+)$/) // which Business/Technical Flow this list belongs to
   const [error, setError] = useState('')
+  const thinking = useJobs().running('flow', target?.[1] === 'items' ? 'item' : 'card', target?.[2])
 
   const load = useCallback(async () => {
     if (!parent) return
@@ -30,7 +32,7 @@ export default function FlowsSection({ parent, label = 'Business Flow', emptyHin
         <span>{label}</span>
         <span className="items-actions">
           <button type="button" className="ai-btn" disabled={!parent} title={parent ? 'Describe it and let Claude draw the flow' : 'Save first'} onClick={() => open('generate')}>
-            <span aria-hidden="true">✦</span> Generate
+            {thinking ? <><span className="spinner" aria-hidden="true" /> Thinking…</> : <><span aria-hidden="true">✦</span> Generate</>}
           </button>
           <button type="button" className="ai-btn" disabled={!parent} title={parent ? 'Add A Swimlane Flow' : 'Save first'} onClick={() => open('new')}>
             + Add Flow

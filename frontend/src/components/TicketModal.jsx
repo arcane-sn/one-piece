@@ -5,6 +5,7 @@ import FlowsSection from './FlowsSection'
 import ItemsSection from './ItemsSection'
 import BranchingSection from './BranchingSection'
 import DiscussModal from './DiscussModal'
+import { useJobs } from '../lib/jobs'
 import RichEditor from './RichEditor'
 import { ReviewComment, ReviewSide, useReview } from './ReviewPanel'
 
@@ -21,6 +22,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [promptOpen, setPromptOpen] = useState(false)
+  const describing = useJobs().running('description', current?.id ? 'card' : 'board', current?.id || boardId)
   const [flowOpen, setFlowOpen] = useState(false)
   const [discussOpen, setDiscussOpen] = useState(false)
   const [branchTick, setBranchTick] = useState(0) // bumps when a Discuss turn ends, so Branching reloads
@@ -154,7 +156,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
               <div className="field-row">
                 <span>Description</span>
                 <button type="button" className="ai-btn" title="Generate Description With Claude" onClick={() => setPromptOpen(true)}>
-                  <span aria-hidden="true">✦</span> Generate
+                  {describing ? <><span className="spinner" aria-hidden="true" /> Thinking…</> : <><span aria-hidden="true">✦</span> Generate</>}
                 </button>
               </div>
               <RichEditor value={description} placeholder="Describe the change and what “done” looks like."

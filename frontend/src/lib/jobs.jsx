@@ -4,7 +4,7 @@ import { toast } from './toast'
 
 // Background Generate jobs live on the server. This provider polls them so a toast can announce a
 // finished one anywhere in the app, and so kanban cards can show a spinner while one is running.
-const JobsContext = createContext({ busyCards: new Set() })
+const JobsContext = createContext({ busyCards: new Set(), running: () => false })
 export const useJobs = () => useContext(JobsContext)
 
 const REFRESH = 'op-jobs-refresh'
@@ -53,7 +53,11 @@ export function JobsProvider({ children }) {
     return () => { stop = true; clearTimeout(timer); window.removeEventListener(REFRESH, kick) }
   }, [poll])
 
-  const value = useMemo(() => ({ busyCards: new Set(active.map((j) => j.cardId).filter(Boolean)) }), [active])
+  const value = useMemo(() => ({
+    busyCards: new Set(active.map((j) => j.cardId).filter(Boolean)),
+    // is a job of this kind running for this target? (scope: card | item | board)
+    running: (kind, scope, target) => active.some((j) => j.kind === kind && j.scope === scope && j.targetId === Number(target)),
+  }), [active])
   return <JobsContext.Provider value={value}>{children}</JobsContext.Provider>
 }
 

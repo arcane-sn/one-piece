@@ -109,7 +109,7 @@ export default function ItemsSection({ card, onModal }) {
               <span className="items-actions">
                 {card.approved && (
                   <button type="button" className="ai-btn" disabled={busy === kind || anyDoing} onClick={() => generate(kind)}>
-                    <span aria-hidden="true">✦</span> {list.some((i) => !i.fixFor) ? 'Regenerate' : 'Generate'}
+                    {busy === kind ? <><span className="spinner" aria-hidden="true" /> Thinking…</> : <><span aria-hidden="true">✦</span> {list.some((i) => !i.fixFor) ? 'Regenerate' : 'Generate'}</>}
                   </button>
                 )}
                 {card.approved && (running
