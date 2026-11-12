@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { api } from '../api'
 
 // The "@word" being typed right before the caret, or null.
@@ -9,8 +9,14 @@ function activeMention(text, caret) {
 
 // A textarea where typing "@" lists files and folders of the board's folders.
 // Picking one inserts "@<folder>/<path>"; the server lets Claude read what was mentioned.
-export default function MentionTextarea({ boardId, value, onChange, onKeyDown: outerKeyDown, ...rest }) {
+export default function MentionTextarea({ boardId, value, onChange, onKeyDown: outerKeyDown, autoGrow, ...rest }) {
   const ta = useRef(null)
+  useLayoutEffect(() => { // autoGrow: the box follows its text, up to the CSS max-height
+    const el = ta.current
+    if (!autoGrow || !el) return
+    el.style.height = 'auto'
+    el.style.height = el.scrollHeight + 2 + 'px'
+  }, [autoGrow, value])
   const [menu, setMenu] = useState(null) // { start, query, items, active }
   const seq = useRef(0)
 
