@@ -18,22 +18,26 @@ import (
 )
 
 type server struct {
-	st     *store.Store
-	static string
-	mu     sync.Mutex
-	turns  map[int64]context.CancelFunc // running brainstorm turns by board id
-	runs   map[int64]context.CancelFunc // running Agent Task executions by item id
-	chains map[int64]context.CancelFunc // Run All chains by card id
+	st      *store.Store
+	static  string
+	mu      sync.Mutex
+	turns   map[int64]context.CancelFunc // running brainstorm turns by board id
+	runs    map[int64]context.CancelFunc // running Agent Task executions by item id
+	chains  map[int64]context.CancelFunc // Run All chains by card id
+	discuss map[int64]context.CancelFunc // running Discuss turns by card id
 }
 
 // New builds the handler: /api/* (authenticated) plus static files from staticDir.
 func New(st *store.Store, staticDir string) http.Handler {
-	s := &server{st: st, static: staticDir, turns: map[int64]context.CancelFunc{}, runs: map[int64]context.CancelFunc{}, chains: map[int64]context.CancelFunc{}}
+	s := &server{st: st, static: staticDir, turns: map[int64]context.CancelFunc{}, runs: map[int64]context.CancelFunc{}, chains: map[int64]context.CancelFunc{}, discuss: map[int64]context.CancelFunc{}}
 	if err := st.FailRunningReviews(); err != nil { // reviews cut short by a previous shutdown
 		log.Printf("sweeping stale reviews: %v", err)
 	}
 	if err := st.FailRunningBrainstorm(); err != nil { // chat replies cut short by a previous shutdown
 		log.Printf("sweeping stale brainstorm replies: %v", err)
+	}
+	if err := st.FailRunningDiscuss(); err != nil { // Discuss replies cut short by a previous shutdown
+		log.Printf("sweeping stale discuss replies: %v", err)
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/login", s.login)
@@ -72,6 +76,10 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/cards/{id}/branches", s.planBranch)
 	mux.HandleFunc("PUT /api/cards/{id}/branches", s.updateBranch)
 	mux.HandleFunc("DELETE /api/cards/{id}/branches", s.deleteBranch)
+	mux.HandleFunc("GET /api/cards/{id}/discuss", s.getDiscuss)
+	mux.HandleFunc("POST /api/cards/{id}/discuss/messages", s.postDiscussMessage)
+	mux.HandleFunc("POST /api/cards/{id}/discuss/stop", s.stopDiscussHandler)
+	mux.HandleFunc("POST /api/cards/{id}/discuss/new", s.newDiscuss)
 	mux.HandleFunc("GET /api/cards/{id}/items", s.listItems)
 	mux.HandleFunc("POST /api/cards/{id}/items", s.createItem)
 	mux.HandleFunc("POST /api/cards/{id}/generate-items", s.generateItems)

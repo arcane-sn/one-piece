@@ -57,29 +57,53 @@ var runBrainstorm = func(ctx context.Context, in brainstormRun, onText func(stri
 	if err := os.MkdirAll(planDir, 0o755); err != nil {
 		return "", err
 	}
-	tmp, err := os.MkdirTemp("", "one-piece-brainstorm-")
+	return runSession(ctx, sessionSpec{
+		System: in.System, Prompt: in.Prompt, SessionID: in.SessionID,
+		Dirs: append([]string{planDir}, in.Dirs...),
+		AllowedTools: []string{"Read", "Grep", "Glob",
+			"Bash(" + in.Exe + " tickets:*)", "Bash(" + in.Exe + " ticket:*)",
+			"Bash(" + in.Exe + " draft-add:*)", "Bash(" + in.Exe + " draft-update:*)",
+			"Write(/" + in.PlanPath + ")", "Edit(/" + in.PlanPath + ")"},
+		Env:       []string{"ONE_PIECE_DB=" + in.DB, "ONE_PIECE_BOARD=" + strconv.FormatInt(in.BoardID, 10)},
+		OnSession: in.OnSession,
+	}, onText)
+}
+
+// sessionSpec is one resumable `claude -p` turn: the Brainstorming chat and the Discuss session share it.
+type sessionSpec struct {
+	System, Prompt, SessionID string
+	Dirs                      []string     // --add-dir, readable
+	AllowedTools              []string     // --allowedTools entries
+	Env                       []string     // KEY=VALUE added to the process environment
+	OnSession                 func(string) // called once, as soon as the CLI announces its session id
+}
+
+// runSession runs the turn in a temp cwd, streams assistant text blocks to onText, and returns the
+// session id (for --resume). See runBrainstorm for what was verified against the real CLI.
+func runSession(ctx context.Context, spec sessionSpec, onText func(string)) (string, error) {
+	tmp, err := os.MkdirTemp("", "one-piece-session-")
 	if err != nil {
 		return "", err
 	}
 	defer os.RemoveAll(tmp)
 
 	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--max-turns", "12",
-		"--setting-sources", "project", "--system-prompt", in.System}
-	if in.SessionID != "" {
-		args = append(args, "--resume", in.SessionID)
+		"--setting-sources", "project", "--system-prompt", spec.System}
+	if spec.SessionID != "" {
+		args = append(args, "--resume", spec.SessionID)
 	}
-	for _, d := range append([]string{planDir}, in.Dirs...) {
+	for _, d := range spec.Dirs {
 		args = append(args, "--add-dir", d)
 	}
-	args = append(args, "--allowedTools", "Read", "Grep", "Glob",
-		"Bash("+in.Exe+" tickets:*)", "Bash("+in.Exe+" ticket:*)",
-		"Bash("+in.Exe+" draft-add:*)", "Bash("+in.Exe+" draft-update:*)",
-		"Write(/"+in.PlanPath+")", "Edit(/"+in.PlanPath+")")
+	if len(spec.AllowedTools) > 0 {
+		args = append(args, "--allowedTools")
+		args = append(args, spec.AllowedTools...)
+	}
 
 	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Dir = tmp
-	cmd.Env = append(os.Environ(), "ONE_PIECE_DB="+in.DB, "ONE_PIECE_BOARD="+strconv.FormatInt(in.BoardID, 10))
-	cmd.Stdin = strings.NewReader(in.Prompt)
+	cmd.Env = append(os.Environ(), spec.Env...)
+	cmd.Stdin = strings.NewReader(spec.Prompt)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.StdoutPipe()
@@ -109,9 +133,9 @@ var runBrainstorm = func(ctx context.Context, in brainstormRun, onText func(stri
 		if json.Unmarshal(sc.Bytes(), &ev) != nil {
 			continue
 		}
-		if ev.SessionID != "" && !announced && in.OnSession != nil { // a stopped turn must still be resumable
+		if ev.SessionID != "" && !announced && spec.OnSession != nil { // a stopped turn must still be resumable
 			announced = true
-			in.OnSession(ev.SessionID)
+			spec.OnSession(ev.SessionID)
 		}
 		switch ev.Type {
 		case "assistant":

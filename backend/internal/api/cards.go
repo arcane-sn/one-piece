@@ -95,6 +95,7 @@ func (s *server) deleteCard(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	s.stopDiscuss(id) // a Discuss turn must not keep running git for a deleted ticket
 	if err := s.st.DeleteCard(id); err != nil {
 		writeErr(w, err)
 		return
