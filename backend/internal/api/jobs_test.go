@@ -141,7 +141,9 @@ func TestPastedImagesAreHandedToClaudeForDescriptionAndFlow(t *testing.T) {
 
 	var gotDirs []string
 	var gotUser string
-	defer func(f func(context.Context, string, string, []string, func(string)) (string, error)) { streamClaude = f }(streamClaude)
+	defer func(f func(context.Context, string, string, []string, func(string)) (string, error)) {
+		streamClaude = f
+	}(streamClaude)
 	streamClaude = func(_ context.Context, _, user string, dirs []string, _ func(string)) (string, error) {
 		gotDirs, gotUser = dirs, user
 		return "## Summary\nok", nil
