@@ -181,7 +181,7 @@ func (s *server) runReview(r store.Review, c store.Card) {
 			fmt.Fprintf(&msg, "Product folders you may read:\n- %s\n", strings.Join(folders, "\n- "))
 		}
 	}
-	fmt.Fprintf(&msg, "\nTicket title: %s\n", c.Title)
+	fmt.Fprintf(&msg, "\nTicket ID: %s\nTicket title: %s\n", c.Ident, c.Title)
 	if c.Deadline != "" {
 		fmt.Fprintf(&msg, "Deadline: %s\n", c.Deadline)
 	}

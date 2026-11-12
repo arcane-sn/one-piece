@@ -429,3 +429,8 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 .item-status { display: inline-flex; align-items: center; gap: 6px; }
 .item-status .spinner, .status-seg .spinner { width: 11px; height: 11px; border-width: 2px; flex-shrink: 0; }
 .status-seg button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+
+/* generated identifiers (MID-12, MID-12-T3, MID-12-QA1) */
+.ident { display: inline-block; margin-right: 8px; padding: 1px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.06); font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.02em; vertical-align: 1px; white-space: nowrap; }
+h2 .ident { font-size: 12px; margin-left: 10px; }
+.key-input { width: 110px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.08em; }

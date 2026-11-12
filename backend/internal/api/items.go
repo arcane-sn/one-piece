@@ -220,7 +220,7 @@ func (s *server) generateItems(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(&msg, "About the product: %s\n", b.Description)
 		}
 	}
-	fmt.Fprintf(&msg, "\nTicket title: %s\n\nDescription (Markdown):\n%s\n", c.Title, c.Description)
+	fmt.Fprintf(&msg, "\nTicket ID: %s\nTicket title: %s\n\nDescription (Markdown):\n%s\n", c.Ident, c.Title, c.Description)
 	flows, _ := s.st.ListFlows(c.ID)
 	for _, f := range flows {
 		fmt.Fprintf(&msg, "\nBusiness Flow %q (swimlane text):\n%s\n", f.Title, f.Source)

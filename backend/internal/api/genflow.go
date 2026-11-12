@@ -103,7 +103,7 @@ func (s *server) generateFlow(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(&msg, "About the product: %s\n", b.Description)
 		}
 	}
-	fmt.Fprintf(&msg, "\nTicket title: %s\n\nTicket description (Markdown):\n%s\n", card.Title, card.Description)
+	fmt.Fprintf(&msg, "\nTicket ID: %s\nTicket title: %s\n\nTicket description (Markdown):\n%s\n", card.Ident, card.Title, card.Description)
 	if in.Kind == "technical" {
 		fmt.Fprintf(&msg, "\nAgent Task: %s\n%s\n", item.Title, item.Body)
 		if fl, _ := s.st.ListFlows(card.ID); len(fl) > 0 {

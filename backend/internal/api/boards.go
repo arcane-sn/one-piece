@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
@@ -21,6 +22,7 @@ type boardIn struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	Folders     []string `json:"folders"`
+	Key         string   `json:"key"` // optional; changes the prefix of new ticket identifiers
 }
 
 func (s *server) listBoards(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +74,9 @@ func (s *server) updateBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b, err := s.st.UpdateBoard(id, in.Name, in.Description, in.Folders)
+	if err == nil && in.Key != "" {
+		b, err = s.st.SetBoardKey(id, strings.ToUpper(strings.TrimSpace(in.Key)))
+	}
 	if err != nil {
 		writeErr(w, err)
 		return

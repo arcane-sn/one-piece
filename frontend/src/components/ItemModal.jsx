@@ -103,7 +103,7 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
     <div className="modal-backdrop item-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <form className="modal ticket" role="dialog" aria-modal="true" aria-label={(current ? 'Edit ' : 'New ') + NAME[k]} onSubmit={save}>
         <div className="ticket-head">
-          <h2>{current ? 'Edit ' : 'New '}{NAME[k]}</h2>
+          <h2>{current ? 'Edit ' : 'New '}{NAME[k]}{current?.ident && <span className="ident">{current.ident}</span>}</h2>
           <button type="button" className="icon-btn" aria-label="Close" onClick={close}>×</button>
         </div>
         <div className="ticket-body">

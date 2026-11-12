@@ -252,12 +252,12 @@ func (s *server) executeItem(ctx context.Context, it store.Item, c store.Card, b
 	if b.Description != "" {
 		fmt.Fprintf(&msg, "About the product: %s\n", b.Description)
 	}
-	fmt.Fprintf(&msg, "\nBusiness ticket: %s\n%s\n", c.Title, c.Description)
+	fmt.Fprintf(&msg, "\nBusiness ticket: %s %s\n%s\n", c.Ident, c.Title, c.Description)
 	if it.Kind == "qa" {
-		fmt.Fprintf(&msg, "\nYour QA Test Case: %s\n%s\n", it.Title, it.Body)
+		fmt.Fprintf(&msg, "\nYour QA Test Case: %s %s\n%s\n", it.Ident, it.Title, it.Body)
 		fmt.Fprintf(&msg, "\nProduct folders you may read:\n- %s\n", strings.Join(b.Folders, "\n- "))
 	} else {
-		fmt.Fprintf(&msg, "\nYour Agent Task: %s\n%s\n", it.Title, it.Body)
+		fmt.Fprintf(&msg, "\nYour Agent Task: %s %s\n%s\n", it.Ident, it.Title, it.Body)
 		if fl, _ := s.st.ListItemFlows(it.ID); len(fl) > 0 {
 			for _, f := range fl {
 				fmt.Fprintf(&msg, "\nTechnical Flow \"%s\":\n%s\n", f.Title, f.Source)

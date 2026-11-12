@@ -128,7 +128,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && requestClose()}>
       <form className="modal ticket ticket-xl" role="dialog" aria-modal="true" aria-label={current ? 'Edit Ticket' : 'New Ticket'} onSubmit={save}>
         <div className="ticket-head">
-          <h2>{current ? 'Edit Ticket' : 'New Ticket'}</h2>
+          <h2>{current ? 'Edit Ticket' : 'New Ticket'}{current?.ident && <span className="ident">{current.ident}</span>}</h2>
           <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}>×</button>
         </div>
 

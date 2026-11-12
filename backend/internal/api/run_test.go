@@ -120,7 +120,7 @@ func TestRunAllStopsAtFirstFailure(t *testing.T) {
 		agentRun = f
 	}(agentRun)
 	agentRun = func(_ context.Context, _ string, _ []string, _, user string, _ func(string)) (string, error) {
-		if strings.Contains(user, "Your Agent Task: two") {
+		if strings.Contains(user, "-T2 two") {
 			return "", errors.New("build is broken")
 		}
 		return "ok", nil
@@ -164,7 +164,7 @@ func TestRunAllQAWaitsForAgentsAndKeepsGoingAfterFail(t *testing.T) {
 		streamClaude = f
 	}(streamClaude)
 	streamClaude = func(_ context.Context, _, user string, _ []string, _ func(string)) (string, error) {
-		if strings.Contains(user, "QA Test Case: bad") {
+		if strings.Contains(user, "-QA2 bad") {
 			return `{"result":"fail","issue":"nav still visible","desc":"close() never unhides the nav in index.html"}`, nil
 		}
 		return "```json\n" + `{"result":"pass","issue":"","desc":"ok"}` + "\n```", nil

@@ -7,6 +7,7 @@ import { FolderIcon } from './Logo'
 export default function BoardModal({ initial, onSaved, onClose }) {
   const [name, setName] = useState(initial?.name ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
+  const [key, setKey] = useState(initial?.key ?? '')
   const [folders, setFolders] = useState(initial?.folders ?? [])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -37,7 +38,7 @@ export default function BoardModal({ initial, onSaved, onClose }) {
     e.preventDefault()
     setBusy(true)
     setError('')
-    const body = { name, description, folders }
+    const body = { name, description, folders, ...(initial && key ? { key } : {}) }
     try {
       const saved = initial
         ? await api(`/api/boards/${initial.id}`, { method: 'PUT', body })
@@ -67,6 +68,14 @@ export default function BoardModal({ initial, onSaved, onClose }) {
           <textarea rows={3} maxLength={500} placeholder="What is this product, in a sentence or two?"
             value={description} onChange={(e) => setDescription(e.target.value)} />
         </label>
+
+        {initial && (
+          <label className="field">
+            <span>Board Key <em>2-5 letters, prefix of ticket IDs. Existing IDs keep theirs.</em></span>
+            <input className="key-input" maxLength={5} value={key}
+              onChange={(e) => setKey(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} />
+          </label>
+        )}
 
         <div className="field">
           <span>Folders <em>optional</em></span>

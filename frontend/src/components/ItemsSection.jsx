@@ -106,7 +106,7 @@ export default function ItemsSection({ card, onModal }) {
               {list.map((i) => (
                 <li key={i.id}>
                   <button type="button" onClick={() => open(i)}>
-                    <span className="item-title">{i.title}</span>
+                    <span className="item-title">{i.ident && <span className="ident">{i.ident}</span>}{i.title}</span>
                     <span className="item-tags">
                       {i.version > 0 && i.version < card.contentVersion && (
                         <span className="item-status stale" title="The ticket changed after Claude generated this. Regenerate to refresh.">Outdated</span>
