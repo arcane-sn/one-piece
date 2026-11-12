@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -71,5 +72,68 @@ func TestFilePickerAndMentions(t *testing.T) {
 	resp, out := s.req(t, "POST", "/api/generate-description", body, ck)
 	if resp.StatusCode != 200 || len(gotDirs) != 1 || gotDirs[0] != root || !strings.Contains(gotUser, filepath.Join(root, "src/help/send.go")) {
 		t.Fatalf("mention generate: %d %s dirs=%v\n%s", resp.StatusCode, out, gotDirs, gotUser)
+	}
+}
+
+func gitInitDir(t *testing.T, dir string) {
+	t.Helper()
+	os.MkdirAll(dir, 0o755)
+	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+}
+
+func TestFilePickerMarksAndRanksRepos(t *testing.T) {
+	s := newTestServer(t)
+	ck := s.login(t)
+	master := filepath.Join(t.TempDir(), "master")
+	gitInitDir(t, filepath.Join(master, "repoA"))
+	writeTree(t, master, "docs/a.md", "zfile.txt", "repoA/src/x.go")
+	bp := newBoardPath(t, s, ck)
+	s.req(t, "PUT", bp, map[string]any{"name": "B", "folders": []string{master}}, ck)
+	list := func(q string) (out []fileHit) {
+		_, body := s.req(t, "GET", bp+"/files?q="+q, nil, ck)
+		json.Unmarshal(body, &out)
+		return
+	}
+	top := list("")
+	var ia, id = -1, -1
+	for i, h := range top {
+		switch h.Path {
+		case "master/repoA":
+			ia = i
+			if !h.IsRepo {
+				t.Error("repoA must be marked isRepo")
+			}
+		case "master/docs":
+			id = i
+			if h.IsRepo {
+				t.Error("docs is not a repo")
+			}
+		}
+	}
+	if ia < 0 || id < 0 || ia > id {
+		t.Fatalf("repoA must be listed and rank before docs: %+v", top)
+	}
+	found := false
+	for _, h := range list("repoa") {
+		found = found || (h.Path == "master/repoA" && h.IsRepo)
+	}
+	if !found {
+		t.Error("q=repoa must find the repo")
+	}
+}
+
+func TestRepoMentions(t *testing.T) {
+	master, _ := filepath.EvalSymlinks(t.TempDir())
+	master = filepath.Join(master, "master")
+	gitInitDir(t, filepath.Join(master, "repoA"))
+	writeTree(t, master, "docs/a.md", "repoA/src/x.go")
+	repos, not := repoMentions([]string{master}, "see @master/repoA/src/x.go and @master/repoA/ again @master/docs and @master/../x and @other/y")
+	if len(repos) != 1 || repos[0] != filepath.Join(master, "repoA") {
+		t.Errorf("repos = %v", repos)
+	}
+	if len(not) != 1 || not[0] != filepath.Join(master, "docs") {
+		t.Errorf("notRepos = %v", not)
 	}
 }

@@ -76,7 +76,7 @@ export default function MentionTextarea({ boardId, value, onChange, ...rest }) {
           {menu.items.map((it, i) => (
             <li key={it.path} role="option" aria-selected={i === menu.active} className={i === menu.active ? 'on' : ''}
               onMouseDown={(e) => { e.preventDefault(); pick(it) }} onMouseEnter={() => setMenu((m) => ({ ...m, active: i }))}>
-              {it.path}{it.isDir ? '/' : ''}
+              {it.path}{it.isDir ? '/' : ''}{it.isRepo && <span className="repo-tag">repo</span>}
             </li>
           ))}
         </ul>

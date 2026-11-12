@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/arcane-sn/one-piece/backend/internal/gitx"
 )
 
 // Directories never worth offering when picking code to mention.
@@ -25,6 +27,8 @@ const (
 type fileHit struct {
 	Path  string `json:"path"` // "<folder name>/relative/path"
 	IsDir bool   `json:"isDir"`
+	// IsRepo marks a folder that is a git repository; the Discuss session branches per repo.
+	IsRepo bool `json:"isRepo"`
 }
 
 // GET /api/boards/{id}/files?q=text → files and folders of the board's folders whose path
@@ -52,7 +56,7 @@ func (s *server) listFiles(w http.ResponseWriter, r *http.Request) {
 			rel, _ := filepath.Rel(root, p)
 			if rel == "." {
 				if q == "" || strings.Contains(strings.ToLower(base), q) {
-					hits = append(hits, fileHit{Path: base, IsDir: true})
+					hits = append(hits, fileHit{Path: base, IsDir: true, IsRepo: gitx.IsRepo(root)})
 				}
 				return nil
 			}
@@ -70,7 +74,7 @@ func (s *server) listFiles(w http.ResponseWriter, r *http.Request) {
 			shown := base + "/" + filepath.ToSlash(rel)
 			if q == "" {
 				if depth == 0 { // top level only
-					hits = append(hits, fileHit{Path: shown, IsDir: d.IsDir()})
+					hits = append(hits, fileHit{Path: shown, IsDir: d.IsDir(), IsRepo: d.IsDir() && gitx.IsRepo(p)})
 				}
 				if d.IsDir() {
 					return filepath.SkipDir
@@ -78,16 +82,19 @@ func (s *server) listFiles(w http.ResponseWriter, r *http.Request) {
 				return nil
 			}
 			if strings.Contains(strings.ToLower(shown), q) {
-				hits = append(hits, fileHit{Path: shown, IsDir: d.IsDir()})
+				hits = append(hits, fileHit{Path: shown, IsDir: d.IsDir(), IsRepo: d.IsDir() && gitx.IsRepo(p)})
 			}
 			return nil
 		})
 	}
-	rank := func(h fileHit) int { // name match beats path match, then shorter paths first
-		if strings.HasPrefix(strings.ToLower(filepath.Base(h.Path)), q) {
+	rank := func(h fileHit) int { // repos first, then name match beats path match, then shorter paths
+		switch {
+		case h.IsRepo:
 			return 0
+		case strings.HasPrefix(strings.ToLower(filepath.Base(h.Path)), q):
+			return 1
 		}
-		return 1
+		return 2
 	}
 	sort.SliceStable(hits, func(i, j int) bool {
 		if ri, rj := rank(hits[i]), rank(hits[j]); ri != rj {
@@ -141,4 +148,31 @@ func mentionedPaths(folders []string, text string) (paths, roots []string) {
 		}
 	}
 	return paths, roots
+}
+
+// repoMentions resolves the same "@<folder name>/…" mentions as mentionedPaths to git repository
+// roots. A mention that exists but is not inside a repo goes to notRepos (absolute path).
+// Both lists are deduplicated; mentions outside the folders or that do not exist are ignored.
+func repoMentions(folders []string, text string) (repos, notRepos []string) {
+	seenR, seenN := map[string]bool{}, map[string]bool{}
+	paths, _ := mentionedPaths(folders, text)
+	for _, p := range paths {
+		var root string
+		for _, f := range folders {
+			if rel, err := filepath.Rel(f, p); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				root = f
+				break
+			}
+		}
+		if rr, err := gitx.RepoRootWithin(root, p); err == nil {
+			if !seenR[rr] {
+				seenR[rr] = true
+				repos = append(repos, rr)
+			}
+		} else if !seenN[p] {
+			seenN[p] = true
+			notRepos = append(notRepos, p)
+		}
+	}
+	return repos, notRepos
 }
