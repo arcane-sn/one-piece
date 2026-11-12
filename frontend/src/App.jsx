@@ -12,6 +12,11 @@ import Login from './pages/Login'
 function Shell({ user, onLogout }) {
   const [boards, setBoards] = useState(null) // null = loading
   const [modal, setModal] = useState(null) // null | 'new' | Board (edit)
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('op-side') === '1' } catch { return false } })
+  const toggleSide = useCallback(() => setCollapsed((c) => {
+    try { localStorage.setItem('op-side', c ? '0' : '1') } catch { /* private mode */ }
+    return !c
+  }), [])
   const navigate = useNavigate()
   const reload = useCallback(() => api('/api/boards').then(setBoards).catch(() => setBoards((b) => b ?? [])), [])
   useEffect(() => { reload() }, [reload])
@@ -26,8 +31,8 @@ function Shell({ user, onLogout }) {
 
   return (
     <>
-      <Sidebar user={user} boards={boards ?? []} onLogout={onLogout} onNewBoard={() => setModal('new')} />
-      <main className="main">
+      <Sidebar user={user} boards={boards ?? []} onLogout={onLogout} onNewBoard={() => setModal('new')} collapsed={collapsed} onToggle={toggleSide} />
+      <main className={'main' + (collapsed ? ' wide' : '')}>
         <Routes>
           <Route path="/" element={<Dashboard user={user} boards={boards} reload={reload} onNew={() => setModal('new')} onEdit={setModal} />} />
           <Route path="/boards/:id" element={<Board reloadBoards={reload} />} />

@@ -111,6 +111,11 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
   border: 1px solid var(--glass-border); -webkit-backdrop-filter: blur(20px) saturate(1.2); backdrop-filter: blur(20px) saturate(1.2);
   box-shadow: 0 24px 48px -20px rgba(184, 100, 50, 0.35);
 }
+.brand-line { display: flex; align-items: center; justify-content: space-between; }
+.side-collapse, .side-open { width: 28px; height: 28px; padding: 0; border: 0; border-radius: 8px; background: rgba(255, 255, 255, 0.55); color: var(--deep); font-size: 16px; font-weight: 700; line-height: 1; }
+.side-collapse:hover:not(:disabled), .side-open:hover:not(:disabled) { background: rgba(255, 255, 255, 0.95); }
+.side-open { position: fixed; left: 16px; top: 16px; z-index: 20; box-shadow: 0 8px 18px -8px rgba(120, 60, 20, 0.4); }
+.main.wide { margin-left: 0; padding-left: 64px; max-width: none; }
 .brand-row { display: block; padding: 2px 8px 16px; color: var(--brown); }
 .nav-item {
   display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: 11px;
@@ -221,7 +226,8 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 
 @media (max-width: 900px) {
   .sidebar { position: static; width: auto; margin: 12px; }
-  .main { margin-left: 0; padding: 16px; }
+  .main, .main.wide { margin-left: 0; padding: 16px; }
+  .side-open { position: static; margin: 12px; }
   body::after { display: none; }
 }
 

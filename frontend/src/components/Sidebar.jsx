@@ -4,10 +4,16 @@ import Logo from './Logo'
 const SWATCH = ['#EA9259', '#7FC9C9', '#D65A42']
 export const totalCards = (b) => Object.values(b.counts || {}).reduce((a, n) => a + n, 0)
 
-export default function Sidebar({ user, boards, onLogout, onNewBoard }) {
+export default function Sidebar({ user, boards, onLogout, onNewBoard, collapsed, onToggle }) {
+  if (collapsed) {
+    return <button type="button" className="side-open" title="Show sidebar" aria-label="Show sidebar" onClick={onToggle}>»</button>
+  }
   return (
     <aside className="sidebar">
-      <NavLink to="/" className="brand-row" aria-label="One Piece home"><Logo size={28} /></NavLink>
+      <div className="brand-line">
+        <NavLink to="/" className="brand-row" aria-label="One Piece home"><Logo size={28} /></NavLink>
+        <button type="button" className="side-collapse" title="Hide sidebar" aria-label="Hide sidebar" onClick={onToggle}>«</button>
+      </div>
       <NavLink to="/" end className="nav-item">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" />
