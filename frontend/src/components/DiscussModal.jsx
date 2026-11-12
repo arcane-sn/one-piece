@@ -113,7 +113,7 @@ export default function DiscussModal({ card, boardId, onTurnDone, onClose }) {
             }}
           />
           {running ? (
-            <button type="button" className="danger" onClick={() => act('/stop')}>Stop</button>
+            <button type="button" className="danger" onClick={() => act('/stop')}><span className="spinner" aria-hidden="true" /> Thinking… Stop</button>
           ) : (
             <button type="button" className="primary" disabled={!text.trim() || !stage} onClick={send}>Send</button>
           )}

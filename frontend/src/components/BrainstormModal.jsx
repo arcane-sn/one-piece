@@ -114,7 +114,7 @@ export default function BrainstormModal({ boardId, onClose, onCardsChanged }) {
                 }}
               />
               {running ? (
-                <button type="button" className="danger" onClick={() => act('/brainstorm/stop')}>Stop</button>
+                <button type="button" className="danger" onClick={() => act('/brainstorm/stop')}><span className="spinner" aria-hidden="true" /> Thinking… Stop</button>
               ) : (
                 <button type="button" className="primary" disabled={!text.trim()} onClick={send}>Send</button>
               )}

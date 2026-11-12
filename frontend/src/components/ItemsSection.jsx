@@ -113,7 +113,7 @@ export default function ItemsSection({ card, onModal }) {
                   </button>
                 )}
                 {card.approved && (running
-                  ? <button type="button" className="ai-btn" onClick={() => runAll('stop-all', kind)}>■ Stop</button>
+                  ? <button type="button" className="ai-btn" onClick={() => runAll('stop-all', kind)}><span className="spinner" aria-hidden="true" /> Working… ■ Stop</button>
                   : <button type="button" className="ai-btn" disabled={!!busy || anyDoing || !list.some((i) => i.status === 'todo')}
                       title={kind === 'qa' ? 'Runs after all Agent Tasks are Done' : undefined} onClick={() => runAll('run-all', kind)}>▶ Run All</button>)}
                 <button type="button" className="ai-btn" onClick={() => open({ kind })}>+ {add}</button>
