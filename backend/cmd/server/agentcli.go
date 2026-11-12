@@ -4,16 +4,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/arcane-sn/one-piece/backend/internal/gitx"
 	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
 
 // agentCommands are the subcommands Claude may run during a brainstorming session.
 // The server gives it the database path and board id through the environment, so Claude
 // cannot point them elsewhere; every write goes through store's Draft guards.
-var agentCommands = map[string]bool{"tickets": true, "ticket": true, "draft-add": true, "draft-update": true}
+var agentCommands = map[string]bool{"tickets": true, "ticket": true, "draft-add": true, "draft-update": true,
+	"branches": true, "branch-plan": true, "branch-status": true, "branch-pr": true, "git": true, "gh": true}
+
+// branchCommands need ONE_PIECE_CARD: the ticket a Discuss session is about.
+var branchCommands = map[string]bool{"branches": true, "branch-plan": true, "branch-status": true, "branch-pr": true, "git": true, "gh": true}
 
 // runAgentCLI runs one agent subcommand (args[0] is its name).
 //
@@ -21,6 +27,14 @@ var agentCommands = map[string]bool{"tickets": true, "ticket": true, "draft-add"
 //	ticket <id>                  one ticket in full
 //	draft-add <title>            new Draft, description on stdin
 //	draft-update <id> <title>    change a Draft, description on stdin
+//
+// Discuss sessions (ONE_PIECE_CARD set) also get, for that ticket only:
+//
+//	branches                          the ticket's branching rows
+//	branch-plan <repo> <base>         record repo + base branch (names come from the board's prefix)
+//	branch-status <repo> <status> [note…]
+//	branch-pr <repo> <url>            store the PR link, status pr_open
+//	git <repo> <args…>, gh <repo> <args…>   guarded by internal/gitx; repo must be registered
 func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io.Writer) error {
 	dbPath := getenv("ONE_PIECE_DB")
 	boardID, err := strconv.ParseInt(getenv("ONE_PIECE_BOARD"), 10, 64)
@@ -44,7 +58,102 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 		return strings.TrimSpace(string(b)), err
 	}
 
+	var card store.Card
+	if branchCommands[args[0]] {
+		cid, err := strconv.ParseInt(getenv("ONE_PIECE_CARD"), 10, 64)
+		if err != nil || cid <= 0 {
+			return errors.New("ONE_PIECE_CARD must be set for " + args[0])
+		}
+		if card, err = st.GetCard(cid); err != nil || card.BoardID != boardID {
+			return errors.New("ticket not found")
+		}
+	}
+	// registered finds the ticket's branching row for an absolute repo path.
+	registered := func(repo string) (store.Branch, error) {
+		rows, err := st.ListBranches(card.ID)
+		if err != nil {
+			return store.Branch{}, err
+		}
+		for _, r := range rows {
+			if filepath.IsAbs(repo) && r.Repo == repo {
+				return r, nil
+			}
+		}
+		return store.Branch{}, errors.New("repo is not registered for this ticket; run branch-plan first")
+	}
+
 	switch args[0] {
+	case "branches":
+		rows, err := st.ListBranches(card.ID)
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			fmt.Fprintf(out, "%s | %s → %s | %s | %s | %s\n", r.Repo, r.BaseBranch, r.FeatureBranch, r.DevBranch, r.Status, r.PRURL)
+		}
+	case "branch-plan":
+		if len(args) != 3 {
+			return errors.New("usage: branch-plan <repo> <base-branch>")
+		}
+		r, err := st.PlanBranch(card.ID, args[1], args[2])
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "%s | %s → %s | %s | %s\n", r.Repo, r.BaseBranch, r.FeatureBranch, r.DevBranch, r.Status)
+	case "branch-status":
+		if len(args) < 3 {
+			return errors.New("usage: branch-status <repo> <status> [note…]")
+		}
+		r, err := registered(args[1])
+		if err != nil {
+			return err
+		}
+		patch := store.BranchPatch{Status: &args[2]}
+		if len(args) > 3 {
+			note := strings.Join(args[3:], " ")
+			patch.Note = &note
+		}
+		if r, err = st.UpdateBranch(card.ID, r.Repo, patch); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "%s is now %s\n", r.Repo, r.Status)
+	case "branch-pr":
+		if len(args) != 3 {
+			return errors.New("usage: branch-pr <repo> <url>")
+		}
+		r, err := registered(args[1])
+		if err != nil {
+			return err
+		}
+		status := "pr_open"
+		if r, err = st.UpdateBranch(card.ID, r.Repo, store.BranchPatch{PRURL: &args[2], Status: &status}); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "%s: PR %s\n", r.Repo, r.PRURL)
+	case "git", "gh":
+		if len(args) < 3 {
+			return fmt.Errorf("usage: %s <repo> <args…>", args[0])
+		}
+		r, err := registered(args[1])
+		if err != nil {
+			return err
+		}
+		board, err := st.GetBoard(boardID)
+		if err != nil {
+			return err
+		}
+		pol := gitx.Policy{Feature: r.FeatureBranch, Dev: r.DevBranch, Base: r.BaseBranch, PRBase: board.DevBranch}
+		run := gitx.Git
+		if args[0] == "gh" {
+			run = gitx.GH
+		}
+		res, err := run(r.Repo, args[2:], pol)
+		if res != "" {
+			fmt.Fprintln(out, res)
+		}
+		if err != nil {
+			return err
+		}
 	case "tickets":
 		cs, err := st.ListCards(boardID)
 		if err != nil {

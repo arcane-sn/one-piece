@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -94,5 +96,120 @@ func TestAgentCLIRefusesWithoutBoardEnv(t *testing.T) {
 	}
 	if _, err := runCLI(noBoard, "", "tickets"); err == nil {
 		t.Fatal("must refuse without ONE_PIECE_BOARD")
+	}
+}
+
+// branchFixture: a board whose folder holds a git repo (with one commit on main) and a business card.
+func branchFixture(t *testing.T) (st *store.Store, env func(string) string, repo string, card store.Card) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "t.db")
+	st, err := store.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.DB.Close() })
+	master, _ := filepath.EvalSymlinks(t.TempDir())
+	repo = filepath.Join(master, "svc")
+	os.MkdirAll(repo, 0o755)
+	os.MkdirAll(filepath.Join(master, "other"), 0o755)
+	for _, d := range []string{repo, filepath.Join(master, "other")} {
+		for _, a := range [][]string{{"init", "-q", "-b", "main"}, {"-c", "user.name=t", "-c", "user.email=t@x", "commit", "-q", "--allow-empty", "-m", "init"}} {
+			if out, err := exec.Command("git", append([]string{"-C", d}, a...)...).CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v %s", a, err, out)
+			}
+		}
+	}
+	b, _ := st.CreateBoard("Midas", "", []string{master})
+	card, _ = st.CreateCard(b.ID, "Login", "", "")
+	env = func(k string) string {
+		return map[string]string{"ONE_PIECE_DB": path, "ONE_PIECE_BOARD": strconv.FormatInt(b.ID, 10), "ONE_PIECE_CARD": strconv.FormatInt(card.ID, 10)}[k]
+	}
+	return st, env, repo, card
+}
+
+func TestBranchPlanThenGit(t *testing.T) {
+	_, env, repo, card := branchFixture(t)
+	if out, err := runCLI(env, "", "branch-plan", repo, "main"); err != nil || !strings.Contains(out, "feature/"+card.Ident) {
+		t.Fatalf("branch-plan: %q, %v", out, err)
+	}
+	if out, err := runCLI(env, "", "git", repo, "switch", "-c", "feature/"+card.Ident, "main"); err != nil {
+		t.Fatalf("switch -c: %q, %v", out, err)
+	}
+	if out, _ := runCLI(env, "", "git", repo, "branch", "--show-current"); strings.TrimSpace(out) != "feature/"+card.Ident {
+		t.Fatalf("current branch = %q", out)
+	}
+	if _, err := runCLI(env, "", "branch-status", repo, "branched", "cut", "from", "main"); err != nil {
+		t.Fatal(err)
+	}
+	if out, _ := runCLI(env, "", "branches"); !strings.Contains(out, "branched") || !strings.Contains(out, repo) {
+		t.Fatalf("branches = %q", out)
+	}
+	if _, err := runCLI(env, "", "branch-status", repo, "weird"); err == nil {
+		t.Error("unknown status must fail")
+	}
+	if _, err := runCLI(env, "", "branch-pr", repo, "https://example.com/pr/9"); err != nil {
+		t.Fatal(err)
+	}
+	if out, _ := runCLI(env, "", "branches"); !strings.Contains(out, "pr_open") || !strings.Contains(out, "https://example.com/pr/9") {
+		t.Fatalf("after branch-pr = %q", out)
+	}
+}
+
+func TestGitRequiresRegisteredRepo(t *testing.T) {
+	_, env, repo, _ := branchFixture(t)
+	runCLI(env, "", "branch-plan", repo, "main")
+	other := filepath.Join(filepath.Dir(repo), "other")
+	if _, err := runCLI(env, "", "git", other, "status"); err == nil || !strings.Contains(err.Error(), "branch-plan") {
+		t.Fatalf("unregistered repo: %v", err)
+	}
+	if _, err := runCLI(env, "", "git", "svc", "status"); err == nil {
+		t.Fatal("relative repo path must fail")
+	}
+	if _, err := runCLI(env, "", "gh", other, "pr", "view", "x"); err == nil || !strings.Contains(err.Error(), "branch-plan") {
+		t.Fatalf("gh unregistered: %v", err)
+	}
+}
+
+func TestGitSubcommandStillGuarded(t *testing.T) {
+	_, env, repo, _ := branchFixture(t)
+	runCLI(env, "", "branch-plan", repo, "main")
+	if _, err := runCLI(env, "", "git", repo, "push", "--force", "origin", "x"); err == nil || !strings.Contains(err.Error(), "not allowed") {
+		t.Fatalf("force push: %v", err)
+	}
+	if _, err := runCLI(env, "", "gh", repo, "pr", "merge", "1"); err == nil || !strings.Contains(err.Error(), "not allowed") {
+		t.Fatalf("gh pr merge: %v", err)
+	}
+}
+
+func TestAgentCLIRequiresCardEnv(t *testing.T) {
+	_, env, repo, _ := branchFixture(t)
+	noCard := func(k string) string {
+		if k == "ONE_PIECE_CARD" {
+			return ""
+		}
+		return env(k)
+	}
+	for _, args := range [][]string{{"branches"}, {"branch-plan", repo, "main"}, {"git", repo, "status"}} {
+		if _, err := runCLI(noCard, "", args...); err == nil || !strings.Contains(err.Error(), "ONE_PIECE_CARD") {
+			t.Errorf("%v without card: %v", args, err)
+		}
+	}
+	if _, err := runCLI(noCard, "", "tickets"); err != nil {
+		t.Errorf("tickets must work without a card: %v", err)
+	}
+}
+
+func TestAgentCLIRefusesCardOfAnotherBoard(t *testing.T) {
+	st, env, repo, _ := branchFixture(t)
+	other, _ := st.CreateBoard("Other", "", nil)
+	foreign, _ := st.CreateCard(other.ID, "Foreign", "", "")
+	wrong := func(k string) string {
+		if k == "ONE_PIECE_CARD" {
+			return strconv.FormatInt(foreign.ID, 10)
+		}
+		return env(k)
+	}
+	if _, err := runCLI(wrong, "", "branch-plan", repo, "main"); err == nil {
+		t.Fatal("a card of another board must be refused")
 	}
 }
