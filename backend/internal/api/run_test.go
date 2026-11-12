@@ -54,6 +54,7 @@ func TestRunItemExecutesAndStops(t *testing.T) {
 	if resp, _ := s.req(t, "POST", ip+"/run", map[string]any{}, ck); resp.StatusCode != 409 {
 		t.Fatalf("run before approval: %d, want 409", resp.StatusCode)
 	}
+	reviewWaiter(t, s, cp, ck)("done")
 	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
 
 	var gotCwd, gotUser string

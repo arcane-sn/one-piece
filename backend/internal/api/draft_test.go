@@ -27,10 +27,10 @@ func TestDraftGates(t *testing.T) {
 		return cp
 	}
 
-	t.Run("ReviewDraftCardIs409", func(t *testing.T) {
+	t.Run("ReviewChatOnDraftCardIs409", func(t *testing.T) {
 		cp := mk()
-		if resp, b := s.req(t, "POST", cp+"/review", nil, ck); resp.StatusCode != 409 {
-			t.Fatalf("review of a draft: %d %s", resp.StatusCode, b)
+		if resp, b := s.req(t, "POST", cp+"/review-chat/messages", map[string]string{"text": "hi"}, ck); resp.StatusCode != 409 {
+			t.Fatalf("review chat of a draft: %d %s", resp.StatusCode, b)
 		}
 	})
 

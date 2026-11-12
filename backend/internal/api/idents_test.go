@@ -53,12 +53,6 @@ func TestPromptsCarryIdentifiers(t *testing.T) {
 	json.Unmarshal(body, &card)
 	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
 	reviewWaiter(t, s, cp, ck)("done")
-	stub.mu.Lock()
-	review := stub.user
-	stub.mu.Unlock()
-	if !strings.Contains(review, "Ticket ID: "+card.Ident+"\n") {
-		t.Errorf("review prompt lacks ident %q:\n%s", card.Ident, review)
-	}
 	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
 
 	var itemsUser string

@@ -3,14 +3,12 @@ package api
 import (
 	"encoding/json"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
 
-func TestFlowsAPIAndReview(t *testing.T) {
-	stub := useStub(t, needsWork, nil)
+func TestFlowsAPI(t *testing.T) {
 	s := newTestServer(t)
 	ck := s.login(t)
 	bp := newBoardPath(t, s, ck)
@@ -18,8 +16,6 @@ func TestFlowsAPIAndReview(t *testing.T) {
 	var card store.Card
 	json.Unmarshal(body, &card)
 	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
-	wait := reviewWaiter(t, s, cp, ck)
-	wait("done")
 
 	resp, body := s.req(t, "POST", cp+"/flows", map[string]any{"title": "Sign in", "source": "User -> App: opens login"}, ck)
 	var f store.Flow
@@ -27,20 +23,6 @@ func TestFlowsAPIAndReview(t *testing.T) {
 	if resp.StatusCode != 201 || f.ID == 0 || f.Title != "Sign in" {
 		t.Fatalf("create flow: %d %s", resp.StatusCode, body)
 	}
-	for i := 0; i < 150; i++ { // saving a flow starts a review of version 2 that sees the flow
-		if r := wait("done"); r.ContentVersion == 2 {
-			break
-		}
-	}
-	stub.mu.Lock()
-	if !strings.Contains(stub.user, "User -> App: opens login") || !strings.Contains(stub.user, "Sign in") {
-		t.Errorf("review prompt should include the flow:\n%s", stub.user)
-	}
-	if !strings.Contains(stub.system, "Business Flow") {
-		t.Error("review system prompt should require a Business Flow")
-	}
-	stub.mu.Unlock()
-
 	fp := "/api/flows/" + strconv.FormatInt(f.ID, 10)
 	if resp, body = s.req(t, "PUT", fp, map[string]any{"title": "Sign in 2", "source": "A -> B"}, ck); resp.StatusCode != 200 {
 		t.Fatalf("update: %d %s", resp.StatusCode, body)

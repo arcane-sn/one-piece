@@ -213,3 +213,104 @@ func TestAgentCLIRefusesCardOfAnotherBoard(t *testing.T) {
 		t.Fatal("a card of another board must be refused")
 	}
 }
+
+// reviewEnv: a Claude Review session for one ticket.
+func reviewEnv(env func(string) string, card int64) func(string) string {
+	return func(k string) string {
+		switch k {
+		case "ONE_PIECE_CARD":
+			return strconv.FormatInt(card, 10)
+		case "ONE_PIECE_MODE":
+			return "review"
+		}
+		return env(k)
+	}
+}
+
+func TestReviewCommandsEditTicketFlowsAndRecordVerdict(t *testing.T) {
+	st, env, _, _, biz, _ := cliFixture(t)
+	renv := reviewEnv(env, biz)
+
+	out, err := runCLI(renv, "", "ticket-show")
+	if err != nil || !strings.Contains(out, "Biz ticket") || !strings.Contains(out, "business body") {
+		t.Fatalf("show: %q %v", out, err)
+	}
+	if out, err := runCLI(renv, "## New body\n- [ ] done", "ticket-edit", "Better title"); err != nil || !strings.Contains(out, "updated") {
+		t.Fatalf("edit: %q %v", out, err)
+	}
+	c, _ := st.GetCard(biz)
+	if c.Title != "Better title" || !strings.Contains(c.Description, "New body") || c.ContentVersion != 2 {
+		t.Fatalf("card = %+v", c)
+	}
+	msgs, _ := st.ListReviewMessages(biz)
+	if len(msgs) != 1 || msgs[0].Role != "event" || msgs[0].Ref == 0 {
+		t.Fatalf("an edit leaves an Undo-able event: %+v", msgs)
+	}
+
+	if _, err := runCLI(renv, "title: F\nUser -> App: opens", "flow-add", "Sign in"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runCLI(renv, "just prose", "flow-add", "Bad"); err == nil {
+		t.Fatal("a flow with no step must be refused")
+	}
+	fl, _ := st.ListFlows(biz)
+	if len(fl) != 1 {
+		t.Fatalf("flows = %+v", fl)
+	}
+	id := strconv.FormatInt(fl[0].ID, 10)
+	if _, err := runCLI(renv, "title: F\nUser -> App: opens\nApp --> User: shows", "flow-update", id, "Sign in v2"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.GetFlow(fl[0].ID); got.Title != "Sign in v2" {
+		t.Fatalf("flow = %+v", got)
+	}
+	if out, _ := runCLI(renv, "", "ticket-show"); !strings.Contains(out, "Sign in v2") || !strings.Contains(out, id) {
+		t.Fatalf("show lists flows with ids: %q", out)
+	}
+	if _, err := runCLI(renv, "", "flow-delete", id); err != nil {
+		t.Fatal(err)
+	}
+
+	// the verdict is for the ticket as it stands now
+	if _, err := runCLI(renv, "Clear and small", "review-verdict", "needs_work", "Define the timeout"); err != nil {
+		t.Fatal(err)
+	}
+	r, _ := st.LatestReview(biz)
+	c, _ = st.GetCard(biz)
+	if r.Verdict != "needs_work" || r.ContentVersion != c.ContentVersion || len(r.Missing) != 1 || r.Summary != "Clear and small" {
+		t.Fatalf("review = %+v", r)
+	}
+	if _, err := runCLI(renv, "ok", "review-verdict", "maybe"); err == nil {
+		t.Fatal("bad verdict")
+	}
+}
+
+func TestReviewCommandsAreScopedToTheReviewSession(t *testing.T) {
+	st, env, _, foreign, biz, _ := cliFixture(t)
+	// no review mode (a Discuss or Brainstorm session): refused
+	discuss := func(k string) string {
+		if k == "ONE_PIECE_CARD" {
+			return strconv.FormatInt(biz, 10)
+		}
+		return env(k)
+	}
+	if _, err := runCLI(discuss, "x", "ticket-edit", "Hacked"); err == nil {
+		t.Fatal("ticket-edit must only work in a review session")
+	}
+	// a flow of another ticket cannot be touched
+	other, _ := st.CreateCard(foreign, "Other", "", "")
+	f, _ := st.CreateFlow(other.ID, "Theirs", "A -> B: x")
+	if _, err := runCLI(reviewEnv(env, biz), "A -> B: y", "flow-update", strconv.FormatInt(f.ID, 10), "Mine now"); err == nil {
+		t.Fatal("another ticket's flow must be untouchable")
+	}
+	if _, err := runCLI(reviewEnv(env, biz), "", "flow-delete", strconv.FormatInt(f.ID, 10)); err == nil {
+		t.Fatal("another ticket's flow must be undeletable")
+	}
+	if got, _ := st.GetFlow(f.ID); got.Title != "Theirs" {
+		t.Fatalf("flow changed: %+v", got)
+	}
+	// a card of another board is not reachable even in review mode
+	if _, err := runCLI(reviewEnv(env, other.ID), "", "ticket-show"); err == nil {
+		t.Fatal("a card of another board must not be reachable")
+	}
+}

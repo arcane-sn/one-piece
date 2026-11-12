@@ -25,11 +25,12 @@ type server struct {
 	runs    map[int64]context.CancelFunc // running Agent Task executions by item id
 	chains  map[int64]context.CancelFunc // Run All chains by card id
 	discuss map[int64]context.CancelFunc // running Discuss turns by card id
+	rchats  map[int64]context.CancelFunc // running Claude Review turns by card id
 }
 
 // New builds the handler: /api/* (authenticated) plus static files from staticDir.
 func New(st *store.Store, staticDir string) http.Handler {
-	s := &server{st: st, static: staticDir, turns: map[int64]context.CancelFunc{}, runs: map[int64]context.CancelFunc{}, chains: map[int64]context.CancelFunc{}, discuss: map[int64]context.CancelFunc{}}
+	s := &server{st: st, static: staticDir, turns: map[int64]context.CancelFunc{}, runs: map[int64]context.CancelFunc{}, chains: map[int64]context.CancelFunc{}, discuss: map[int64]context.CancelFunc{}, rchats: map[int64]context.CancelFunc{}}
 	if err := st.FailRunningReviews(); err != nil { // reviews cut short by a previous shutdown
 		log.Printf("sweeping stale reviews: %v", err)
 	}
@@ -38,6 +39,9 @@ func New(st *store.Store, staticDir string) http.Handler {
 	}
 	if err := st.FailRunningDiscuss(); err != nil { // Discuss replies cut short by a previous shutdown
 		log.Printf("sweeping stale discuss replies: %v", err)
+	}
+	if err := st.FailRunningReviewChats(); err != nil { // Claude Review replies cut short by a previous shutdown
+		log.Printf("sweeping stale review chats: %v", err)
 	}
 	if err := st.FailRunningJobs(); err != nil { // Generate jobs cut short by a previous shutdown
 		log.Printf("sweeping stale jobs: %v", err)
@@ -65,7 +69,6 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("PUT /api/cards/{id}", s.updateCard)
 	mux.HandleFunc("POST /api/cards/{id}/move", s.moveCard)
 	mux.HandleFunc("GET /api/cards/{id}/review", s.getReview)
-	mux.HandleFunc("POST /api/cards/{id}/review", s.postReview)
 	mux.HandleFunc("POST /api/cards/{id}/approve", s.approveCard)
 	mux.HandleFunc("DELETE /api/cards/{id}", s.deleteCard)
 	mux.HandleFunc("POST /api/uploads", s.uploadImage)
@@ -79,6 +82,11 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/cards/{id}/branches", s.planBranch)
 	mux.HandleFunc("PUT /api/cards/{id}/branches", s.updateBranch)
 	mux.HandleFunc("DELETE /api/cards/{id}/branches", s.deleteBranch)
+	mux.HandleFunc("GET /api/cards/{id}/review-chat", s.getReviewChat)
+	mux.HandleFunc("POST /api/cards/{id}/review-chat/messages", s.postReviewChatMessage)
+	mux.HandleFunc("POST /api/cards/{id}/review-chat/stop", s.stopReviewChatHandler)
+	mux.HandleFunc("POST /api/cards/{id}/review-chat/new", s.newReviewChat)
+	mux.HandleFunc("POST /api/cards/{id}/revisions/{rid}/restore", s.restoreRevision)
 	mux.HandleFunc("GET /api/cards/{id}/discuss", s.getDiscuss)
 	mux.HandleFunc("POST /api/cards/{id}/discuss/messages", s.postDiscussMessage)
 	mux.HandleFunc("POST /api/cards/{id}/discuss/stop", s.stopDiscussHandler)

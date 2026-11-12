@@ -41,7 +41,6 @@ func (s *server) createFlow(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	s.reviewCard(f.CardID)
 	writeJSON(w, http.StatusCreated, f)
 }
 
@@ -61,9 +60,6 @@ func (s *server) updateFlow(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	if f.ItemID == 0 { // Technical Flows are not part of the reviewed ticket
-		s.reviewCard(f.CardID)
-	}
 	writeJSON(w, http.StatusOK, f)
 }
 
@@ -73,24 +69,9 @@ func (s *server) deleteFlow(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	f, err := s.st.GetFlow(id)
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
 	if err := s.st.DeleteFlow(id); err != nil {
 		writeErr(w, err)
 		return
 	}
-	if f.ItemID == 0 {
-		s.reviewCard(f.CardID)
-	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// reviewCard re-reads the card (its version just changed) and starts a review.
-func (s *server) reviewCard(id int64) {
-	if c, err := s.st.GetCard(id); err == nil {
-		s.reviewQuietly(c)
-	}
 }

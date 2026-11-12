@@ -1,10 +1,7 @@
 package api
 
 import (
-	"log"
 	"net/http"
-
-	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
 
 type cardIn struct {
@@ -43,7 +40,6 @@ func (s *server) createCard(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	s.reviewQuietly(c)
 	writeJSON(w, http.StatusCreated, c)
 }
 
@@ -63,7 +59,6 @@ func (s *server) updateCard(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	s.reviewQuietly(c)
 	writeJSON(w, http.StatusOK, c)
 }
 
@@ -95,20 +90,11 @@ func (s *server) deleteCard(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	s.stopDiscuss(id) // a Discuss turn must not keep running git for a deleted ticket
+	s.stopDiscuss(id)
+	s.stopReviewChat(id) // a Discuss turn must not keep running git for a deleted ticket
 	if err := s.st.DeleteCard(id); err != nil {
 		writeErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// reviewQuietly starts a review for the saved card; a failure to start must not fail the save.
-func (s *server) reviewQuietly(c store.Card) {
-	if c.Status == "draft" {
-		return
-	}
-	if _, err := s.startReview(c); err != nil {
-		log.Printf("starting review of card %d: %v", c.ID, err)
-	}
 }

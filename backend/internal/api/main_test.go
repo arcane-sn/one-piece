@@ -21,6 +21,9 @@ func TestMain(m *testing.M) {
 	runDiscuss = func(context.Context, discussRun, func(string)) (string, error) {
 		return "", errors.New("claude is stubbed in tests")
 	}
+	runReviewChat = func(context.Context, reviewRun, func(string)) (string, error) {
+		return "", errors.New("claude is stubbed in tests")
+	}
 	agentRun = func(context.Context, string, []string, string, string, func(string)) (string, error) {
 		return "", errors.New("claude is stubbed in tests")
 	}
