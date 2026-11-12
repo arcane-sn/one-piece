@@ -44,11 +44,6 @@ export default function GenerateFlowModal({ kind, id, createPath, onSaved, onClo
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   })
-  useEffect(() => { // restore the request that was sent
-    if (!job?.request || prompt) return
-    try { setPrompt(JSON.parse(job.request).prompt || '') } catch { /* keep empty */ }
-  }, [job]) // eslint-disable-line react-hooks/exhaustive-deps
-
   const result = jobResult(job)
   useEffect(() => { // a finished job fills the preview
     if (!result || filled.current === job.id) return

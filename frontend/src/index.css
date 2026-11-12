@@ -416,7 +416,7 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 .mention-list li.on { background: rgba(214, 90, 66, 0.14); }
 
 /* Toasts */
-.toaster { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; width: min(560px, calc(100vw - 32px)); }
+.toaster { position: fixed; top: 16px; right: 16px; z-index: 200; display: flex; flex-direction: column; gap: 8px; width: min(400px, calc(100vw - 32px)); }
 .toast { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; height: auto; width: 100%; padding: 12px 16px; border-radius: 14px; text-align: left; font-size: 13.5px; font-weight: 600; line-height: 1.4; color: #fff; background: #3b2417; border: 0; box-shadow: 0 16px 34px -10px rgba(59, 36, 23, 0.55); animation: op-pop 0.18s ease-out; cursor: pointer; }
 .toast.error { background: #b4372a; }
 .toast.ok { background: #2f7d6d; }

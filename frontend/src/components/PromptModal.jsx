@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { jobError, jobResult, useJob } from '../lib/jobs'
 import MentionTextarea from './MentionTextarea'
 
@@ -12,12 +12,6 @@ export default function PromptModal({ boardId, cardId, title, description, onUse
   const busy = job?.status === 'running'
   const result = jobResult(job)?.description ?? ''
   const error = startError || jobError(job)
-  const filled = useRef(false)
-  useEffect(() => { // restore the idea that was sent
-    if (filled.current || !job?.request) return
-    filled.current = true
-    try { setPrompt((p) => p || JSON.parse(job.request).prompt || '') } catch { /* keep empty */ }
-  }, [job])
 
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
