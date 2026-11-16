@@ -57,3 +57,30 @@ func TestSessionExpires(t *testing.T) {
 		t.Error("expired session still valid")
 	}
 }
+
+func TestResetPassword(t *testing.T) {
+	s := openTemp(t)
+	if err := s.CreateUser("arcane", "old-password"); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := s.CheckPassword("arcane", "old-password")
+	tok, _ := s.NewSession(id)
+	if err := s.ResetPassword("arcane", "short"); err == nil {
+		t.Error("short password")
+	}
+	if err := s.ResetPassword("nobody", "new-password-1"); err == nil {
+		t.Error("unknown user")
+	}
+	if err := s.ResetPassword("arcane", "new-password-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.CheckPassword("arcane", "old-password"); ok {
+		t.Error("old password still works")
+	}
+	if _, ok := s.CheckPassword("arcane", "new-password-1"); !ok {
+		t.Error("new password rejected")
+	}
+	if _, ok := s.SessionUser(tok); ok {
+		t.Error("old session should be ended")
+	}
+}

@@ -11,6 +11,8 @@ cd backend && go run ./cmd/server create-user <username> && cd ..
 ./start.sh        # http://127.0.0.1:5300
 ```
 
+Lupa password: `cd backend && go run ./cmd/server reset-password <username>` (data tetap utuh, semua sesi login diakhiri).
+
 Butuh Go ≥ 1.26 (syarat dependency sqlite) dan Node. `start.sh` membangun frontend bila `frontend/dist` belum ada.
 
 Development: jalankan backend (`cd backend && go run ./cmd/server`) dan frontend (`cd frontend && npm run dev`, buka http://127.0.0.1:5301). Tes: `cd backend && go test ./...`.

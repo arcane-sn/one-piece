@@ -39,6 +39,30 @@ func (s *Store) CreateUser(username, password string) error {
 	return err
 }
 
+// ResetPassword sets a new password for an existing user and ends all of that user's sessions.
+func (s *Store) ResetPassword(username, password string) error {
+	username = strings.TrimSpace(username)
+	switch {
+	case len(password) < 8:
+		return ValidationError{"password must be at least 8 characters"}
+	case len(password) > 72:
+		return ValidationError{"password must be at most 72 bytes"}
+	}
+	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	res, err := s.DB.Exec(`UPDATE users SET password_hash=? WHERE username=?`, string(h), username)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ValidationError{"no such user"}
+	}
+	_, err = s.DB.Exec(`DELETE FROM sessions WHERE user_id=(SELECT id FROM users WHERE username=?)`, username)
+	return err
+}
+
 func (s *Store) CheckPassword(username, password string) (userID int64, ok bool) {
 	var hash string
 	err := s.DB.QueryRow(`SELECT id,password_hash FROM users WHERE username=?`, strings.TrimSpace(username)).Scan(&userID, &hash)

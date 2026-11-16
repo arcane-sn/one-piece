@@ -2,6 +2,7 @@
 //
 //	server [-addr 127.0.0.1:5300] [-db one-piece.db] [-static ../frontend/dist]
 //	server create-user [-db one-piece.db] <username>
+//	server reset-password [-db one-piece.db] <username>
 //	server qa-setup [-db one-piece.db]   install the Playwright toolchain for browser QA (needs npm and network, once)
 package main
 
@@ -41,6 +42,10 @@ func fatal(format string, a ...any) {
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "create-user" {
 		createUser(os.Args[2:])
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "reset-password" {
+		resetPassword(os.Args[2:])
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "qa-setup" {
@@ -87,6 +92,24 @@ func createUser(args []string) {
 		fatal("%v", err)
 	}
 	fmt.Println("user created")
+}
+
+func resetPassword(args []string) {
+	fs := flag.NewFlagSet("reset-password", flag.ExitOnError)
+	db := fs.String("db", "one-piece.db", "SQLite file")
+	fs.Parse(args)
+	if fs.NArg() != 1 {
+		fatal("usage: server reset-password [-db file] <username>")
+	}
+	pw := readPassword()
+	st, err := store.Open(*db)
+	if err != nil {
+		fatal("open db: %v", err)
+	}
+	if err := st.ResetPassword(fs.Arg(0), pw); err != nil {
+		fatal("%v", err)
+	}
+	fmt.Println("password reset; all sessions ended")
 }
 
 // readPassword prompts without echo on a terminal, else reads one line of stdin.
