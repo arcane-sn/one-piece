@@ -17,14 +17,16 @@ import (
 // cannot point them elsewhere; every write goes through store's Draft guards.
 var agentCommands = map[string]bool{"tickets": true, "ticket": true, "draft-add": true, "draft-update": true,
 	"branches": true, "branch-plan": true, "branch-status": true, "branch-pr": true, "git": true, "gh": true,
-	"ticket-show": true, "ticket-edit": true, "flow-add": true, "flow-update": true, "flow-delete": true, "review-verdict": true}
+	"ticket-show": true, "ticket-edit": true, "flow-add": true, "flow-update": true, "flow-delete": true, "review-verdict": true,
+	"branch-mode": true, "pending-picks": true, "remote-kind": true, "decision": true, "decisions": true}
 
 // reviewCommands only work in a Claude Review session (ONE_PIECE_MODE=review, ONE_PIECE_CARD set):
 // they read and edit THAT ticket and its Business Flows, and record the verdict.
 var reviewCommands = map[string]bool{"ticket-show": true, "ticket-edit": true, "flow-add": true, "flow-update": true, "flow-delete": true, "review-verdict": true}
 
 // branchCommands need ONE_PIECE_CARD: the ticket a Discuss session is about.
-var branchCommands = map[string]bool{"branches": true, "branch-plan": true, "branch-status": true, "branch-pr": true, "git": true, "gh": true}
+var branchCommands = map[string]bool{"branches": true, "branch-plan": true, "branch-status": true, "branch-pr": true, "git": true, "gh": true,
+	"branch-mode": true, "pending-picks": true, "remote-kind": true, "decision": true, "decisions": true}
 
 // runAgentCLI runs one agent subcommand (args[0] is its name).
 //
@@ -39,6 +41,10 @@ var branchCommands = map[string]bool{"branches": true, "branch-plan": true, "bra
 //	branch-plan <repo> <base>         record repo + base branch (names come from the board's prefix)
 //	branch-status <repo> <status> [note…]
 //	branch-pr <repo> <url>            store the PR link, status pr_open
+//	branch-mode <repo> merge|cherry-pick   how the feature is integrated; cherry-pick only after the repo was marked blocked
+//	pending-picks <repo>              the ticket's own commits not yet cherry-picked, oldest first
+//	remote-kind <repo>                github | other | none
+//	decision (text on stdin), decisions   the ticket's dated decision log
 //	git <repo> <args…>, gh <repo> <args…>   guarded by internal/gitx; repo must be registered
 func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io.Writer) error {
 	dbPath := getenv("ONE_PIECE_DB")
@@ -97,6 +103,24 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 			}
 		}
 		return store.Branch{}, errors.New("repo is not registered for this ticket; run branch-plan first")
+	}
+
+	// policy builds the guard's view of one registered repo: names, saved mode, picks, integration state.
+	policy := func(r store.Branch) (gitx.Policy, error) {
+		board, err := st.GetBoard(boardID)
+		if err != nil {
+			return gitx.Policy{}, err
+		}
+		picked, err := st.PickedSHAs(card.ID, r.Repo)
+		if err != nil {
+			return gitx.Policy{}, err
+		}
+		ready, err := st.PushReady(card.ID)
+		if err != nil {
+			return gitx.Policy{}, err
+		}
+		return gitx.Policy{Feature: r.FeatureBranch, Dev: r.DevBranch, Base: r.BaseBranch, PRBase: board.DevBranch,
+			Ident: card.Ident, Mode: r.Mode, Picked: picked, Integrated: store.IntegratedStatus(r.Status), PushReady: ready}, nil
 	}
 
 	// ownFlow finds a Business Flow of THIS ticket by the id in args[1].
@@ -218,7 +242,16 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 			return err
 		}
 		for _, r := range rows {
-			fmt.Fprintf(out, "%s | %s → %s | %s | %s | %s\n", r.Repo, r.BaseBranch, r.FeatureBranch, r.DevBranch, r.Status, r.PRURL)
+			pending := "?"
+			if r.Status != "planned" {
+				if pol, err := policy(r); err == nil {
+					if p, err := gitx.PendingPicks(r.Repo, pol); err == nil {
+						pending = strconv.Itoa(len(p))
+					}
+				}
+			}
+			fmt.Fprintf(out, "%s | %s → %s | %s | %s | %s | mode %s | remote %s | %s feature commits not yet picked\n",
+				r.Repo, r.BaseBranch, r.FeatureBranch, r.DevBranch, r.Status, r.PRURL, r.Mode, gitx.RemoteKind(r.Repo), pending)
 		}
 	case "branch-plan":
 		if len(args) != 3 {
@@ -259,6 +292,75 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 			return err
 		}
 		fmt.Fprintf(out, "%s: PR %s\n", r.Repo, r.PRURL)
+	case "branch-mode":
+		if len(args) != 3 || (args[2] != "merge" && args[2] != "cherry-pick") {
+			return errors.New("usage: branch-mode <repo> merge|cherry-pick")
+		}
+		r, err := registered(args[1])
+		if err != nil {
+			return err
+		}
+		if args[2] == "cherry-pick" && r.Mode != "cherry-pick" && r.Status != "blocked" {
+			return errors.New("switching to cherry-pick is only accepted after a merge conflict: abort the merge, run branch-status <repo> blocked <reason>, report to the owner, and switch only after they agree (the owner can also set the mode in the Branching list)")
+		}
+		if r, err = st.UpdateBranch(card.ID, r.Repo, store.BranchPatch{Mode: &args[2]}); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "%s: mode %s\n", r.Repo, r.Mode)
+	case "pending-picks":
+		if len(args) != 2 {
+			return errors.New("usage: pending-picks <repo>")
+		}
+		r, err := registered(args[1])
+		if err != nil {
+			return err
+		}
+		pol, err := policy(r)
+		if err != nil {
+			return err
+		}
+		cs, err := gitx.PendingPicks(r.Repo, pol)
+		if err != nil {
+			return err
+		}
+		if len(cs) == 0 {
+			fmt.Fprintln(out, "none")
+		}
+		for _, c := range cs {
+			fmt.Fprintf(out, "%s %s\n", c.SHA, c.Subject)
+		}
+	case "remote-kind":
+		if len(args) != 2 {
+			return errors.New("usage: remote-kind <repo>")
+		}
+		r, err := registered(args[1])
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(out, gitx.RemoteKind(r.Repo))
+	case "decision":
+		if len(args) != 1 {
+			return errors.New("usage: decision  (one self-contained sentence on stdin)")
+		}
+		text, err := description()
+		if err != nil {
+			return err
+		}
+		if _, err := st.AddDecision(card.ID, text, "claude"); err != nil {
+			return err
+		}
+		fmt.Fprintln(out, "decision saved")
+	case "decisions":
+		ds, err := st.ListDecisions(card.ID)
+		if err != nil {
+			return err
+		}
+		if len(ds) == 0 {
+			fmt.Fprintln(out, "none")
+		}
+		for _, d := range ds {
+			fmt.Fprintf(out, "%s (%s): %s\n", d.CreatedAt, d.Source, d.Text)
+		}
 	case "git", "gh":
 		if len(args) < 3 {
 			return fmt.Errorf("usage: %s <repo> <args…>", args[0])
@@ -267,21 +369,36 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 		if err != nil {
 			return err
 		}
-		board, err := st.GetBoard(boardID)
+		pol, err := policy(r)
 		if err != nil {
 			return err
 		}
-		pol := gitx.Policy{Feature: r.FeatureBranch, Dev: r.DevBranch, Base: r.BaseBranch, PRBase: board.DevBranch}
-		run := gitx.Git
 		if args[0] == "gh" {
-			run = gitx.GH
+			res, err := gitx.GH(r.Repo, args[2:], pol)
+			if res != "" {
+				fmt.Fprintln(out, res)
+			}
+			return err
 		}
-		res, err := run(r.Repo, args[2:], pol)
-		if res != "" {
-			fmt.Fprintln(out, res)
+		res, err := gitx.GitX(r.Repo, args[2:], pol)
+		if res.Out != "" {
+			fmt.Fprintln(out, res.Out)
 		}
 		if err != nil {
 			return err
+		}
+		// facts only the server records: Claude cannot write them
+		if len(res.Picked) > 0 {
+			err = st.AddPicks(card.ID, r.Repo, res.Picked)
+		}
+		if err == nil && res.Stash != "" {
+			err = st.AddStash(card.ID, r.Repo, res.Stash, res.StashBranch, res.StashMsg)
+		}
+		if err == nil && res.Popped != "" {
+			err = st.MarkStashPopped(card.ID, r.Repo, res.Popped)
+		}
+		if err != nil {
+			return fmt.Errorf("git ran, but recording it failed: %v", err)
 		}
 	case "tickets":
 		cs, err := st.ListCards(boardID)
