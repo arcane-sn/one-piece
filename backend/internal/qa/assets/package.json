@@ -1,0 +1,7 @@
+{
+  "name": "one-piece-qa-runner",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Playwright toolchain for One Piece browser QA. Installed by `server qa-setup`; never committed.",
+  "devDependencies": { "@playwright/test": "1.49.1" }
+}

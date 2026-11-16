@@ -2,6 +2,7 @@
 //
 //	server [-addr 127.0.0.1:5300] [-db one-piece.db] [-static ../frontend/dist]
 //	server create-user [-db one-piece.db] <username>
+//	server qa-setup [-db one-piece.db]   install the Playwright toolchain for browser QA (needs npm and network, once)
 package main
 
 import (
@@ -12,12 +13,14 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"golang.org/x/term"
 
 	"github.com/arcane-sn/one-piece/backend/internal/api"
+	"github.com/arcane-sn/one-piece/backend/internal/qa"
 	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
 
@@ -38,6 +41,10 @@ func fatal(format string, a ...any) {
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "create-user" {
 		createUser(os.Args[2:])
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "qa-setup" {
+		qaSetup(os.Args[2:])
 		return
 	}
 	if len(os.Args) > 1 && agentCommands[os.Args[1]] {
@@ -96,4 +103,20 @@ func readPassword() string {
 	}
 	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	return strings.TrimRight(line, "\r\n")
+}
+
+// qaSetup installs the browser QA toolchain next to the database (backend/qa/runner by default).
+func qaSetup(args []string) {
+	fs := flag.NewFlagSet("qa-setup", flag.ExitOnError)
+	db := fs.String("db", "one-piece.db", "SQLite file")
+	fs.Parse(args)
+	abs, err := filepath.Abs(*db)
+	if err != nil {
+		fatal("%v", err)
+	}
+	p := qa.Paths{Data: filepath.Dir(abs)}
+	if err := qa.Setup(p, func(s string) { fmt.Println(s) }); err != nil {
+		fatal("qa-setup failed: %v", err)
+	}
+	fmt.Println("Playwright is ready in", p.Runner())
 }

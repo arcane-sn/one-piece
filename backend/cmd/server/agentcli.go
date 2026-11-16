@@ -18,7 +18,8 @@ import (
 var agentCommands = map[string]bool{"tickets": true, "ticket": true, "draft-add": true, "draft-update": true,
 	"branches": true, "branch-plan": true, "branch-status": true, "branch-pr": true, "git": true, "gh": true,
 	"ticket-show": true, "ticket-edit": true, "flow-add": true, "flow-update": true, "flow-delete": true, "review-verdict": true,
-	"branch-mode": true, "pending-picks": true, "remote-kind": true, "decision": true, "decisions": true}
+	"branch-mode": true, "pending-picks": true, "remote-kind": true, "decision": true, "decisions": true,
+	"qa-run": true, "qa-blocked": true}
 
 // reviewCommands only work in a Claude Review session (ONE_PIECE_MODE=review, ONE_PIECE_CARD set):
 // they read and edit THAT ticket and its Business Flows, and record the verdict.
@@ -67,6 +68,10 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 	description := func() (string, error) {
 		b, err := io.ReadAll(io.LimitReader(in, 1<<20))
 		return strings.TrimSpace(string(b)), err
+	}
+
+	if qaCommands[args[0]] {
+		return runQACLI(args, getenv, st, boardID, in, out)
 	}
 
 	var card store.Card
