@@ -3,16 +3,21 @@ import { createPortal } from 'react-dom'
 import { api, baseName } from '../api'
 import { toast } from '../lib/toast'
 
-const STATUS = [['planned', 'Planned'], ['branched', 'Branched'], ['merged_dev', 'Merged To Dev'], ['pr_open', 'PR Open'], ['blocked', 'Blocked']]
+const STATUS = [['planned', 'Planned'], ['branched', 'Branched'], ['merged_dev', 'Merged To Dev'], ['pushed', 'Pushed (No PR)'], ['pr_open', 'PR Open'], ['blocked', 'Blocked']]
+const MODES = [['merge', 'Merge'], ['cherry-pick', 'Cherry-pick']]
 const label = (s) => STATUS.find((x) => x[0] === s)?.[1] ?? s
 
 // Per-repo branching of one ticket: base branch, feature branch, -dev branch, status and PR link.
 export default function BranchingSection({ cardId, reloadKey = 0, onModal }) {
   const [rows, setRows] = useState([])
   const [editing, setEditing] = useState(null) // null | 'new' | row
+  const [stashes, setStashes] = useState([])
 
   const load = useCallback(async () => {
-    try { setRows(await api(`/api/cards/${cardId}/branches`)) } catch (err) { toast(err.message) }
+    try {
+      setRows(await api(`/api/cards/${cardId}/branches`))
+      setStashes(await api(`/api/cards/${cardId}/stashes`))
+    } catch (err) { toast(err.message) }
   }, [cardId])
   useEffect(() => { load() }, [load, reloadKey])
 
@@ -36,12 +41,27 @@ export default function BranchingSection({ cardId, reloadKey = 0, onModal }) {
               <button type="button" className="branch-row" onClick={() => open(r)}>
                 <span className="branch-repo" title={r.repo}>{baseName(r.repo)}</span>
                 <span className="branch-names">{r.baseBranch} → {r.featureBranch}</span>
+                {r.mode === 'cherry-pick' && <span className="branch-chip" title="Integrated by cherry-pick">Cherry-pick · {r.picked} picked</span>}
                 <span className={'branch-chip ' + r.status}>{label(r.status)}</span>
               </button>
+              {(r.status === 'pushed' || r.status === 'pr_open') && (
+                <span className="hint" title="Pushed branches">{r.featureBranch}, {r.devBranch}</span>
+              )}
               {r.prUrl && <a href={r.prUrl} target="_blank" rel="noreferrer noopener" className="link-btn">PR</a>}
             </li>
           ))}
         </ul>
+      )}
+      {stashes.some((x) => !x.poppedAt) && (
+        <div className="hint">
+          <strong>Stashed work:</strong>
+          <ul className="branch-list">
+            {stashes.filter((x) => !x.poppedAt).map((x) => (
+              <li key={x.id}><span>{baseName(x.repo)} · {x.message} · {x.createdAt.slice(0, 10)}</span></li>
+            ))}
+          </ul>
+          Restore it in Discuss (stash pop).
+        </div>
       )}
       {editing && <BranchModal cardId={cardId} row={editing === 'new' ? null : editing} onDone={done} onClose={() => open(null)} />}
     </div>
@@ -56,6 +76,7 @@ function BranchModal({ cardId, row, onDone, onClose }) {
   const [status, setStatus] = useState(row?.status ?? 'planned')
   const [prUrl, setPrUrl] = useState(row?.prUrl ?? '')
   const [note, setNote] = useState(row?.note ?? '')
+  const [mode, setMode] = useState(row?.mode ?? 'merge')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const url = `/api/cards/${cardId}/branches`
@@ -73,7 +94,7 @@ function BranchModal({ cardId, row, onDone, onClose }) {
     setError('')
     try {
       if (!row) await api(url, { method: 'POST', body: { repo, baseBranch: base } })
-      else await api(url, { method: 'PUT', body: { repo: row.repo, baseBranch: base, featureBranch: feature, devBranch: dev, status, prUrl, note } })
+      else await api(url, { method: 'PUT', body: { repo: row.repo, baseBranch: base, featureBranch: feature, devBranch: dev, status, prUrl, note, mode } })
       onDone()
     } catch (err) {
       setError(err.message)
@@ -116,6 +137,12 @@ function BranchModal({ cardId, row, onDone, onClose }) {
               <span>Status</span>
               <select value={status} onChange={(e) => setStatus(e.target.value)}>
                 {STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </label>
+            <label className="field">
+              <span>Integration <em>how the feature reaches the -dev branch</em></span>
+              <select value={mode} onChange={(e) => setMode(e.target.value)}>
+                {MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </label>
             <label className="field"><span>PR Link</span><input value={prUrl} onChange={(e) => setPrUrl(e.target.value)} /></label>

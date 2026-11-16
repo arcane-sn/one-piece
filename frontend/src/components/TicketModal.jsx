@@ -5,6 +5,7 @@ import FlowsSection from './FlowsSection'
 import ItemsSection from './ItemsSection'
 import BranchingSection from './BranchingSection'
 import DiscussModal from './DiscussModal'
+import DecisionLog from './DecisionLog'
 import { useJobs } from '../lib/jobs'
 import RichEditor from './RichEditor'
 import ReviewChatModal from './ReviewChatModal'
@@ -162,8 +163,8 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
         <div className="ticket-head">
           <h2>{current ? 'Edit Ticket' : 'New Ticket'}{current?.ident && <span className="ident">{current.ident}</span>}</h2>
           {reviewing && <span className="review-badge running ticket-lock"><span className="spinner" /> Claude is editing…</span>}
-          {current && (current.status === 'business' || current.status === 'done') && (
-            <button type="button" className="ai-btn discuss-btn" title="Plan and run this ticket's branching with Claude"
+          {current && (
+            <button type="button" className="ai-btn discuss-btn" title="Git help for this ticket: branches, integration, stashes"
               onClick={() => { setDiscussOpen(true); setFlowOpen(true) }}>
               <span aria-hidden="true">✦</span> Discuss
             </button>
@@ -189,6 +190,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
             </div>
             {!isDraft && <FlowsSection parent={current ? `/api/cards/${current.id}` : null} locked={reviewing} reloadKey={flowTick} emptyHint="No flow yet. Claude asks for at least one before approval." onChanged={flowsChanged} onModal={setFlowOpen} />}
             {!isDraft && current && <BranchingSection cardId={current.id} reloadKey={branchTick} onModal={setFlowOpen} />}
+            {current && <DecisionLog cardId={current.id} reloadKey={branchTick} />}
             {!isDraft && <ItemsSection card={current} onModal={setFlowOpen} />}
           </div>
 

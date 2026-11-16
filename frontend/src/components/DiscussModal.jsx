@@ -5,7 +5,7 @@ import MentionTextarea from './MentionTextarea'
 import { toast } from '../lib/toast'
 
 const NOTE = { stopped: 'Stopped', failed: 'Failed' }
-const STAGE = { setup: 'Setting up branches', closeout: 'Closing out: dev branch and pull requests' }
+const STAGE = { setup: 'Setting up branches', closeout: 'Closing out: integrate every repo, then push and open pull requests', assist: 'Git assistant for this ticket' }
 
 // Per-ticket chat where Claude plans and runs the branching with the owner. Business: create the
 // feature branches. Done: make the -dev branches and open the PRs. `onTurnDone` fires when a turn ends.
@@ -77,14 +77,16 @@ export default function DiscussModal({ card, boardId, onTurnDone, onClose }) {
           <h2>Discuss{card.ident && <span className="ident">{card.ident}</span>}</h2>
           <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
         </div>
-        <p className="discuss-stage">{stage ? STAGE[stage] : 'Discuss is available while the ticket is in Business or Done.'}</p>
+        <p className="discuss-stage">{stage ? STAGE[stage] : 'Loading…'}</p>
         <div className="bs-list" ref={listRef}>
           {view === null && <p className="muted">Loading…</p>}
           {view?.messages.length === 0 && (
             <p className="muted">
               {stage === 'closeout'
-                ? 'Tell Claude to wrap up. It merges each feature branch into a -dev branch, pushes, and opens the pull requests.'
-                : 'Tell Claude which repos this ticket touches (type @ to pick them) and which branch each one starts from.'}
+                ? 'Tell Claude to wrap up. It integrates every repo into its -dev branch first, and pushes only when all of them are clean.'
+                : stage === 'assist'
+                  ? 'Ask anything about this ticket’s branches: refresh the -dev branch, pull, stash, switch or integrate. Agreements are saved to the decision log.'
+                  : 'Tell Claude which repos this ticket touches (type @ to pick them) and the release branch each one starts from.'}
             </p>
           )}
           {view?.messages.map((m) => m.role === 'marker' ? (
