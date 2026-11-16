@@ -45,3 +45,27 @@ func Scrub(s string, secrets []string) string {
 	}
 	return s
 }
+
+// StateExpired reports a saved login that cannot be valid any more: unreadable, no cookies, or every cookie
+// that carries an expiry is already past (session cookies carry none and cannot be judged here).
+func StateExpired(b []byte, now int64) bool {
+	var st struct {
+		Cookies []struct {
+			Expires float64 `json:"expires"`
+		} `json:"cookies"`
+	}
+	if json.Unmarshal(b, &st) != nil || len(st.Cookies) == 0 {
+		return true
+	}
+	withExpiry := 0
+	for _, c := range st.Cookies {
+		if c.Expires <= 0 {
+			return false // a session cookie: judged by the live check
+		}
+		if int64(c.Expires) > now {
+			return false
+		}
+		withExpiry++
+	}
+	return withExpiry > 0
+}

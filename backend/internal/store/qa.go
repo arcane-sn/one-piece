@@ -234,3 +234,10 @@ func (s *Store) LastQAStatus(itemID int64) string {
 	s.DB.QueryRow(`SELECT status FROM qa_runs WHERE item_id=? ORDER BY id DESC LIMIT 1`, itemID).Scan(&st)
 	return st
 }
+
+// SetQARunRepos records the repos under test (branch, commit, dirty) once they are known.
+func (s *Store) SetQARunRepos(id int64, repos []qa.RepoState) error {
+	b, _ := json.Marshal(repos)
+	_, err := s.DB.Exec(`UPDATE qa_runs SET repos=? WHERE id=?`, string(b), id)
+	return err
+}

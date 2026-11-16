@@ -262,6 +262,11 @@ const (
 // is judged by reading the code.
 func (s *server) executeItem(ctx context.Context, it store.Item, c store.Card, b store.Board) runOutcome {
 	defer s.finishRun(it.ID)
+	if it.Kind == "qa" { // a board with a QA stack runs the case in a real browser; any other board reads code (B11)
+		if cfg, err := s.st.GetQAConfig(b.ID); err == nil && cfg.Configured() {
+			return s.executeQA(ctx, it, c, b, cfg)
+		}
+	}
 	var msg strings.Builder
 	fmt.Fprintf(&msg, "Product: %s\n", b.Name)
 	if b.Description != "" {
@@ -317,20 +322,9 @@ func (s *server) executeItem(ctx context.Context, it store.Item, c store.Card, b
 			s.st.SetItemStatus(it.ID, "todo")
 			return runBlocked
 		case res != "pass":
-			logLine("Failed: " + issue)
-			s.st.SetItemFailure(it.ID, issue, desc)
-			if fix, made, err := s.st.AddFixTask(it, issue, desc); err != nil {
-				logLine("Could not create a [FIX] task: " + err.Error())
-			} else if made {
-				logLine("Created Agent Task: " + fix.Title)
-			}
-			s.st.SetItemStatus(it.ID, "todo")
-			return runFailed
+			return s.failQA(it, logLine, issue, desc)
 		}
-		s.st.SetItemFailure(it.ID, "", "")
-		logLine("Passed: " + shorten(desc, 300))
-		s.st.SetItemStatus(it.ID, "done")
-		return runDone
+		return s.passQA(it, logLine, desc)
 	}
 	if len(repos) > 0 {
 		changed, cerr := commitTask(repos, it)
@@ -358,6 +352,26 @@ func (s *server) executeItem(ctx context.Context, it store.Item, c store.Card, b
 		}
 	}
 	logLine("Done: " + shorten(final, 400))
+	s.st.SetItemStatus(it.ID, "done")
+	return runDone
+}
+
+// failQA records a QA finding: the failure on the item and (once) a [FIX] Agent Task.
+func (s *server) failQA(it store.Item, logLine func(string), issue, desc string) runOutcome {
+	logLine("Failed: " + issue)
+	s.st.SetItemFailure(it.ID, issue, desc)
+	if fix, made, err := s.st.AddFixTask(it, issue, desc); err != nil {
+		logLine("Could not create a [FIX] task: " + err.Error())
+	} else if made {
+		logLine("Created Agent Task: " + fix.Title)
+	}
+	s.st.SetItemStatus(it.ID, "todo")
+	return runFailed
+}
+
+func (s *server) passQA(it store.Item, logLine func(string), desc string) runOutcome {
+	s.st.SetItemFailure(it.ID, "", "")
+	logLine("Passed: " + shorten(desc, 300))
 	s.st.SetItemStatus(it.ID, "done")
 	return runDone
 }

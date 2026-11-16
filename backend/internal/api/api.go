@@ -26,6 +26,7 @@ type server struct {
 	chains  map[int64]context.CancelFunc // Run All chains by card id
 	discuss map[int64]context.CancelFunc // running Discuss turns by card id
 	rchats  map[int64]context.CancelFunc // running Claude Review turns by card id
+	qaBusy  string                       // "" or what holds the one QA lock: run | login | check
 }
 
 // New builds the handler: /api/* (authenticated) plus static files from staticDir.
@@ -46,6 +47,10 @@ func New(st *store.Store, staticDir string) http.Handler {
 	if err := st.FailRunningJobs(); err != nil { // Generate jobs cut short by a previous shutdown
 		log.Printf("sweeping stale jobs: %v", err)
 	}
+	if err := st.StopRunningQARuns(); err != nil { // QA runs cut short by a previous shutdown
+		log.Printf("sweeping stale QA runs: %v", err)
+	}
+	sweepQA(st)
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/login", s.login)
 	mux.HandleFunc("POST /api/logout", s.logout)
@@ -95,6 +100,13 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/cards/{id}/discuss/messages", s.postDiscussMessage)
 	mux.HandleFunc("POST /api/cards/{id}/discuss/stop", s.stopDiscussHandler)
 	mux.HandleFunc("POST /api/cards/{id}/discuss/new", s.newDiscuss)
+	mux.HandleFunc("GET /api/boards/{id}/qa", s.getQA)
+	mux.HandleFunc("PUT /api/boards/{id}/qa", s.putQA)
+	mux.HandleFunc("POST /api/boards/{id}/qa/login", s.qaLoginHandler)
+	mux.HandleFunc("POST /api/boards/{id}/qa/session/check", s.qaCheckHandler)
+	mux.HandleFunc("DELETE /api/boards/{id}/qa/session", s.qaForgetHandler)
+	mux.HandleFunc("GET /api/items/{id}/qa-runs", s.listQARuns)
+	mux.HandleFunc("GET /api/qa-evidence/{run}/{attempt}/{file...}", s.getQAEvidence)
 	mux.HandleFunc("GET /api/cards/{id}/items", s.listItems)
 	mux.HandleFunc("POST /api/cards/{id}/items", s.createItem)
 	mux.HandleFunc("POST /api/cards/{id}/generate-items", s.generateItems)

@@ -35,8 +35,17 @@ var streamClaude = func(ctx context.Context, system, user string, dirs []string,
 // runStream runs `claude` with args in cwd, feeding user on stdin and turning the
 // stream-json events into onLog lines. It returns Claude's final message.
 func runStream(ctx context.Context, args []string, cwd, user string, onLog func(string)) (string, error) {
+	return runStreamEnv(ctx, args, cwd, user, nil, onLog)
+}
+
+// runStreamEnv is runStream with extra KEY=VALUE environment entries for the process (and so for the
+// subcommands Claude may run through its Bash allow-list).
+func runStreamEnv(ctx context.Context, args []string, cwd, user string, env []string, onLog func(string)) (string, error) {
 	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Dir = cwd
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	cmd.Stdin = strings.NewReader(user)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
