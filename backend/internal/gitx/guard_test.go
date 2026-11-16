@@ -43,7 +43,7 @@ func split(s string) []string { return strings.Fields(s) }
 
 func TestValidateGitAllowsTheFlow(t *testing.T) {
 	for _, c := range []string{
-		"switch -c feature/MID-1 main", "switch -c feature/MID-1 origin/main", "switch -c feature/MID-1-dev origin/dev",
+		"switch -c feature/MID-1 release", "switch -c feature/MID-1 origin/release", "switch -c feature/MID-1-dev origin/dev", "switch -c feature/MID-1-dev dev",
 		"switch feature/MID-1", "merge --no-edit feature/MID-1",
 		"push -u origin feature/MID-1-dev", "push origin feature/MID-1",
 		"status --porcelain", "status -s", "status", "status -b",
@@ -65,8 +65,8 @@ func TestValidateGitRejects(t *testing.T) {
 		"push origin :feature/MID-1", "push origin feature/MID-1 feature/MID-1-dev", "push --delete origin feature/MID-1",
 		"push -u origin dev", "push upstream feature/MID-1",
 		"branch -D x", "branch -d x", "branch -m x", "reset --hard", "clean -fd", "checkout .", "restore .", "rebase main",
-		"switch --detach", "switch -c other main", "switch -c feature/MID-1 --force", "switch -c feature/MID-1 -x",
-		"merge feature/other", "merge --no-edit main", "merge --no-edit", "merge --squash feature/MID-1",
+		"switch --detach", "switch -c other main", "switch -c feature/MID-1 main", "switch -c feature/MID-1-dev release", "switch -c feature/MID-1 --force", "switch -c feature/MID-1 -x",
+		"merge feature/other", "merge --no-edit dev", "merge --no-edit", "merge --squash feature/MID-1",
 		"fetch --upload-pack=x", "fetch origin main", "log --all", "log -p", "log --oneline -n x", "diff main..feature/MID-1",
 		"diff --stat --output=x main..feature/MID-1", "--version", "-c core.pager=x status", "status ; rm -rf /",
 		"rev-parse --git-dir", "rev-parse --verify -x", "branch --list -x", "commit -m x", "add .", "stash", "config user.name x",
@@ -83,40 +83,47 @@ func TestValidateGitRejects(t *testing.T) {
 
 func TestGitRuntimeGuards(t *testing.T) {
 	repo := newRepo(t)
+	run(t, repo, "branch", "release")
 	os.WriteFile(filepath.Join(repo, "dirty.txt"), []byte("x"), 0o644)
-	if _, err := Git(repo, split("switch -c feature/MID-1 main"), pol); err == nil || !strings.Contains(err.Error(), "uncommitted changes") {
+	if _, err := Git(repo, split("switch -c feature/MID-1 release"), pol); err == nil || !strings.Contains(err.Error(), "uncommitted changes") {
 		t.Fatalf("dirty switch: %v", err)
 	}
 	os.Remove(filepath.Join(repo, "dirty.txt"))
-	if out, err := Git(repo, split("switch -c feature/MID-1 main"), pol); err != nil {
+	if out, err := Git(repo, split("switch -c feature/MID-1 release"), pol); err != nil {
 		t.Fatalf("switch -c: %v\n%s", err, out)
 	}
 	if got := run(t, repo, "branch", "--show-current"); got != "feature/MID-1" {
 		t.Fatalf("current = %q", got)
 	}
-	if _, err := Git(repo, split("switch -c feature/MID-1 main"), pol); err == nil {
+	if _, err := Git(repo, split("switch -c feature/MID-1 release"), pol); err == nil {
 		t.Error("existing branch must refuse switch -c")
 	}
-	if _, err := Git(repo, split("merge --no-edit feature/MID-1"), pol); err == nil || !strings.Contains(err.Error(), "feature/MID-1-dev") {
+	if _, err := Git(repo, split("merge --no-edit feature/MID-1"), pol); err == nil || !strings.Contains(err.Error(), "base branch") {
 		t.Errorf("merge off the dev branch: %v", err)
 	}
 }
 
 func TestGitMergeAndPush(t *testing.T) {
 	repo := newRepo(t)
+	run(t, repo, "branch", "dev")
 	bare := withOrigin(t, repo)
 	run(t, repo, "switch", "-q", "-c", pol.Feature)
 	os.WriteFile(filepath.Join(repo, "f.txt"), []byte("f"), 0o644)
 	run(t, repo, "add", "-A")
 	run(t, repo, "commit", "-q", "-m", "work")
 	run(t, repo, "switch", "-q", "main")
-	if out, err := Git(repo, split("switch -c "+pol.Dev+" main"), pol); err != nil {
+	if out, err := Git(repo, split("switch -c "+pol.Dev+" dev"), pol); err != nil {
 		t.Fatalf("make dev: %v\n%s", err, out)
 	}
 	if out, err := Git(repo, split("merge --no-edit "+pol.Feature), pol); err != nil {
 		t.Fatalf("merge: %v\n%s", err, out)
 	}
-	if out, err := Git(repo, split("push -u origin "+pol.Dev), pol); err != nil {
+	if _, err := Git(repo, split("push -u origin "+pol.Dev), pol); err == nil {
+		t.Fatal("push of -dev must wait for PushReady")
+	}
+	ready := pol
+	ready.PushReady = true
+	if out, err := Git(repo, split("push -u origin "+pol.Dev), ready); err != nil {
 		t.Fatalf("push: %v\n%s", err, out)
 	}
 	if got := run(t, bare, "branch", "--list", pol.Dev); !strings.Contains(got, pol.Dev) {
@@ -145,6 +152,18 @@ func TestGHRules(t *testing.T) {
 			t.Errorf("%v should be rejected", bad)
 		}
 	}
+	oldKind := RemoteKind
+	defer func() { RemoteKind = oldKind }()
+	RemoteKind = func(string) string { return "other" }
+	if _, err := GH(t.TempDir(), good, pol); err == nil || !strings.Contains(err.Error(), "not on GitHub") {
+		t.Errorf("non-GitHub remote: %v", err)
+	}
+	RemoteKind = func(string) string { return "github" }
+	if _, err := GH(t.TempDir(), good, pol); err == nil || !strings.Contains(err.Error(), "integrated") {
+		t.Errorf("not integrated: %v", err)
+	}
+	pol := pol
+	pol.Integrated = true
 	t.Setenv("PATH", t.TempDir())
 	if _, err := GH(t.TempDir(), good, pol); err == nil || !strings.Contains(err.Error(), "gh is not installed") {
 		t.Errorf("without gh: %v", err)
