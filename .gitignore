@@ -8,3 +8,11 @@ backend/uploads/
 .env
 .superpowers/
 frontend/dist/
+
+# browser QA: evidence, saved login, runner (never commit)
+backend/qa/
+test-results/
+playwright-report/
+*.webm
+storageState*.json
+*.trace.zip
