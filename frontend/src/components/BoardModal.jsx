@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, baseName } from '../api'
 import { FolderIcon } from './Logo'
+import QAStackSection from './QAStackSection'
 
 // Create (no `initial`) or edit a board: name, short description and folders
 // picked through the native Finder dialog (the Go server opens it).
@@ -111,6 +112,8 @@ export default function BoardModal({ initial, onSaved, onClose }) {
             {picking ? 'Waiting for Finder…' : folders.length ? '+ Add Another Folder' : '+ Choose a Folder…'}
           </button>
         </div>
+
+        {initial && folders.length > 0 && <QAStackSection board={{ ...initial, folders }} />}
 
         {error && <p className="error">{error}</p>}
         <div className="modal-actions">

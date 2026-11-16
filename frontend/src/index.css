@@ -510,3 +510,18 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 .decision-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .decision-add { display: flex; gap: 8px; margin-top: 8px; }
 .decision-add input { flex: 1; min-width: 0; }
+
+/* Browser QA */
+.qa-stack > summary { cursor: pointer; }
+.qa-svc { display: grid; grid-template-columns: 1fr 1fr 2fr 80px 2fr auto; gap: 6px; margin-bottom: 6px; }
+.qa-svc input, .qa-svc select { min-width: 0; }
+.qa-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.qa-runs .qa-run { margin-bottom: 6px; }
+.qa-run-body { margin-top: 6px; display: grid; gap: 6px; }
+.qa-repos { margin: 0; padding-left: 18px; font-size: 12px; }
+.qa-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.qa-steps li { display: grid; gap: 4px; font-size: 12px; }
+.qa-steps img { width: 100%; border: 1px solid var(--border, #ccc); border-radius: 6px; display: block; }
+.qa-steps li.failed img { border-color: #c0392b; }
+.qa-err { white-space: pre-wrap; font-size: 11px; }
+@media (max-width: 640px) { .qa-svc { grid-template-columns: 1fr 1fr; } }

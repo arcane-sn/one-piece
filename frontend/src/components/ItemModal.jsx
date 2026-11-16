@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
 import FlowsSection from './FlowsSection'
+import QARunPanel from './QARunPanel'
 import RichEditor from './RichEditor'
 import { toast } from '../lib/toast'
 
@@ -153,7 +154,7 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
                 {running
                   ? <button type="button" onClick={() => runOrStop('stop')}><span className="spinner" aria-hidden="true" /> Working… Stop</button>
                   : <button type="button" className="primary" disabled={dirty || current.status === 'done'} onClick={() => runOrStop('run')}>Run with Claude</button>}
-                <p className="hint">{dirty ? 'Save your changes first.' : k === 'agent' ? 'Claude edits files in the board’s first folder. Needs an approved ticket.' : 'Claude checks this against the code. Run after all Agent Tasks are Done.'}</p>
+                <p className="hint">{dirty ? 'Save your changes first.' : k === 'agent' ? 'Claude edits files in the board’s first folder. Needs an approved ticket.' : 'Claude checks this against the code, or in a real browser when the board has a QA stack. Run after all Agent Tasks are Done.'}</p>
               </div>
             )}
             {current?.failure && (
@@ -168,6 +169,7 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
                 )}
               </div>
             )}
+            {current && k === 'qa' && <QARunPanel itemId={current.id} refreshKey={current.status + (current.log?.length ?? 0)} />}
             <div className="field review-side">
               <span>Claude Log</span>
               {current?.log?.length > 0

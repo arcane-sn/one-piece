@@ -35,6 +35,18 @@ Login, dashboard, kanban, review tiket oleh Claude (live log + approval gate), B
 - **Decision log**: yang kamu sepakati dengan Claude di Discuss disimpan Claude (`decision`) sebagai catatan bertanggal di tiket (bisa kamu tambah/hapus), dan dikirim di pesan pertama Discuss baru, Run, dan QA untuk tiket itu. Perubahan setelah integrasi (commit Run baru di repo yang sudah `merged_dev`/`pushed`/`pr_open`) mengembalikan repo ke `branched`, sehingga harus diintegrasikan lagi sebelum push.
 - **Run sadar-git**: bila tiket punya repo berstatus `branched`, Run menolak (409) jika repo tidak sedang di branch feature-nya, Claude hanya boleh menulis di repo terdaftar, dan tiap tugas Agent yang berhasil di-commit sendiri sebagai `{ident tugas}: {judul}`. Commit gagal (mis. hook) membuat tugas kembali ke To Do dan Run All berhenti. Perubahan yang belum di-commit di repo itu sebelum Run ikut masuk commit tugas pertama, jadi bersihkan dulu.
 
+## Browser QA dengan bukti screenshot
+
+QA Test Case di board yang punya **QA stack** dijalankan di browser sungguhan; board tanpa stack tetap QA read-only seperti biasa.
+
+1. Sekali saja: `cd backend && go run ./cmd/server qa-setup` (butuh `npm` dan jaringan; memasang Playwright dan Chromium di `backend/qa/runner`).
+2. Edit Board → **Browser QA stack**: Base URL, service yang dijalankan (folder, command, port, ready URL), dan **Allowed hosts**. Request ke host di luar daftar (selain localhost) diblokir proxy dan dicatat, jadi QA tidak bisa menyentuh production.
+3. **Log in...** membuka Chromium berkepala; kamu login sendiri (bot check aman) lalu menutup jendela. Login disimpan di `backend/qa/auth`, tidak pernah bisa dibaca Claude, dan dicek sebelum tiap run ("Login needed").
+4. Run QA: server menjalankan stack, Claude menulis satu spec Playwright per test case (tiap `qaStep` diakhiri screenshot), menjalankannya lewat subcommand `qa-run`, lalu membuka semua screenshot dan memberi verdict. Pass hanya bila run lulus **dan** screenshot cocok. Masalah lingkungan (login, port, spec rusak, host terblokir) menandai item **Blocked** tanpa [FIX] task; temuan produk membuat [FIX] task.
+5. Bukti per run (screenshot, trace, video, hasil JSON, branch + commit tiap repo) ada di `backend/qa/runs`, tampil di ItemModal, dan tidak pernah masuk git. Hanya satu run QA pada satu waktu; 10 run terakhir per item disimpan.
+
+Batas keamanan: Claude tidak punya shell (hanya `qa-run` dan `qa-blocked`), hanya bisa mengedit satu file spec, tidak bisa mengedit folder produk (di-backstop snapshot repo dan `sandbox-exec` di macOS), dan cookie/token disamarkan dari semua output. Test opt-in dengan CLI sungguhan: `ONE_PIECE_REAL_CLI=1` dan `ONE_PIECE_REAL_QA=<runner>`.
+
 ## Belum ada (slice berikutnya)
 
 Integrasi drawdb.
