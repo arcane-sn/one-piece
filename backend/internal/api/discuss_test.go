@@ -113,11 +113,17 @@ func TestDiscussOnlyInBusinessAndDone(t *testing.T) {
 	}
 
 	s.req(t, "POST", cp+"/move", map[string]any{"status": "agent", "position": 0}, ck)
-	if code, body := dSend(t, s, cp, ck, "x"); code != 409 || !strings.Contains(body, "Business or Done") {
-		t.Fatalf("agent column: %d %s", code, body)
+	for _, col := range []string{"agent", "qa", "draft"} {
+		s.req(t, "POST", cp+"/move", map[string]any{"status": col, "position": 0}, ck)
+		if code, body := dSend(t, s, cp, ck, "x"); code != 202 {
+			t.Fatalf("%s column: %d %s", col, code, body)
+		}
+		if v := dIdle(t, s, cp, ck); v.Stage != "assist" {
+			t.Errorf("stage in %s column = %q", col, v.Stage)
+		}
 	}
-	if v := dGet(t, s, cp, ck); v.Stage != "" {
-		t.Errorf("stage in agent column = %q", v.Stage)
+	if got := (*calls)[len(*calls)-1].System; !strings.Contains(got, "Stage: assist") {
+		t.Errorf("assist system prompt missing")
 	}
 	s.req(t, "POST", cp+"/move", map[string]any{"status": "done", "position": 0}, ck)
 	if code, body := dSend(t, s, cp, ck, "wrap up"); code != 202 {
@@ -126,7 +132,7 @@ func TestDiscussOnlyInBusinessAndDone(t *testing.T) {
 	if v := dIdle(t, s, cp, ck); v.Stage != "closeout" {
 		t.Errorf("stage = %q", v.Stage)
 	}
-	if got := (*calls)[2].System; !strings.Contains(got, "closeout") {
+	if got := (*calls)[len(*calls)-1].System; !strings.Contains(got, "closeout") {
 		t.Errorf("closeout system prompt missing")
 	}
 }
@@ -154,22 +160,22 @@ func TestDiscussPromptStages(t *testing.T) {
 	rows := []store.Branch{{Repo: repo, BaseBranch: "main", FeatureBranch: "feature/MID-7", DevBranch: "feature/MID-7-dev", Status: "branched"}}
 	const exe = "/tmp/one-piece-agent/op"
 
-	setup := discussPrompt(b, c, nil, exe, "setup", "start", true)
+	setup := discussPrompt(b, c, nil, "", exe, "setup", "start", true)
 	for _, want := range []string{"MID-7", "feature/", "dev", exe, "none yet", "start"} {
 		if !strings.Contains(setup, want) {
 			t.Errorf("setup prompt lacks %q:\n%s", want, setup)
 		}
 	}
-	closeout := discussPrompt(b, c, rows, exe, "closeout", "wrap up", true)
+	closeout := discussPrompt(b, c, rows, "", exe, "closeout", "wrap up", true)
 	for _, want := range []string{repo, "feature/MID-7-dev", "branched", "closeout"} {
 		if !strings.Contains(closeout, want) {
 			t.Errorf("closeout prompt lacks %q:\n%s", want, closeout)
 		}
 	}
-	if m := discussPrompt(b, c, rows, exe, "setup", "see @"+filepath.Base(master)+"/svc", true); !strings.Contains(m, repo) {
+	if m := discussPrompt(b, c, rows, "", exe, "setup", "see @"+filepath.Base(master)+"/svc", true); !strings.Contains(m, repo) {
 		t.Errorf("an @-mentioned repo must be named in the prompt")
 	}
-	resumed := discussPrompt(b, c, rows, exe, "setup", "next", false)
+	resumed := discussPrompt(b, c, rows, "", exe, "setup", "next", false)
 	if strings.Contains(resumed, "Ticket description") || !strings.Contains(resumed, "next") || !strings.Contains(resumed, "branched") {
 		t.Errorf("resumed prompt should carry the state, not the whole context:\n%s", resumed)
 	}
@@ -200,9 +206,27 @@ func TestDiscussPromptStages(t *testing.T) {
 		t.Error("done → closeout")
 	}
 	for _, other := range []string{"draft", "agent", "qa"} {
-		if _, ok := discussStage(other); ok {
-			t.Errorf("%s must not allow Discuss", other)
+		if st, ok := discussStage(other); !ok || st != "assist" {
+			t.Errorf("%s must be the general assistant, got %q", other, st)
 		}
+	}
+	for _, stage := range []string{"setup", "closeout", "assist"} {
+		sys := discussSystemPrompt(stage)
+		for _, want := range []string{"OP decision", "never resolve a conflict", "stash push"} {
+			if !strings.Contains(strings.ToLower(sys), strings.ToLower(want)) {
+				t.Errorf("%s prompt lacks %q", stage, want)
+			}
+		}
+	}
+	if sys := discussSystemPrompt("closeout"); !strings.Contains(sys, "push NOTHING") || !strings.Contains(sys, "remote-kind") || !strings.Contains(sys, "cherry-pick -x") {
+		t.Error("closeout must integrate everything before pushing, branch on remote kind, and cover cherry-pick")
+	}
+	dec := "Decision log (oldest first):\n- x (claude): release is release/2\n"
+	if m := discussPrompt(b, c, rows, dec, exe, "assist", "hi", true); !strings.Contains(m, "release/2") {
+		t.Error("a fresh session must carry the decision log")
+	}
+	if m := discussPrompt(b, c, rows, dec, exe, "assist", "hi", false); strings.Contains(m, "release/2") {
+		t.Error("a resumed session must not repeat the log")
 	}
 }
 

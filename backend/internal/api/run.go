@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -108,6 +109,9 @@ func (s *server) runnable(it store.Item, gate bool) (store.Card, store.Board, er
 	}
 	if fi, err := os.Stat(b.Folders[0]); err != nil || !fi.IsDir() {
 		return c, b, store.ConflictError{Msg: "Folder not found: " + b.Folders[0]}
+	}
+	if it.Kind == "agent" && s.discussRunning(c.ID) {
+		return c, b, store.ConflictError{Msg: "Claude is running git for this ticket in Discuss. Wait for it or stop it first."}
 	}
 	if it.Kind == "agent" { // Agent Tasks work in the ticket's branched repos, which must be on their feature branch
 		repos, err := s.ticketRepos(c.ID)
@@ -264,6 +268,9 @@ func (s *server) executeItem(ctx context.Context, it store.Item, c store.Card, b
 		fmt.Fprintf(&msg, "About the product: %s\n", b.Description)
 	}
 	fmt.Fprintf(&msg, "\nBusiness ticket: %s %s\n%s\n", c.Ident, c.Title, c.Description)
+	if blk := decisionBlock(s.st, c.ID); blk != "" {
+		msg.WriteString("\n" + blk)
+	}
 	if it.Kind == "qa" {
 		fmt.Fprintf(&msg, "\nYour QA Test Case: %s %s\n%s\n", it.Ident, it.Title, it.Body)
 		fmt.Fprintf(&msg, "\nProduct folders you may read:\n- %s\n", strings.Join(b.Folders, "\n- "))
@@ -334,7 +341,20 @@ func (s *server) executeItem(ctx context.Context, it store.Item, c store.Card, b
 			return runBlocked
 		}
 		if len(changed) > 0 {
-			logLine("Committed in " + strings.Join(changed, ", "))
+			names := make([]string, len(changed))
+			for i, p := range changed {
+				names[i] = filepath.Base(p)
+			}
+			logLine("Committed in " + strings.Join(names, ", "))
+			for _, r := range repos { // new commits after integration: the repo must be integrated again
+				for _, p := range changed {
+					if r.Repo == p && store.IntegratedStatus(r.Status) {
+						if err := s.st.RegressBranch(c.ID, r.Repo); err == nil {
+							logLine("New commits in " + filepath.Base(p) + ": integrate it again before pushing")
+						}
+					}
+				}
+			}
 		}
 	}
 	logLine("Done: " + shorten(final, 400))

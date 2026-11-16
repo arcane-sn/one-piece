@@ -12,8 +12,10 @@ import (
 	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
 
-// ticketRepos returns the ticket's Branching rows in status "branched": the repos an Agent Task
-// works in and commits to. Empty means Run behaves as it did before branching existed.
+// ticketRepos returns the ticket's Branching rows an Agent Task works in and commits to: every row that has a
+// feature branch (not planned, not blocked), including repos already integrated, because fixes after integration
+// are committed on the feature branch (the commit then sends the repo back to "branched").
+// Empty means Run behaves as it did before branching existed.
 func (s *server) ticketRepos(cardID int64) ([]store.Branch, error) {
 	all, err := s.st.ListBranches(cardID)
 	if err != nil {
@@ -21,7 +23,7 @@ func (s *server) ticketRepos(cardID int64) ([]store.Branch, error) {
 	}
 	var out []store.Branch
 	for _, r := range all {
-		if r.Status == "branched" {
+		if r.Status != "planned" && r.Status != "blocked" {
 			out = append(out, r)
 		}
 	}
@@ -87,7 +89,7 @@ func commitTask(repos []store.Branch, it store.Item) (changed []string, err erro
 		if _, err := repoGit(r.Repo, "commit", "-q", "-m", msg); err != nil {
 			return changed, fmt.Errorf("%s: %v", filepath.Base(r.Repo), err)
 		}
-		changed = append(changed, filepath.Base(r.Repo))
+		changed = append(changed, r.Repo)
 	}
 	return changed, nil
 }

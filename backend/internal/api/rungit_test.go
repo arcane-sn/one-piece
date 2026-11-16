@@ -291,3 +291,30 @@ func TestCommitRefusedWhenRepoLeftTheBranch(t *testing.T) {
 		t.Errorf("main must not get the commit, commits = %s", n)
 	}
 }
+
+// A fix committed after integration sends the repo back to "branched", so the push gate closes again.
+func TestFixAfterIntegrationReopensTheRepo(t *testing.T) {
+	g := gitRunFixture(t)
+	st := "pr_open"
+	url := "https://example.test/pr/1"
+	g.s.St.UpdateBranch(g.card.ID, g.repo, store.BranchPatch{Status: &st, PRURL: &url})
+	useAgent(t, func(_ context.Context, cwd string, _ []string, _, user string, _ func(string)) (string, error) {
+		writeInCwd(user, cwd)
+		return "ok", nil
+	})
+	_, ip := g.addTask(t, "[FIX] small bug")
+	if resp, body := g.s.req(t, "POST", ip+"/run", map[string]any{}, g.ck); resp.StatusCode != 202 {
+		t.Fatalf("run on an integrated repo: %d %s", resp.StatusCode, body)
+	}
+	done := waitItem(t, g.s, g.cp, ip, g.ck, "done")
+	rows, _ := g.s.St.ListBranches(g.card.ID)
+	if rows[0].Status != "branched" || rows[0].PRURL != url || !strings.Contains(rows[0].Note, "after integration") {
+		t.Errorf("row = %+v", rows[0])
+	}
+	if ok, _ := g.s.St.PushReady(g.card.ID); ok {
+		t.Error("push gate must close after new commits")
+	}
+	if !strings.Contains(strings.Join(done.Log, "\n"), "integrate it again") {
+		t.Errorf("log = %v", done.Log)
+	}
+}
