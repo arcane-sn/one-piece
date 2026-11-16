@@ -20,7 +20,9 @@ export const test = base.extend({
       let u: URL
       try { u = new URL(route.request().url()) } catch { return route.continue() }
       if (u.protocol !== 'http:' && u.protocol !== 'https:' && u.protocol !== 'ws:' && u.protocol !== 'wss:') return route.continue()
-      return hostAllowed(u.hostname) ? route.continue() : route.abort('blockedbyclient')
+      if (hostAllowed(u.hostname)) return route.continue()
+      try { fs.appendFileSync(path.join(ATTEMPT, 'blocked-routes.txt'), u.hostname.toLowerCase() + '\n') } catch {}
+      return route.abort('blockedbyclient')
     })
     await use(page)
   },

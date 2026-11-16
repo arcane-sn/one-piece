@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -121,7 +122,7 @@ func runQACLI(args []string, getenv func(string) string, st *store.Store, boardI
 	_, _, perr := paths.RunPlaywright(context.Background(), cfgFile, attemptDir, paths.AttemptEnv(attemptDir, cfg), board.Folders)
 	qa.CollectArtifacts(attemptDir)
 
-	blocked := proxy.Blocked()
+	blocked := mergeRouteBlocked(proxy.Blocked(), filepath.Join(attemptDir, "blocked-routes.txt"))
 	writeJSONFile(filepath.Join(attemptDir, qa.BlockedFile), blocked)
 	report, _ := os.ReadFile(filepath.Join(attemptDir, qa.ResultFile))
 	stepsRaw, _ := os.ReadFile(filepath.Join(attemptDir, qa.StepsFile))
@@ -213,3 +214,23 @@ func writeJSONFile(path string, v any) {
 }
 
 var jsonMarshal = json.Marshal
+
+// mergeRouteBlocked adds the hosts the page-side route fixture aborted (it acts before the proxy sees them).
+func mergeRouteBlocked(hosts []string, file string) []string {
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return hosts
+	}
+	seen := map[string]bool{}
+	for _, h := range hosts {
+		seen[h] = true
+	}
+	for _, h := range strings.Fields(string(b)) {
+		if !seen[h] {
+			seen[h] = true
+			hosts = append(hosts, h)
+		}
+	}
+	sort.Strings(hosts)
+	return hosts
+}

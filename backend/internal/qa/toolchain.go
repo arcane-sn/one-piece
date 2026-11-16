@@ -78,7 +78,7 @@ func (p Paths) WriteRunnerFiles() error {
 	return nil
 }
 
-// PrepareWorkspace creates a board's workspace: helpers.ts (not editable by Claude) and a node_modules link
+// PrepareWorkspace creates a board's workspace: specs/helpers.ts (read-only; Claude may edit only its one spec) and a node_modules link
 // to the runner, so specs resolve @playwright/test. The specs folder is created empty.
 func (p Paths) PrepareWorkspace(boardID int64) error {
 	ws := p.Workspace(boardID)
@@ -86,10 +86,10 @@ func (p Paths) PrepareWorkspace(boardID int64) error {
 		return err
 	}
 	b, _ := assets.ReadFile("assets/helpers.ts")
-	if err := os.WriteFile(filepath.Join(ws, "helpers.ts"), b, 0o444); err != nil {
+	if err := os.WriteFile(filepath.Join(p.Specs(boardID), "helpers.ts"), b, 0o444); err != nil {
 		// a read-only copy from an earlier run: replace it
-		os.Remove(filepath.Join(ws, "helpers.ts"))
-		if err := os.WriteFile(filepath.Join(ws, "helpers.ts"), b, 0o444); err != nil {
+		os.Remove(filepath.Join(p.Specs(boardID), "helpers.ts"))
+		if err := os.WriteFile(filepath.Join(p.Specs(boardID), "helpers.ts"), b, 0o444); err != nil {
 			return err
 		}
 	}
@@ -187,6 +187,9 @@ func SandboxProfile(attemptDir string, productFolders []string) string {
 	b.WriteString("(version 1)\n(allow default)\n(deny file-write*)\n")
 	b.WriteString(fmt.Sprintf("(allow file-write* (subpath %q) (subpath \"/private/var/folders\") (subpath \"/private/tmp\") (subpath \"/dev\"))\n", attemptDir))
 	for _, f := range productFolders {
+		if r, err := filepath.EvalSymlinks(f); err == nil { // seatbelt matches resolved paths
+			f = r
+		}
 		b.WriteString(fmt.Sprintf("(deny file-write* (subpath %q))\n", f))
 	}
 	return b.String()

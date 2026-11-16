@@ -260,7 +260,7 @@ func (s *server) executeQA(ctx context.Context, it store.Item, c store.Card, b s
 	}
 	fmt.Fprintf(&msg, "\nYour QA Test Case: %s %s\n%s\n", it.Ident, it.Title, it.Body)
 	fmt.Fprintf(&msg, "\nBase URL (the QA stack is already running and logged in): %s\n", cfg.BaseURL)
-	fmt.Fprintf(&msg, "The one spec file you may write: %s\nHelpers (read first): %s\n", p.SpecPath(b.ID, it.Ident), filepath.Join(p.Workspace(b.ID), "helpers.ts"))
+	fmt.Fprintf(&msg, "The one spec file you may write: %s\nHelpers (read first): %s\n", p.SpecPath(b.ID, it.Ident), filepath.Join(p.Specs(b.ID), "helpers.ts"))
 	fmt.Fprintf(&msg, "Commands: %s qa-run (no arguments) | %s qa-blocked <reason>\nEvidence of this run lives under: %s\n", exe, exe, runDir)
 	msg.WriteString("\nRepos under test (the code that is running):\n")
 	for _, r := range before {

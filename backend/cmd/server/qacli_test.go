@@ -12,7 +12,7 @@ import (
 	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
 
-const okSpec = `import { test, expect } from './helpers'
+const okSpec = `import { test, expect, qaStep } from './helpers'
 test('x', async ({ page }) => {
   await qaStep(page, 'Open', async () => { await page.goto('/'); await expect(page).toHaveTitle(/x/) })
 })`
