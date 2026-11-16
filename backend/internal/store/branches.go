@@ -11,7 +11,13 @@ import (
 var prefixRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*/$`)
 
 // BranchStatuses are the states of one repo's branching for a ticket.
-var BranchStatuses = []string{"planned", "branched", "merged_dev", "pr_open", "blocked"}
+var BranchStatuses = []string{"planned", "branched", "merged_dev", "pushed", "pr_open", "blocked"}
+
+// BranchModes are the ways a feature branch is integrated into the -dev branch.
+var BranchModes = []string{"merge", "cherry-pick"}
+
+// IntegratedStatus reports whether a repo's feature is already integrated into its -dev branch.
+func IntegratedStatus(s string) bool { return s == "merged_dev" || s == "pushed" || s == "pr_open" }
 
 // Branch is one repo's branching plan for a ticket (the owner's Discuss session decides it).
 type Branch struct {
@@ -24,18 +30,20 @@ type Branch struct {
 	Status        string `json:"status"`
 	PRURL         string `json:"prUrl"`
 	Note          string `json:"note"`
+	Mode          string `json:"mode"`   // merge | cherry-pick
+	Picked        int    `json:"picked"` // feature commits already cherry-picked
 }
 
 // BranchPatch changes the given fields only.
 type BranchPatch struct {
-	BaseBranch, FeatureBranch, DevBranch, Status, PRURL, Note *string
+	BaseBranch, FeatureBranch, DevBranch, Status, PRURL, Note, Mode *string
 }
 
-const branchCols = `id,card_id,repo,base_branch,feature_branch,dev_branch,status,pr_url,note`
+const branchCols = `id,card_id,repo,base_branch,feature_branch,dev_branch,status,pr_url,note,mode,(SELECT COUNT(*) FROM card_picks p WHERE p.card_id=card_branches.card_id AND p.repo=card_branches.repo)`
 
 func scanBranch(sc interface{ Scan(...any) error }) (Branch, error) {
 	var b Branch
-	err := sc.Scan(&b.ID, &b.CardID, &b.Repo, &b.BaseBranch, &b.FeatureBranch, &b.DevBranch, &b.Status, &b.PRURL, &b.Note)
+	err := sc.Scan(&b.ID, &b.CardID, &b.Repo, &b.BaseBranch, &b.FeatureBranch, &b.DevBranch, &b.Status, &b.PRURL, &b.Note, &b.Mode, &b.Picked)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Branch{}, ErrNotFound
 	}
@@ -144,6 +152,16 @@ func (s *Store) UpdateBranch(cardID int64, repo string, f BranchPatch) (Branch, 
 		}
 		cur.Status = *f.Status
 	}
+	if f.Mode != nil {
+		ok := false
+		for _, v := range BranchModes {
+			ok = ok || v == *f.Mode
+		}
+		if !ok {
+			return Branch{}, ValidationError{"mode must be merge or cherry-pick"}
+		}
+		cur.Mode = *f.Mode
+	}
 	if f.PRURL != nil {
 		cur.PRURL = *f.PRURL
 	}
@@ -153,12 +171,13 @@ func (s *Store) UpdateBranch(cardID int64, repo string, f BranchPatch) (Branch, 
 	if len(cur.PRURL) > 500 || len(cur.Note) > 2000 {
 		return Branch{}, ValidationError{"pr url or note is too long"}
 	}
-	_, err = s.DB.Exec(`UPDATE card_branches SET base_branch=?,feature_branch=?,dev_branch=?,status=?,pr_url=?,note=? WHERE id=?`,
-		cur.BaseBranch, cur.FeatureBranch, cur.DevBranch, cur.Status, cur.PRURL, cur.Note, cur.ID)
+	_, err = s.DB.Exec(`UPDATE card_branches SET base_branch=?,feature_branch=?,dev_branch=?,status=?,pr_url=?,note=?,mode=? WHERE id=?`,
+		cur.BaseBranch, cur.FeatureBranch, cur.DevBranch, cur.Status, cur.PRURL, cur.Note, cur.Mode, cur.ID)
 	return cur, err
 }
 
 func (s *Store) DeleteBranch(cardID int64, repo string) error {
+	s.DB.Exec(`DELETE FROM card_picks WHERE card_id=? AND repo=?`, cardID, repo)
 	res, err := s.DB.Exec(`DELETE FROM card_branches WHERE card_id=? AND repo=?`, cardID, repo)
 	if err != nil {
 		return err
