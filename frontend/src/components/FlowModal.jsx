@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
 import { build, hl, parse } from '../lib/swimlanes'
+import { confirmDialog } from '../lib/confirm'
 
 const SAMPLE = `title: Sign In
 autonumber
@@ -38,8 +39,8 @@ export default function FlowModal({ createPath, flow, onSaved, onDeleted, onClos
   )
 
   const dirty = title !== (flow?.title ?? '') || source !== (flow?.source ?? SAMPLE)
-  const close = () => {
-    if (dirty && !window.confirm('Discard unsaved changes?')) return
+  const close = async () => {
+    if (dirty && !(await confirmDialog({ title: 'Discard unsaved changes?', message: 'Your edits to this flow have not been saved.', confirmLabel: 'Discard', cancelLabel: 'Keep Editing', danger: true }))) return
     onClose()
   }
 
@@ -67,7 +68,7 @@ export default function FlowModal({ createPath, flow, onSaved, onDeleted, onClos
   }
 
   async function remove() {
-    if (!window.confirm(`Delete "${flow.title}"?`)) return
+    if (!(await confirmDialog({ title: 'Delete this flow?', message: `"${flow.title}" will be deleted. This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return
     setBusy(true)
     try {
       await api(`/api/flows/${flow.id}`, { method: 'DELETE' })

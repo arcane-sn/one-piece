@@ -21,6 +21,24 @@ func (s *server) listCards(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	s.mu.Lock()
+	ids := make([]int64, 0, len(s.runs))
+	for id := range s.runs {
+		ids = append(ids, id)
+	}
+	chains := map[int64]bool{}
+	for id := range s.chains {
+		chains[id] = true
+	}
+	s.mu.Unlock()
+	busy, err := s.st.CardIDsOfItems(ids)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	for i := range cs {
+		cs[i].Running = busy[cs[i].ID] || chains[cs[i].ID]
+	}
 	writeJSON(w, http.StatusOK, cs)
 }
 

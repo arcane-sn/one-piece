@@ -268,6 +268,12 @@ func (s *Store) AddFixTask(qa Item, issue, desc string) (Item, bool, error) {
 	body := "Test case QA gagal: " + qa.Title + "\n\n"
 	if earlier > 0 {
 		body += "Perbaikan sebelumnya belum berhasil: test case ini masih gagal.\n\n"
+		if tried := s.earlierFixSummaries(qa.ID); tried != "" {
+			body += "Yang sudah dicoba dan TIDAK cukup (jangan diulang, cari penyebab lain):\n" + tried + "\n"
+		}
+	}
+	if others := s.otherFailures(qa); others != "" {
+		body += "Test case lain di tiket ini yang juga sedang gagal (cek apakah akar masalahnya sama dan perbaiki sekalian):\n" + others + "\n"
 	}
 	body += "Issue: " + issue + "\n\nDesc: " + desc + "\n\nLangkah dan hasil yang diharapkan:\n" + qa.Body +
 		"\n\nPerbaiki kodenya supaya test case ini lolos."
@@ -289,4 +295,45 @@ func (s *Store) AddFixTask(qa Item, issue, desc string) (Item, bool, error) {
 	}
 	it.FixFor = qa.ID
 	return it, true, tx.Commit()
+}
+
+// earlierFixSummaries lists what previous [FIX] tasks for a QA item reported doing (their last "Done:" log line).
+func (s *Store) earlierFixSummaries(qaID int64) string {
+	rows, err := s.DB.Query(`SELECT ident,log FROM card_items WHERE kind='agent' AND fix_for=? ORDER BY id`, qaID)
+	if err != nil {
+		return ""
+	}
+	defer rows.Close()
+	var b strings.Builder
+	for rows.Next() {
+		var ident, raw string
+		var log []string
+		if rows.Scan(&ident, &raw) != nil || json.Unmarshal([]byte(raw), &log) != nil {
+			continue
+		}
+		for i := len(log) - 1; i >= 0; i-- {
+			if strings.HasPrefix(log[i], "Done:") {
+				b.WriteString("- " + ident + " " + log[i] + "\n")
+				break
+			}
+		}
+	}
+	return b.String()
+}
+
+// otherFailures lists the issues of the card's other QA items that are failing right now.
+func (s *Store) otherFailures(qa Item) string {
+	rows, err := s.DB.Query(`SELECT ident,failure FROM card_items WHERE card_id=? AND kind='qa' AND id!=? AND failure!='' AND superseded=0 ORDER BY id`, qa.CardID, qa.ID)
+	if err != nil {
+		return ""
+	}
+	defer rows.Close()
+	var b strings.Builder
+	for rows.Next() {
+		var ident, failure string
+		if rows.Scan(&ident, &failure) == nil {
+			b.WriteString("- " + ident + ": " + failure + "\n")
+		}
+	}
+	return b.String()
 }

@@ -8,7 +8,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -19,6 +21,7 @@ const runSystemPrompt = `You are the implementing engineer on one Agent Task of 
 Work in the current directory (the product's main folder); other product folders may be added as extra directories.
 Do only this task. Do not touch anything the task does not need, do not commit, and do not run shell commands.
 Read the relevant code first, follow the existing style, then make the edits.
+For a [FIX] task (a QA test case failed): fix the root cause, not the symptom. Search the whole product for every place the same problem lives (feature flags such as USE_MOCK, hard-coded or mock data, a missing route or call), fix all of them, and do not repeat what earlier attempts listed in the task already tried. Before finishing, re-read your edits against the test case's steps and expected result.
 Your final message is a short summary (2-4 sentences) of what you changed and anything left undone. Write in the same language as the task.`
 
 const qaSystemPrompt = `You are a QA engineer checking one test case against the implemented code.
@@ -27,6 +30,17 @@ Check the test case's steps and expected result against what the code does now.
 Your final message must be ONLY one JSON object and nothing else:
 {"result":"pass"|"fail","issue":"one sentence (max 140 characters) naming what is wrong; empty with pass","desc":"with fail: what the code does now, what the test case expects, and the files and functions involved, so a developer can fix it; with pass: one or two sentences of evidence"}
 Use "pass" only when the code clearly satisfies the expected result; otherwise "fail". Write in the same language as the test case.`
+
+// notify shows a macOS notification (the server runs on the user's Mac). Title and text go
+// in as argv, never into the script, so nothing in them is interpreted. A variable so tests stub it.
+var notify = func(title, text string) {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	exec.Command("osascript",
+		"-e", "on run a", "-e", "display notification (item 2 of a) with title (item 1 of a)", "-e", "end run",
+		title, text).Start() //nolint:errcheck // best effort
+}
 
 // agentRun runs `claude -p` with edit tools in the product's first folder (cwd) and
 // the remaining folders as extra directories. It is a variable so tests can stub it.
@@ -226,9 +240,14 @@ func (s *server) runAll(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]int{"queued": len(todo)})
 }
 
-// POST /api/cards/{id}/stop-all → cancel the chain and the task currently running.
+// POST /api/cards/{id}/stop-all → cancel the chain and every task of the ticket currently running.
 func (s *server) stopAll(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	items, err := s.st.ListItems(id)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -236,6 +255,11 @@ func (s *server) stopAll(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	if cancel, ok := s.chains[id]; ok {
 		cancel()
+	}
+	for _, it := range items { // a task started on its own has no chain
+		if cancel, ok := s.runs[it.ID]; ok {
+			cancel()
+		}
 	}
 	s.mu.Unlock()
 	w.WriteHeader(http.StatusNoContent)
@@ -262,6 +286,16 @@ const (
 // is judged by reading the code.
 func (s *server) executeItem(ctx context.Context, it store.Item, c store.Card, b store.Board) runOutcome {
 	defer s.finishRun(it.ID)
+	defer func() { // macOS notification; a run the user stopped stays quiet
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return
+		}
+		verdict := "needs attention"
+		if n, err := s.st.GetItem(it.ID); err == nil && n.Status == "done" {
+			verdict = "done"
+		}
+		notify(it.Ident+" "+verdict, it.Title)
+	}()
 	if it.Kind == "qa" { // a board with a QA stack runs the case in a real browser; any other board reads code (B11)
 		if cfg, err := s.st.GetQAConfig(b.ID); err == nil && cfg.Configured() {
 			return s.executeQA(ctx, it, c, b, cfg)

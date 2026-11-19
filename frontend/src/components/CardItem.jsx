@@ -6,16 +6,17 @@ const plain = (md) => md.replace(/```[\s\S]*?```/g, ' ').replace(/!\[[^\]]*\]\([
 // A draggable kanban card; click opens the ticket modal.
 export default function CardItem({ card, onOpen, onDropOn }) {
   const generating = useJobs().busyCards.has(card.id)
+  const working = generating || card.running // Claude job, or an Agent/QA task being run
   return (
     <div
-      className="kcard"
+      className={`kcard${working ? ' running' : ''}`}
       draggable
       onDragStart={(e) => e.dataTransfer.setData('text/plain', String(card.id))}
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDropOn}
       onClick={() => onOpen(card)}
     >
-      <div className="kcard-title">{card.ident && <span className="ident">{card.ident}</span>}{card.title}{generating && <span className="spinner" title="Claude is generating" aria-label="Claude is generating" style={{ marginLeft: 6 }} />}</div>
+      <div className="kcard-title">{card.ident && <span className="ident">{card.ident}</span>}{card.title}{working && <span className="spinner" title="Claude is working" aria-label="Claude is working" />}</div>
       {card.approved && <span className="approved-chip">Approved ✓</span>}
       {plain(card.description) && <div className="kcard-desc">{plain(card.description)}</div>}
       {card.deadline && (

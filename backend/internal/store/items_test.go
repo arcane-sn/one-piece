@@ -1,6 +1,9 @@
 package store
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestItemsCRUDDoesNotTouchContentVersion(t *testing.T) {
 	s, c := newCard(t)
@@ -168,5 +171,35 @@ func TestSupersedeOnlyStrikesToDo(t *testing.T) {
 	}
 	if _, err := s.SetSuperseded(9999, true); err != ErrNotFound {
 		t.Fatalf("missing: %v", err)
+	}
+}
+
+func TestFixTaskCarriesWhatWasTriedAndOtherFailures(t *testing.T) {
+	s, c := newCard(t)
+	q1, _ := s.CreateItem(c.ID, "qa", "q1", "steps")
+	q2, _ := s.CreateItem(c.ID, "qa", "q2", "")
+	s.SetItemFailure(q2.ID, "USE_MOCK masih true", "d")
+	fix1, _, _ := s.AddFixTask(q1, "i", "d")
+	s.AppendItemLog(fix1.ID, "Done: ubah warna tombol")
+	s.SetItemStatus(fix1.ID, "done")
+	fix2, made, err := s.AddFixTask(q1, "i2", "d2")
+	if err != nil || !made {
+		t.Fatalf("second fix = %+v %v %v", fix2, made, err)
+	}
+	for _, want := range []string{"ubah warna tombol", "USE_MOCK masih true", c.Ident + "-QA2"} {
+		if !strings.Contains(fix2.Body, want) {
+			t.Errorf("fix body lacks %q:\n%s", want, fix2.Body)
+		}
+	}
+}
+
+func TestCardIDsOfItems(t *testing.T) {
+	s, c := newCard(t)
+	it, _ := s.CreateItem(c.ID, "agent", "T", "")
+	if got, err := s.CardIDsOfItems(nil); err != nil || len(got) != 0 {
+		t.Fatalf("empty = %v, %v", got, err)
+	}
+	if got, err := s.CardIDsOfItems([]int64{it.ID, 9999}); err != nil || !got[c.ID] || len(got) != 1 {
+		t.Fatalf("got %v, %v", got, err)
 	}
 }

@@ -4,6 +4,7 @@ import { api } from '../api'
 import MentionTextarea from './MentionTextarea'
 import { toast } from '../lib/toast'
 import { refreshJobs } from '../lib/jobs'
+import { confirmDialog } from '../lib/confirm'
 
 const NOTE = { stopped: 'Stopped', failed: 'Failed' }
 const VERDICT = { pass: ['pass', 'Passed'], needs_work: ['work', 'Needs Work'] }
@@ -71,7 +72,7 @@ export default function ReviewChatModal({ card, boardId, onTurnDone, onCardChang
   }
 
   async function undo(ref) {
-    if (!window.confirm('Go back to the ticket text from before this change?')) return
+    if (!(await confirmDialog({ title: 'Undo this change?', message: 'The ticket text goes back to what it was before this change.', confirmLabel: 'Undo' }))) return
     try {
       const next = await api(`/api/cards/${card.id}/revisions/${ref}/restore`, { method: 'POST', body: {} })
       onCardChanged?.(next)
@@ -81,8 +82,9 @@ export default function ReviewChatModal({ card, boardId, onTurnDone, onCardChang
     }
   }
 
-  const newSession = () =>
-    window.confirm('Start a new session? The chat stays; Claude just starts fresh.') && act('/new')
+  const newSession = async () => {
+    if (await confirmDialog({ title: 'Start a new session?', message: 'The chat stays; Claude just starts fresh.', confirmLabel: 'New Session' })) act('/new')
+  }
 
   const running = !!view?.running
   const available = view?.available

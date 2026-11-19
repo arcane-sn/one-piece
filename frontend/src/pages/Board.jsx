@@ -36,8 +36,24 @@ export default function Board({ reloadBoards }) {
   }, [id])
   useEffect(() => { load() }, [load])
 
+  // Agent/QA runs happen on the server, from the ticket modal or anywhere else: keep each card's
+  // `running` flag fresh (poll + a kick right after Run/Stop). Only that flag is merged, so a poll
+  // never overwrites a move or edit in progress.
+  useEffect(() => {
+    const sync = () => {
+      if (document.hidden) return
+      api(`/api/boards/${id}/cards`).then((fresh) => {
+        const run = new Map(fresh.map((c) => [c.id, c.running]))
+        setCards((cs) => (cs.some((c) => !!run.get(c.id) !== !!c.running) ? cs.map((c) => ({ ...c, running: !!run.get(c.id) })) : cs))
+      }).catch(() => {})
+    }
+    const t = setInterval(sync, 3000)
+    window.addEventListener('op-cards-refresh', sync)
+    return () => { clearInterval(t); window.removeEventListener('op-cards-refresh', sync) }
+  }, [id])
+
   const upsert = (card) => {
-    setCards((cs) => (cs.some((x) => x.id === card.id) ? cs.map((x) => (x.id === card.id ? card : x)) : [...cs, card]))
+    setCards((cs) => (cs.some((x) => x.id === card.id) ? cs.map((x) => (x.id === card.id ? { ...card, running: x.running } : x)) : [...cs, card]))
     reloadBoards()
   }
   const removed = (card) => {

@@ -10,6 +10,7 @@ import { useJobs } from '../lib/jobs'
 import RichEditor from './RichEditor'
 import ReviewChatModal from './ReviewChatModal'
 import { ReviewSide, useReview } from './ReviewPanel'
+import { confirmDialog } from '../lib/confirm'
 
 const STATUS_LABEL = { draft: 'Draft', business: 'Business', agent: 'Agent', qa: 'QA', done: 'Done' }
 
@@ -42,10 +43,14 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
     description !== (current?.description ?? '') ||
     deadline !== (current?.deadline ?? '')
 
-  const requestClose = useCallback(() => {
-    if (dirty && !window.confirm('Discard unsaved changes?')) return
+  const requestClose = useCallback(async () => {
+    if (dirty) {
+      const changed = [title !== (current?.title ?? '') && 'Title', description !== (current?.description ?? '') && 'Description', deadline !== (current?.deadline ?? '') && 'Deadline'].filter(Boolean)
+      const ok = await confirmDialog({ title: 'Discard unsaved changes?', message: `${changed.join(', ')} ${changed.length > 1 ? 'have' : 'has'} not been saved. If you close now, ${changed.length > 1 ? 'those edits are' : 'that edit is'} lost.`, confirmLabel: 'Discard', cancelLabel: 'Keep Editing', danger: true })
+      if (!ok) return
+    }
     onClose()
-  }, [dirty, onClose])
+  }, [dirty, onClose, title, description, deadline, current])
 
   useEffect(() => {
     if (!card) titleRef.current?.focus()
@@ -78,7 +83,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
   }
 
   async function remove() {
-    if (!window.confirm(`Delete "${current.title}"?`)) return
+    if (!(await confirmDialog({ title: 'Delete this ticket?', message: `"${current.title}" and its tasks, flows and notes will be deleted. This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return
     setBusy(true)
     setError('')
     try {

@@ -16,3 +16,4 @@ playwright-report/
 *.webm
 storageState*.json
 *.trace.zip
+.run/

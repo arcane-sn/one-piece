@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { api } from '../api'
 import MentionTextarea from './MentionTextarea'
 import { toast } from '../lib/toast'
+import { confirmDialog } from '../lib/confirm'
 
 const NOTE = { stopped: 'Stopped', failed: 'Failed' }
 const STAGE = { setup: 'Setting up branches', closeout: 'Closing out: integrate every repo, then push and open pull requests', assist: 'Git assistant for this ticket' }
@@ -64,8 +65,9 @@ export default function DiscussModal({ card, boardId, onTurnDone, onClose }) {
     if (await act('/messages', { text: t })) setText('')
   }
 
-  const newSession = () =>
-    window.confirm('Start a new session? The chat and the Branching list stay; Claude just starts fresh.') && act('/new')
+  const newSession = async () => {
+    if (await confirmDialog({ title: 'Start a new session?', message: 'The chat and the Branching list stay; Claude just starts fresh.', confirmLabel: 'New Session' })) act('/new')
+  }
 
   const running = !!view?.running
   const stage = view?.stage

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import ItemModal from './ItemModal'
 import { toast } from '../lib/toast'
-import { useJob } from '../lib/jobs'
+import { useJob, refreshCards } from '../lib/jobs'
 
 const KINDS = [
   ['agent', 'Agent Tasks', 'Add Task'],
@@ -44,6 +44,7 @@ export default function ItemsSection({ card, onModal }) {
     setError('')
     try {
       await api(`/api/cards/${card.id}/${action}`, { method: 'POST', body: { kind } })
+      refreshCards()
       await load()
     } catch (err) {
       toast(err.message)
@@ -129,9 +130,6 @@ export default function ItemsSection({ card, onModal }) {
                   <button type="button" onClick={() => open(i)}>
                     <span className="item-title">{i.ident && <span className="ident">{i.ident}</span>}{i.title}</span>
                     <span className="item-tags">
-                      {i.version > 0 && i.version < card.contentVersion && (
-                        <span className="item-status stale" title="The ticket changed after Claude generated this. Regenerate to refresh.">Outdated</span>
-                      )}
                       {i.kind === 'qa' && i.failure && i.status === 'todo' && (
                         <span className="item-status stale" title={i.failure}>Failed</span>
                       )}
@@ -153,9 +151,6 @@ export default function ItemsSection({ card, onModal }) {
                   <button type="button" onClick={() => open(i)}>
                     <span className="item-title">{i.ident && <span className="ident">{i.ident}</span>}{i.title}</span>
                     <span className="item-tags">
-                      {i.version > 0 && i.version < card.contentVersion && (
-                        <span className="item-status stale" title="The ticket changed after Claude generated this. Regenerate to refresh.">Outdated</span>
-                      )}
                       {i.kind === 'qa' && i.failure && i.status === 'todo' && (
                         <span className="item-status stale" title={i.failure}>Failed</span>
                       )}

@@ -8,10 +8,12 @@ AI workflow pribadi untuk membuat product. Slice 1: login + dashboard + kanban b
 # sekali saja: buat satu-satunya user (password diminta tanpa echo, min. 8 karakter)
 cd backend && go run ./cmd/server create-user <username> && cd ..
 
-./start.sh        # http://127.0.0.1:5300
+./start.sh        # (re)start di background: http://127.0.0.1:5300
+./start.sh stop   # matikan
+./start.sh logs   # lihat log
 ```
 
-Butuh Go ≥ 1.26 (syarat dependency sqlite) dan Node. `start.sh` membangun frontend bila `frontend/dist` belum ada.
+Butuh Go ≥ 1.26 (syarat dependency sqlite) dan Node. `start.sh` membangun ulang frontend/backend bila ada perubahan dan mematikan instance lama, jadi cukup jalankan lagi setelah mengubah kode.
 
 Development: jalankan backend (`cd backend && go run ./cmd/server`) dan frontend (`cd frontend && npm run dev`, buka http://127.0.0.1:5301). Tes: `cd backend && go test ./...`.
 

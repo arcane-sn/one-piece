@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import MentionTextarea from './MentionTextarea'
 import RichEditor from './RichEditor'
+import { confirmDialog } from '../lib/confirm'
 
 const NOTE = { stopped: 'Stopped', failed: 'Failed' }
 
@@ -65,11 +66,12 @@ export default function BrainstormModal({ boardId, onClose, onCardsChanged }) {
     if (await act('/brainstorm/messages', { text: t })) setText('')
   }
 
-  const newConversation = () =>
-    window.confirm('Start a new conversation? The chat history and the plan stay; Claude just starts fresh.') &&
-    act('/brainstorm/new')
-  const restore = (v) =>
-    window.confirm(`Restore plan version ${v}? It becomes the newest version; nothing is deleted.`) && act(`/plan/${v}/restore`)
+  const newConversation = async () => {
+    if (await confirmDialog({ title: 'Start a new conversation?', message: 'The chat history and the plan stay; Claude just starts fresh.', confirmLabel: 'New Conversation' })) act('/brainstorm/new')
+  }
+  const restore = async (v) => {
+    if (await confirmDialog({ title: `Restore plan version ${v}?`, message: 'It becomes the newest version; nothing is deleted.', confirmLabel: 'Restore' })) act(`/plan/${v}/restore`)
+  }
 
   const running = !!view?.running
   const latest = view?.plan?.version

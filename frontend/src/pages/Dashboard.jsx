@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, baseName } from '../api'
 import { FolderIcon } from '../components/Logo'
 import { totalCards } from '../components/Sidebar'
+import { confirmDialog } from '../lib/confirm'
 
 const STATUSES = ['draft', 'business', 'agent', 'qa', 'done']
 
@@ -16,7 +17,7 @@ export default function Dashboard({ user, boards, reload, onNew, onEdit }) {
   const [error, setError] = useState('')
 
   async function remove(b) {
-    if (!window.confirm(`Delete board "${b.name}" and all its cards?`)) return
+    if (!(await confirmDialog({ title: 'Delete this board?', message: `"${b.name}" and all its tickets, tasks and notes will be deleted. This cannot be undone.`, confirmLabel: 'Delete Board', danger: true }))) return
     try {
       await api(`/api/boards/${b.id}`, { method: 'DELETE' })
       reload()

@@ -8,6 +8,7 @@ import { JobsProvider } from './lib/jobs'
 import Board from './pages/Board'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
+import ConfirmHost from './components/ConfirmHost'
 
 function Shell({ user, onLogout }) {
   const [boards, setBoards] = useState(null) // null = loading
@@ -39,6 +40,7 @@ function Shell({ user, onLogout }) {
         </Routes>
       </main>
       <Toaster />
+      <ConfirmHost />
       {modal && (
         <BoardModal key={modal === 'new' ? 'new' : modal.id} initial={modal === 'new' ? undefined : modal} onSaved={saved} onClose={closeModal} />
       )}

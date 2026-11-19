@@ -5,6 +5,8 @@ import FlowsSection from './FlowsSection'
 import QARunPanel from './QARunPanel'
 import RichEditor from './RichEditor'
 import { toast } from '../lib/toast'
+import { confirmDialog } from '../lib/confirm'
+import { refreshCards } from '../lib/jobs'
 
 const STATUS = [['todo', 'To Do'], ['doing', 'In Progress'], ['done', 'Done']]
 const NAME = { agent: 'Agent Task', qa: 'QA Test Case' }
@@ -25,8 +27,8 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
   const running = current?.status === 'doing'
 
   const dirty = title !== (current?.title ?? '') || body !== (current?.body ?? '') || status !== (current?.status ?? 'todo')
-  const close = () => {
-    if (dirty && !window.confirm('Discard unsaved changes?')) return
+  const close = async () => {
+    if (dirty && !(await confirmDialog({ title: 'Discard unsaved changes?', message: 'Your edits to this task have not been saved.', confirmLabel: 'Discard', cancelLabel: 'Keep Editing', danger: true }))) return
     onClose()
   }
 
@@ -60,6 +62,7 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
       const next = await api(`/api/items/${current.id}/${action}`, { method: 'POST', body: {} })
       setCurrent(next)
       setStatus(next.status)
+      refreshCards()
     } catch (err) {
       toast(err.message)
     }
@@ -99,7 +102,7 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
   }
 
   async function remove() {
-    if (!window.confirm(`Delete "${current.title}"?`)) return
+    if (!(await confirmDialog({ title: 'Delete this task?', message: `"${current.title}" will be deleted. This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return
     setBusy(true)
     try {
       await api(`/api/items/${current.id}`, { method: 'DELETE' })

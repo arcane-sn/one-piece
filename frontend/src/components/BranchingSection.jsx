@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api, baseName } from '../api'
 import { toast } from '../lib/toast'
+import { confirmDialog } from '../lib/confirm'
 
 const STATUS = [['planned', 'Planned'], ['branched', 'Branched'], ['merged_dev', 'Merged To Dev'], ['pushed', 'Pushed (No PR)'], ['pr_open', 'PR Open'], ['blocked', 'Blocked']]
 const MODES = [['merge', 'Merge'], ['cherry-pick', 'Cherry-pick']]
@@ -103,7 +104,7 @@ function BranchModal({ cardId, row, onDone, onClose }) {
   }
 
   async function remove() {
-    if (!window.confirm('Remove this repo from the ticket’s branching?')) return
+    if (!(await confirmDialog({ title: 'Remove this repo?', message: 'It is removed from the ticket’s branching list. The repo itself is not touched.', confirmLabel: 'Remove', danger: true }))) return
     setBusy(true)
     try {
       await api(`${url}?repo=${encodeURIComponent(row.repo)}`, { method: 'DELETE' })

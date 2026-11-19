@@ -210,6 +210,7 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
   box-shadow: var(--shadow-card); cursor: grab; transition: box-shadow 0.15s;
 }
 .kcard:hover { box-shadow: 0 12px 22px -10px rgba(120, 60, 20, 0.45); }
+.kcard.running { background: rgba(255, 224, 196, 0.95); border-color: var(--orange); box-shadow: 0 0 0 2px rgba(234, 146, 89, 0.35), var(--shadow-card); }
 .kcard.editing { cursor: default; }
 .kcard-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .kcard-title { font-size: 14px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; }
@@ -525,3 +526,15 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 .qa-steps li.failed img { border-color: #c0392b; }
 .qa-err { white-space: pre-wrap; font-size: 11px; }
 @media (max-width: 640px) { .qa-svc { grid-template-columns: 1fr 1fr; } }
+
+/* An open modal owns the scroll: the page behind never moves, even when the modal's own scroll hits the end.
+   (No overscroll-behavior on inner elements: an overflow:auto box that does not overflow would swallow the wheel.) */
+html:has(.modal-backdrop), body:has(.modal-backdrop) { overflow: hidden; }
+
+/* confirm dialog (replaces window.confirm); above every other modal */
+.confirm-backdrop { z-index: 90; }
+.modal.confirm-modal { width: min(420px, 100%); gap: 20px; }
+.confirm-modal h2 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; }
+.confirm-msg { margin: 8px 0 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.modal-actions button.confirm-ok.danger { background: var(--red); color: #fff; box-shadow: var(--shadow-btn); }
+.modal-actions button.confirm-ok.danger:hover:not(:disabled) { background: #c24e37; }

@@ -27,5 +27,6 @@ func TestMain(m *testing.M) {
 	agentRun = func(context.Context, string, []string, string, string, func(string)) (string, error) {
 		return "", errors.New("claude is stubbed in tests")
 	}
+	notify = func(string, string) {} // no real notifications from tests
 	os.Exit(m.Run())
 }

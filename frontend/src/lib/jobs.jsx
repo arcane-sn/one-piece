@@ -9,6 +9,8 @@ export const useJobs = () => useContext(JobsContext)
 
 const REFRESH = 'op-jobs-refresh'
 export const refreshJobs = () => window.dispatchEvent(new Event(REFRESH))
+// Tell the Board to re-read which cards have a task running (after Run / Stop), instead of waiting for its poll.
+export const refreshCards = () => window.dispatchEvent(new Event('op-cards-refresh'))
 
 function finishedMessage(j) {
   if (j.kind === 'review_chat') {

@@ -21,6 +21,7 @@ type Card struct {
 	ContentVersion int    `json:"contentVersion"`
 	Status         string `json:"status"`
 	Position       int    `json:"position"`
+	Running        bool   `json:"running"` // an Agent/QA task of this ticket is being run; set by the API, never stored
 }
 
 // Statuses are the kanban columns, in display order.
@@ -170,6 +171,31 @@ func (s *Store) ListCards(boardID int64) ([]Card, error) {
 		cards = append(cards, c)
 	}
 	return cards, rows.Err()
+}
+
+// CardIDsOfItems maps item ids to the set of cards they belong to.
+func (s *Store) CardIDsOfItems(itemIDs []int64) (map[int64]bool, error) {
+	out := map[int64]bool{}
+	if len(itemIDs) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(itemIDs))
+	for i, id := range itemIDs {
+		args[i] = id
+	}
+	rows, err := s.DB.Query(`SELECT DISTINCT card_id FROM card_items WHERE id IN (?`+strings.Repeat(",?", len(itemIDs)-1)+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) UpdateCard(id int64, title, description, deadline string) (Card, error) {

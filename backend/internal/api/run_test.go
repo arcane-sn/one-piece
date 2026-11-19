@@ -96,6 +96,14 @@ func TestRunItemExecutesAndStops(t *testing.T) {
 	if stopped.Log[len(stopped.Log)-1] != "Stopped" {
 		t.Errorf("log = %v", stopped.Log)
 	}
+
+	// the ticket's Stop button (stop-all) also stops a task that was run on its own, with no Run All chain
+	s.req(t, "POST", ip+"/run", map[string]any{}, ck)
+	waitItem(t, s, cp, ip, ck, "doing")
+	if resp, _ := s.req(t, "POST", cp+"/stop-all", map[string]any{}, ck); resp.StatusCode != 204 {
+		t.Fatalf("stop-all: %d", resp.StatusCode)
+	}
+	waitItem(t, s, cp, ip, ck, "todo")
 }
 
 func TestRunAllStopsAtFirstFailure(t *testing.T) {
@@ -222,5 +230,79 @@ func TestRunAllQAWaitsForAgentsAndKeepsGoingAfterFail(t *testing.T) {
 	s.req(t, "POST", q2+"/run", map[string]any{}, ck)
 	if ok := waitItem(t, s, cp, q2, ck, "done"); ok.Failure != "" || ok.FailureDesc != "" {
 		t.Errorf("failure not cleared: %q", ok.Failure)
+	}
+}
+
+// a ticket whose Agent Task or QA Test Case is running is marked running in the card list
+func TestCardListMarksRunningTasksAndQA(t *testing.T) {
+	s := newTestServer(t)
+	ck := s.login(t)
+	bp := newBoardPath(t, s, ck)
+	if resp, body := s.req(t, "PUT", bp, map[string]any{"name": "B", "folders": []string{t.TempDir()}}, ck); resp.StatusCode != 200 {
+		t.Fatalf("add folder: %d %s", resp.StatusCode, body)
+	}
+	_, body := s.req(t, "POST", bp+"/cards", map[string]any{"title": "Login", "description": "Sign in"}, ck)
+	var card store.Card
+	json.Unmarshal(body, &card)
+	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
+	reviewWaiter(t, s, cp, ck)("done")
+	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
+	defer func(f func(context.Context, string, []string, string, string, func(string)) (string, error)) {
+		agentRun = f
+	}(agentRun)
+	agentRun = func(ctx context.Context, _ string, _ []string, _, _ string, _ func(string)) (string, error) {
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+	defer func(f func(context.Context, string, string, []string, func(string)) (string, error)) {
+		streamClaude = f
+	}(streamClaude)
+	streamClaude = func(ctx context.Context, _, _ string, _ []string, _ func(string)) (string, error) { // QA reads code through this one
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+	cardRunning := func() bool {
+		_, b := s.req(t, "GET", bp+"/cards", nil, ck)
+		var cs []store.Card
+		json.Unmarshal(b, &cs)
+		return len(cs) == 1 && cs[0].Running
+	}
+	// Run All over QA Test Cases (a chain) marks the ticket running too
+	_, body = s.req(t, "POST", cp+"/items", map[string]any{"kind": "qa", "title": "chain", "body": "y"}, ck)
+	var chained store.Item
+	json.Unmarshal(body, &chained)
+	cip := "/api/items/" + strconv.FormatInt(chained.ID, 10)
+	if resp, b := s.req(t, "POST", cp+"/run-all", map[string]any{"kind": "qa"}, ck); resp.StatusCode != 202 {
+		t.Fatalf("run-all: %d %s", resp.StatusCode, b)
+	}
+	waitItem(t, s, cp, cip, ck, "doing")
+	if !cardRunning() {
+		t.Fatal("run-all qa: card not marked running")
+	}
+	s.req(t, "POST", cp+"/stop-all", map[string]any{}, ck)
+	waitItem(t, s, cp, cip, ck, "todo")
+	s.req(t, "DELETE", cip, nil, ck)
+
+	for _, kind := range []string{"agent", "qa"} {
+		_, body = s.req(t, "POST", cp+"/items", map[string]any{"kind": kind, "title": "x", "body": "y"}, ck)
+		var it store.Item
+		json.Unmarshal(body, &it)
+		ip := "/api/items/" + strconv.FormatInt(it.ID, 10)
+		if cardRunning() {
+			t.Fatalf("%s: running before any run", kind)
+		}
+		if resp, b := s.req(t, "POST", ip+"/run", map[string]any{}, ck); resp.StatusCode != 202 {
+			t.Fatalf("%s run: %d %s", kind, resp.StatusCode, b)
+		}
+		waitItem(t, s, cp, ip, ck, "doing")
+		if !cardRunning() {
+			t.Fatalf("%s: card not marked running", kind)
+		}
+		s.req(t, "POST", ip+"/stop", map[string]any{}, ck)
+		waitItem(t, s, cp, ip, ck, "todo")
+		if cardRunning() {
+			t.Fatalf("%s: still running after stop", kind)
+		}
+		s.req(t, "PUT", ip, map[string]any{"title": "x", "body": "y", "status": "done"}, ck) // QA waits for every Agent Task to be Done
 	}
 }
