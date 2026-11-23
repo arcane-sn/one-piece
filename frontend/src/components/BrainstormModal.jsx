@@ -1,3 +1,6 @@
+import ChatComposer, { ContinueChip, NewChatButton } from './ChatComposer'
+import Tip from './Tip'
+import { toast } from '../lib/toast'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import MentionTextarea from './MentionTextarea'
@@ -13,6 +16,8 @@ export default function BrainstormModal({ boardId, onClose, onCardsChanged }) {
   const [tab, setTab] = useState('chat')
   const [text, setText] = useState('')
   const [error, setError] = useState('')
+  const [query, setQuery] = useState(null) // null = search closed
+  const [drafted, setDrafted] = useState(() => new Set())
   const wasRunning = useRef(false)
   const listRef = useRef(null)
 
@@ -59,10 +64,38 @@ export default function BrainstormModal({ boardId, onClose, onCardsChanged }) {
     }
   }
 
-  async function send() {
-    const t = text.trim()
+  async function send(override) {
+    const t = (typeof override === 'string' ? override : text).trim()
     if (!t || view?.running) return
-    if (await act('/brainstorm/messages', { text: t })) setText('')
+    if (await act('/brainstorm/messages', { text: t }) && typeof override !== 'string') setText('')
+  }
+
+  // One click: a Claude reply becomes a Draft ticket (title = its first line, description = the reply).
+  async function makeDraft(m) {
+    const first = m.text.split('\n').map((l) => l.replace(/^[#>*\-•\s]+/, '').trim()).find(Boolean) || 'Draft from chat'
+    const title = Array.from(first).slice(0, 120).join('')
+    try {
+      await api(`${base}/drafts`, { method: 'POST', body: { title, description: m.text } })
+      setDrafted((d) => new Set(d).add(m.id))
+      toast('Added to Draft', 'ok')
+      onCardsChanged()
+    } catch (e) {
+      toast(e.message)
+    }
+  }
+
+  // Export = latest plan + the whole conversation, as one Markdown file.
+  function exportAll() {
+    const day = new Date().toISOString().slice(0, 10)
+    const parts = []
+    if (view?.plan) parts.push(`# Plan (version ${view.plan.version})\n\n${view.plan.content}`)
+    const chat = (view?.messages ?? []).filter((m) => (m.role === 'user' || m.role === 'assistant') && m.text)
+    if (chat.length) parts.push('# Conversation\n\n' + chat.map((m) => `**${m.role === 'user' ? 'You' : 'Claude'}:**\n\n${m.text}`).join('\n\n---\n\n'))
+    if (parts.length === 0) return toast('Nothing to export yet')
+    const url = URL.createObjectURL(new Blob([parts.join('\n\n---\n\n') + '\n'], { type: 'text/markdown' }))
+    const a = Object.assign(document.createElement('a'), { href: url, download: `brainstorm-board-${boardId}-${day}.md` })
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const newConversation = () =>
@@ -72,6 +105,8 @@ export default function BrainstormModal({ boardId, onClose, onCardsChanged }) {
     window.confirm(`Restore plan version ${v}? It becomes the newest version; nothing is deleted.`) && act(`/plan/${v}/restore`)
 
   const running = !!view?.running
+  const q = (query ?? '').trim().toLowerCase()
+  const shown = (view?.messages ?? []).filter((m) => !q || m.text?.toLowerCase().includes(q))
   const latest = view?.plan?.version
 
   return (
@@ -79,7 +114,22 @@ export default function BrainstormModal({ boardId, onClose, onCardsChanged }) {
       <div className="modal brainstorm" role="dialog" aria-modal="true" aria-label="Brainstorming">
         <div className="ticket-head">
           <h2>Brainstorming</h2>
-          <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
+          <div className="head-actions">
+            {tab === 'chat' && (
+              <Tip label="Search chat" side="top">
+                <button type="button" className="icon-btn" aria-label="Search chat" onClick={() => setQuery((q) => (q === null ? '' : null))}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+                </button>
+              </Tip>
+            )}
+            <Tip label="Export plan + chat (.md)" side="top">
+              <button type="button" className="icon-btn" aria-label="Export" onClick={exportAll}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg>
+              </button>
+            </Tip>
+            {tab === 'chat' && <NewChatButton label="New conversation" disabled={running} onClick={newConversation} />}
+            <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
+          </div>
         </div>
         <div className="bs-tabs" role="tablist">
           <button role="tab" aria-selected={tab === 'chat'} className={tab === 'chat' ? 'on' : ''} onClick={() => setTab('chat')}>Chat</button>
@@ -88,41 +138,45 @@ export default function BrainstormModal({ boardId, onClose, onCardsChanged }) {
 
         {tab === 'chat' ? (
           <>
+            {query !== null && (
+              <div className="bs-search">
+                <input
+                  autoFocus
+                  placeholder="Search this chat…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setQuery(null) } }}
+                />
+                {query.trim() && <span className="bs-count">{shown.length} of {view?.messages.length ?? 0}</span>}
+              </div>
+            )}
             <div className="bs-list" ref={listRef}>
               {view === null && <p className="muted">Loading…</p>}
               {view?.messages.length === 0 && (
                 <p className="muted">Tell Claude what this product should do. It plans with you and fills the Draft column.</p>
               )}
-              {view?.messages.map((m) => (
+              {query?.trim() && shown.length === 0 && <p className="muted">No messages match.</p>}
+              {shown.map((m) => (
                 <div key={m.id} className={'bs-msg' + (m.role === 'user' ? ' user' : '')}>
                   {m.text || (m.status === 'running' ? 'Thinking…' : '')}
                   {m.role === 'assistant' && NOTE[m.status] && <span className="bs-note">{NOTE[m.status]}</span>}
+                  {m.role === 'assistant' && m.text && m.status !== 'running' && (
+                    <button type="button" className="bs-draft" disabled={drafted.has(m.id)} onClick={() => makeDraft(m)}>
+                      {drafted.has(m.id) ? 'Added to Draft ✓' : '+ Draft'}
+                    </button>
+                  )}
                 </div>
               ))}
+              <ContinueChip messages={view?.messages} running={view?.running} onContinue={() => send('continue')} />
             </div>
-            <div className="bs-input">
-              <MentionTextarea
-                rows={2}
-                placeholder="Message Claude…  (Enter sends, Shift+Enter adds a line, paste a screenshot to attach it)"
-                value={text}
-                disabled={running}
-                onChange={setText}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                    e.preventDefault()
-                    send()
-                  }
-                }}
-              />
-              {running ? (
-                <button type="button" className="danger" onClick={() => act('/brainstorm/stop')}><span className="spinner" aria-hidden="true" /> Thinking… Stop</button>
-              ) : (
-                <button type="button" className="primary" disabled={!text.trim()} onClick={send}>Send</button>
-              )}
-            </div>
-            <div className="bs-actions">
-              <button type="button" className="link" disabled={running} onClick={newConversation}>New conversation</button>
-            </div>
+            <ChatComposer
+              boardId={boardId}
+              value={text}
+              onChange={setText}
+              onSend={send}
+              onStop={() => act('/brainstorm/stop')}
+              running={running}
+            />
           </>
         ) : (
           <>

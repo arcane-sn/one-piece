@@ -1,3 +1,4 @@
+import ChatComposer, { ContinueChip, NewChatButton } from './ChatComposer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
@@ -64,10 +65,10 @@ export default function ReviewChatModal({ card, boardId, onTurnDone, onCardChang
     }
   }
 
-  async function send() {
-    const t = text.trim()
+  async function send(override) {
+    const t = (typeof override === 'string' ? override : text).trim()
     if (!t || view?.running) return
-    if (await act('/messages', { text: t })) setText('')
+    if (await act('/messages', { text: t }) && typeof override !== 'string') setText('')
   }
 
   async function undo(ref) {
@@ -94,7 +95,10 @@ export default function ReviewChatModal({ card, boardId, onTurnDone, onCardChang
       <div className="modal brainstorm" role="dialog" aria-modal="true" aria-label="Claude Review">
         <div className="ticket-head">
           <h2>Claude Review{card.ident && <span className="ident">{card.ident}</span>}</h2>
-          <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
+          <div className="head-actions">
+            <NewChatButton label="New session" disabled={running} onClick={newSession} />
+            <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
+          </div>
         </div>
         <div className="discuss-stage review-strip">
           {!available && view ? 'Claude Review is available while the ticket is in Business.' : (
@@ -124,31 +128,18 @@ export default function ReviewChatModal({ card, boardId, onTurnDone, onCardChang
               {m.role === 'assistant' && NOTE[m.status] && <span className="bs-note">{NOTE[m.status]}</span>}
             </div>
           ))}
+          <ContinueChip messages={view?.messages} running={running} onContinue={() => send('continue')} />
         </div>
-        <div className="bs-input discuss-input">
-          <MentionTextarea
-            rows={2}
-            maxLength={20000}
-            placeholder="Message Claude…  (paste a screenshot to attach it; Enter sends, Shift+Enter adds a line)"
-            value={text}
-            disabled={running || !available}
-            onChange={setText}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault()
-                send()
-              }
-            }}
-          />
-          {running ? (
-            <button type="button" className="danger" onClick={() => act('/stop')}><span className="spinner" aria-hidden="true" /> Thinking… Stop</button>
-          ) : (
-            <button type="button" className="primary" disabled={!text.trim() || !available} onClick={send}>Send</button>
-          )}
-        </div>
-        <div className="bs-actions">
-          <button type="button" className="link" disabled={running} onClick={newSession}>New session</button>
-        </div>
+        <ChatComposer
+          mentions={false}
+          maxLength={20000}
+          value={text}
+          onChange={setText}
+          onSend={send}
+          onStop={() => act('/stop')}
+          running={running}
+          disabled={!available}
+        />
       </div>
     </div>,
     document.body,

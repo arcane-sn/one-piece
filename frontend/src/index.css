@@ -595,3 +595,27 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 .search-btn { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 10px 0 12px; color: rgba(59, 36, 23, 0.7); font-weight: 600; }
 .search-btn kbd { padding: 2px 6px; border-radius: 6px; background: rgba(59, 36, 23, 0.08); font: 700 11px/1.3 inherit; }
 .page-head > .search-btn { align-self: flex-start; }
+
+/* chat composer: one pill, Enter sends, no Send button */
+.head-actions { display: flex; align-items: center; gap: 4px; }
+.composer { display: flex; align-items: flex-end; gap: 8px; padding: 9px 12px 9px 18px; border-radius: 24px; background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(59, 36, 23, 0.14); transition: border-color 0.15s, box-shadow 0.15s; }
+.composer:focus-within { border-color: var(--orange); box-shadow: 0 0 0 4px rgba(234, 146, 89, 0.22); }
+.composer .mention-wrap { flex: 1; min-width: 0; }
+.composer .mention-wrap textarea, .composer .mention-wrap textarea:focus { border: 0; background: transparent; box-shadow: none; padding: 0; display: block; min-height: 28px; max-height: 160px; resize: none; line-height: 26px; }
+.composer-go { flex: none; width: 28px; height: 28px; display: grid; place-items: center; color: var(--deep); opacity: 0.3; transition: opacity 0.15s; }
+.composer-go.on { opacity: 1; }
+.composer-stop { flex: none; height: 28px; padding: 0 14px; border-radius: 16px; font-size: 13px; font-weight: 700; color: var(--deep); display: inline-flex; align-items: center; gap: 6px; }
+.composer .mention-list { position: absolute; bottom: 100%; left: -12px; right: -6px; margin: 0 0 14px; z-index: 5; }
+
+/* the × glyph sits low in its box: raise it 2px (padding-bottom 4px = 2px shift); svg icons are re-centred */
+.icon-btn { display: grid; place-items: center; padding: 0 0 4px; }
+.icon-btn svg { transform: translateY(2px); }
+
+.composer-wrap { display: flex; flex-direction: column; gap: 6px; }
+.composer-hint { padding: 0 8px; font-size: 11.5px; font-weight: 600; color: var(--faint); }
+.continue-chip { align-self: flex-start; height: 30px; padding: 0 14px; border-radius: 15px; font-size: 13px; font-weight: 700; color: var(--deep); }
+.bs-search { display: flex; align-items: center; gap: 10px; }
+.bs-search input { flex: 1; height: 36px; }
+.bs-count { flex: none; font-size: 12px; font-weight: 700; color: var(--faint); }
+.bs-draft { display: block; margin-top: 8px; height: 24px; padding: 0 10px; border-radius: 12px; font-size: 11.5px; font-weight: 700; color: var(--deep); opacity: 0; transition: opacity 0.15s; }
+.bs-msg:hover .bs-draft, .bs-draft:focus-visible, .bs-draft:disabled { opacity: 1; }

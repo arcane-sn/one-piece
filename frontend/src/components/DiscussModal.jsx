@@ -1,3 +1,4 @@
+import ChatComposer, { ContinueChip, NewChatButton } from './ChatComposer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
@@ -58,10 +59,10 @@ export default function DiscussModal({ card, boardId, onTurnDone, onClose }) {
     }
   }
 
-  async function send() {
-    const t = text.trim()
+  async function send(override) {
+    const t = (typeof override === 'string' ? override : text).trim()
     if (!t || view?.running) return
-    if (await act('/messages', { text: t })) setText('')
+    if (await act('/messages', { text: t }) && typeof override !== 'string') setText('')
   }
 
   const newSession = () =>
@@ -75,7 +76,10 @@ export default function DiscussModal({ card, boardId, onTurnDone, onClose }) {
       <div className="modal brainstorm" role="dialog" aria-modal="true" aria-label="Discuss">
         <div className="ticket-head">
           <h2>Discuss{card.ident && <span className="ident">{card.ident}</span>}</h2>
-          <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
+          <div className="head-actions">
+            <NewChatButton label="New session" disabled={running} onClick={newSession} />
+            <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
+          </div>
         </div>
         <p className="discuss-stage">{stage ? STAGE[stage] : 'Loading…'}</p>
         <div className="bs-list" ref={listRef}>
@@ -97,32 +101,18 @@ export default function DiscussModal({ card, boardId, onTurnDone, onClose }) {
               {m.role === 'assistant' && NOTE[m.status] && <span className="bs-note">{NOTE[m.status]}</span>}
             </div>
           ))}
+          <ContinueChip messages={view?.messages} running={running} onContinue={() => send('continue')} />
         </div>
-        <div className="bs-input discuss-input">
-          <MentionTextarea
-            boardId={boardId}
-            rows={2}
-            maxLength={20000}
-            placeholder="Message Claude…  (@ picks a repo; paste a screenshot to attach it; Enter sends, Shift+Enter adds a line)"
-            value={text}
-            disabled={running || !stage}
-            onChange={setText}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault()
-                send()
-              }
-            }}
-          />
-          {running ? (
-            <button type="button" className="danger" onClick={() => act('/stop')}><span className="spinner" aria-hidden="true" /> Thinking… Stop</button>
-          ) : (
-            <button type="button" className="primary" disabled={!text.trim() || !stage} onClick={send}>Send</button>
-          )}
-        </div>
-        <div className="bs-actions">
-          <button type="button" className="link" disabled={running} onClick={newSession}>New session</button>
-        </div>
+        <ChatComposer
+          boardId={boardId}
+          maxLength={20000}
+          value={text}
+          onChange={setText}
+          onSend={send}
+          onStop={() => act('/stop')}
+          running={running}
+          disabled={!stage}
+        />
       </div>
     </div>,
     document.body,
