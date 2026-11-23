@@ -23,16 +23,18 @@ func (s *Store) GetQAConfig(boardID int64) (qa.Config, error) {
 	}
 	json.Unmarshal([]byte(hosts), &c.AllowedHosts)
 	c.Headed = headed == 1
-	rows, err := s.DB.Query(`SELECT id,name,folder,command,port,ready_url,ready_timeout_s FROM board_qa_services WHERE board_id=? ORDER BY position`, boardID)
+	rows, err := s.DB.Query(`SELECT id,name,folder,command,port,ready_url,ready_timeout_s,external FROM board_qa_services WHERE board_id=? ORDER BY position`, boardID)
 	if err != nil {
 		return c, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var v qa.Service
-		if err := rows.Scan(&v.ID, &v.Name, &v.Folder, &v.Command, &v.Port, &v.ReadyURL, &v.ReadyTimeoutS); err != nil {
+		var ext int
+		if err := rows.Scan(&v.ID, &v.Name, &v.Folder, &v.Command, &v.Port, &v.ReadyURL, &v.ReadyTimeoutS, &ext); err != nil {
 			return c, err
 		}
+		v.External = ext == 1
 		c.Services = append(c.Services, v)
 	}
 	return c, rows.Err()
@@ -65,8 +67,8 @@ func (s *Store) SetQAConfig(boardID int64, c qa.Config) (qa.Config, error) {
 			return c, err
 		}
 		for i, v := range c.Services {
-			if _, err := tx.Exec(`INSERT INTO board_qa_services(board_id,position,name,folder,command,port,ready_url,ready_timeout_s) VALUES(?,?,?,?,?,?,?,?)`,
-				boardID, i, v.Name, v.Folder, v.Command, v.Port, v.ReadyURL, v.ReadyTimeoutS); err != nil {
+			if _, err := tx.Exec(`INSERT INTO board_qa_services(board_id,position,name,folder,command,port,ready_url,ready_timeout_s,external) VALUES(?,?,?,?,?,?,?,?,?)`,
+				boardID, i, v.Name, v.Folder, v.Command, v.Port, v.ReadyURL, v.ReadyTimeoutS, map[bool]int{true: 1}[v.External]); err != nil {
 				return c, err
 			}
 		}

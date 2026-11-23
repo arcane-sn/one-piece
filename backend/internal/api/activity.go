@@ -3,11 +3,12 @@ package api
 import (
 	"net/http"
 	"sort"
+	"strconv"
 )
 
-// activityRow is one thing Claude is doing right now: a chat turn, an Agent Task run or a Run All chain.
+// activityRow is one thing Claude is doing right now: a chat turn, an Agent Task run, a Run All chain or a Generate job.
 type activityRow struct {
-	Kind    string `json:"kind"` // discuss | review | brainstorm | agent | chain
+	Kind    string `json:"kind"` // discuss | review | brainstorm | agent | chain | agent_tasks | qa_cases | flow | description
 	BoardID int64  `json:"boardId"`
 	Board   string `json:"board"`
 	CardID  int64  `json:"cardId"` // 0 for brainstorm
@@ -68,6 +69,22 @@ func (s *server) activity(w http.ResponseWriter, r *http.Request) {
 		if it, err := s.st.GetItem(id); err == nil && !seen[it.CardID] {
 			seen[it.CardID] = true
 			card("agent", it.CardID)
+		}
+	}
+	jobs, _ := s.st.ActiveJobs()
+	jobSeen := map[string]bool{}
+	for _, j := range jobs {
+		if j.Status != "running" {
+			continue
+		}
+		if j.CardID != 0 {
+			if jobSeen[j.Kind+"/"+strconv.FormatInt(j.CardID, 10)] {
+				continue
+			}
+			jobSeen[j.Kind+"/"+strconv.FormatInt(j.CardID, 10)] = true
+			card(j.Kind, j.CardID)
+		} else if j.Scope == "board" { // a description for a ticket that is not saved yet
+			out = append(out, activityRow{Kind: j.Kind, BoardID: j.TargetID, Board: name(j.TargetID), Title: "New ticket"})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Ident < out[j].Ident })

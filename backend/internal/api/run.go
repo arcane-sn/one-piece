@@ -223,6 +223,9 @@ func (s *server) runAll(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		if in.Kind == "agent" && ctx.Err() == nil {
+			s.advanceToQA(id)
+		}
 	}()
 	writeJSON(w, http.StatusAccepted, map[string]int{"queued": len(todo)})
 }
@@ -440,4 +443,39 @@ func (s *server) stopItem(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, it)
+}
+
+// advanceToQA moves a ticket from Agent to QA once every Agent Task of it is Done (Run All finished cleanly).
+func (s *server) advanceToQA(cardID int64) {
+	c, err := s.st.GetCard(cardID)
+	if err != nil || c.Status != "agent" {
+		return
+	}
+	items, err := s.st.ListItems(cardID)
+	if err != nil {
+		return
+	}
+	n := 0
+	for _, it := range items {
+		if it.Kind != "agent" || it.Superseded {
+			continue
+		}
+		if it.Status != "done" {
+			return
+		}
+		n++
+	}
+	if n == 0 {
+		return
+	}
+	if _, err := s.st.MoveCard(cardID, "qa", 1<<30); err != nil {
+		log.Printf("run all: moving card %d to QA: %v", cardID, err)
+		return
+	}
+	for i := len(items) - 1; i >= 0; i-- { // note it on the last task's log
+		if items[i].Kind == "agent" && !items[i].Superseded {
+			s.st.AppendItemLog(items[i].ID, "All Agent Tasks done: ticket moved to QA")
+			break
+		}
+	}
 }

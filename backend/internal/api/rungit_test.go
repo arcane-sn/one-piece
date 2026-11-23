@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"os/exec"
@@ -351,5 +352,43 @@ func TestRunRecordsWhatTheTaskChanged(t *testing.T) {
 		if x.ID == it.ID && (x.Changes == nil || x.Changes.Files == 0) {
 			t.Errorf("the task row carries a change summary: %+v", x.Changes)
 		}
+	}
+}
+
+func TestRunAllMovesTicketToQAWhenEverythingIsDone(t *testing.T) {
+	g := gitRunFixture(t)
+	useAgent(t, func(_ context.Context, cwd string, _ []string, _, user string, _ func(string)) (string, error) {
+		writeInCwd(user, cwd)
+		return "ok", nil
+	})
+	g.addTask(t, "one")
+	g.addTask(t, "two")
+	if _, err := g.s.St.MoveCard(g.card.ID, "agent", 0); err != nil {
+		t.Fatal(err)
+	}
+	if resp, body := g.s.req(t, "POST", g.cp+"/run-all", map[string]any{}, g.ck); resp.StatusCode != 202 {
+		t.Fatalf("run-all: %d %s", resp.StatusCode, body)
+	}
+	for i := 0; i < 150; i++ {
+		if c, _ := g.s.St.GetCard(g.card.ID); c.Status == "qa" {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	c, _ := g.s.St.GetCard(g.card.ID)
+	t.Fatalf("card status = %q, want qa", c.Status)
+}
+
+func TestRunAllKeepsTicketInAgentWhenATaskFails(t *testing.T) {
+	g := gitRunFixture(t)
+	useAgent(t, func(context.Context, string, []string, string, string, func(string)) (string, error) {
+		return "", errors.New("boom")
+	})
+	g.addTask(t, "one")
+	g.s.St.MoveCard(g.card.ID, "agent", 0)
+	g.s.req(t, "POST", g.cp+"/run-all", map[string]any{}, g.ck)
+	time.Sleep(400 * time.Millisecond)
+	if c, _ := g.s.St.GetCard(g.card.ID); c.Status != "agent" {
+		t.Fatalf("card status = %q, want agent", c.Status)
 	}
 }

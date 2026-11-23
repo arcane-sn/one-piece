@@ -557,9 +557,38 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 
 /* Browser QA */
 .qa-stack > summary { cursor: pointer; }
-.qa-svc { display: grid; grid-template-columns: 1fr 1fr 2fr 80px 2fr auto; gap: 6px; margin-bottom: 6px; }
-.qa-svc input, .qa-svc select { min-width: 0; }
-.qa-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.qa-stack { padding: 16px 18px; border-radius: 16px; background: rgba(255, 255, 255, 0.45); border: 1px solid rgba(214, 90, 66, 0.18); }
+.qa-stack > summary { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.qa-body { display: flex; flex-direction: column; gap: 20px; margin-top: 16px; }
+.qa-body > .field-pair { gap: 14px; }
+.qa-body .field { gap: 8px; }
+.qa-body .field > span { line-height: 1.4; }
+.qa-stack > summary::-webkit-details-marker { display: none; }
+.qa-stack[open] > summary { padding-bottom: 12px; border-bottom: 1px solid rgba(214, 90, 66, 0.15); }
+.qa-title { font-size: 14px; font-weight: 800; }
+.qa-title::before { content: '▸'; display: inline-block; margin-right: 8px; color: var(--red); transition: transform .15s; }
+.qa-stack[open] .qa-title::before { transform: rotate(90deg); }
+.qa-sub { font-size: 12px; color: var(--faint); font-weight: 500; padding-left: 18px; }
+.qa-stack .hint { margin: 0; font-size: 12px; line-height: 1.5; }
+.check { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; cursor: pointer; }
+.check input[type='checkbox'] { flex: none; width: 18px; height: 18px; min-height: 0; padding: 0; margin: 1px 0 0; border-radius: 5px; box-shadow: none; appearance: none; -webkit-appearance: none; display: grid; place-content: center; border: 1.5px solid rgba(214, 90, 66, 0.55); background: rgba(255, 255, 255, 0.85); cursor: pointer; transition: background .12s, border-color .12s, box-shadow .12s; }
+.check input[type='checkbox']::after { content: ''; width: 9px; height: 5px; margin-top: -2px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) scale(0); transition: transform .12s; }
+.check input[type='checkbox']:checked { background: var(--orange); border-color: var(--orange); }
+.check input[type='checkbox']:checked::after { transform: rotate(-45deg) scale(1); }
+.check input[type='checkbox']:focus-visible { box-shadow: 0 0 0 4px rgba(234, 146, 89, 0.28); }
+.qa-save { align-self: stretch; width: 100%; height: 48px; }
+.qa-actions { justify-content: flex-start; }
+.qa-actions .item-status { margin-left: 0; }
+.qa-body .field > span em { display: block; margin: 2px 0 0; }
+.check span em { display: block; margin: 1px 0 0; font-size: 11.5px; }
+.qa-svc { display: flex; flex-direction: column; gap: 8px; padding: 12px; margin-bottom: 8px; border-radius: 14px; background: rgba(255, 255, 255, 0.6); border: 1px solid rgba(214, 90, 66, 0.14); }
+.qa-svc-top { display: flex; gap: 8px; align-items: center; }
+.qa-svc-top .svc-name { flex: 0 1 220px; }
+.qa-svc-top .svc-port { flex: 0 0 110px; }
+.qa-svc-top .grow { flex: 1; }
+.qa-svc-run { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 8px; }
+.qa-svc input, .qa-svc select { min-width: 0; height: 40px; font-size: 13px; }
+.qa-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding-top: 4px; }
 .qa-runs .qa-run { margin-bottom: 6px; }
 .qa-run-body { margin-top: 6px; display: grid; gap: 6px; }
 .qa-repos { margin: 0; padding-left: 18px; font-size: 12px; }
@@ -568,7 +597,7 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 .qa-steps img { width: 100%; border: 1px solid var(--border, #ccc); border-radius: 6px; display: block; }
 .qa-steps li.failed img { border-color: #c0392b; }
 .qa-err { white-space: pre-wrap; font-size: 11px; }
-@media (max-width: 640px) { .qa-svc { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .qa-svc-top, .qa-svc-run { grid-template-columns: 1fr 1fr; } }
 
 .tip-top { transform: translate(-50%, -100%); animation-name: op-tip-top; }
 .tip-top::before { left: 50%; top: auto; bottom: -4px; transform: translateX(-50%) rotate(45deg); }
@@ -812,3 +841,6 @@ pre.diff span { display: block; padding: 0 10px; white-space: pre; }
 pre.diff .dl-add { background: rgba(76,175,110,.25); }
 pre.diff .dl-del { background: rgba(214,90,66,.28); }
 pre.diff .dl-hunk { color: #EA9259; }
+
+
+.modal.board-modal { width: min(760px, 100%); }

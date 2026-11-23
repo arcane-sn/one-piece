@@ -200,7 +200,7 @@ func TestConfigValidate(t *testing.T) {
 		"other port ready": func(c *Config) { c.Services[0].ReadyURL = "http://localhost:5001/" },
 		"base host":        func(c *Config) { c.BaseURL = "https://shop.example.test" },
 		"bad host":         func(c *Config) { c.AllowedHosts = []string{"https://x"} },
-		"bad name":         func(c *Config) { c.Services[0].Name = "Web App" },
+		"empty name":       func(c *Config) { c.Services[0].Name = " !! " },
 		"no command":       func(c *Config) { c.Services[0].Command = " " },
 		"no services":      func(c *Config) { c.Services = nil },
 		"not http":         func(c *Config) { c.BaseURL = "ftp://localhost" },

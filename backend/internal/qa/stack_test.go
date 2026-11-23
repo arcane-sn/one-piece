@@ -136,3 +136,60 @@ func TestSnapshotAndBackstop(t *testing.T) {
 		t.Errorf("a new file must trip the backstop: %+v", b)
 	}
 }
+
+func TestStackExternalServiceIsCheckedNeverStartedOrStopped(t *testing.T) {
+	srv := http.Server{Addr: "127.0.0.1:0"}
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	port := ln.Addr().(*net.TCPAddr).Port
+	srv.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "ok") })
+	go srv.Serve(ln)
+	defer srv.Close()
+	dir := t.TempDir()
+	ext := Service{Name: "payments", Port: port, ReadyURL: "http://127.0.0.1:" + strconv.Itoa(port) + "/", ReadyTimeoutS: 10, External: true}
+	st, err := StartStack(t.Context(), []Service{ext}, filepath.Join(dir, "l"), filepath.Join(dir, "s.json"))
+	if err != nil {
+		t.Fatalf("a running external service must be accepted: %v", err)
+	}
+	st.Stop()
+	if !PortBusy(port) {
+		t.Error("Stop must leave an external service running")
+	}
+	ln.Close()
+	srv.Close()
+	for i := 0; i < 50 && PortBusy(port); i++ {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if _, err := StartStack(t.Context(), []Service{ext}, filepath.Join(dir, "l"), filepath.Join(dir, "s.json")); err == nil || !strings.Contains(err.Error(), "not running") {
+		t.Fatalf("a stopped external service must block with a clear message: %v", err)
+	}
+}
+
+func TestConfigExternalServiceNeedsNoCommandOrFolder(t *testing.T) {
+	c := Config{BaseURL: "http://localhost:3000", AllowedHosts: []string{"localhost"}, Services: []Service{
+		{Name: "payments", Port: 4000, ReadyURL: "http://localhost:4000/health", External: true},
+	}}
+	if err := c.Validate(nil); err != nil {
+		t.Fatalf("external service: %v", err)
+	}
+	c.Services[0].External = false
+	if err := c.Validate(nil); err == nil {
+		t.Fatal("a normal service without a command must still be refused")
+	}
+}
+
+func TestServiceNamesAreNormalizedNotRefused(t *testing.T) {
+	c := Config{BaseURL: "http://localhost:3000", Services: []Service{
+		{Name: "BASE_SERVICE", Port: 5000, ReadyURL: "http://localhost:5000/", External: true},
+		{Name: "Setting Service", Port: 5085, ReadyURL: "http://localhost:5085/", External: true},
+	}}
+	if err := c.Validate(nil); err != nil {
+		t.Fatal(err)
+	}
+	if c.Services[0].Name != "base-service" || c.Services[1].Name != "setting-service" {
+		t.Errorf("names = %q, %q", c.Services[0].Name, c.Services[1].Name)
+	}
+	c.Services[1].Name = "base service"
+	if err := c.Validate(nil); err == nil || !strings.Contains(err.Error(), "different names") {
+		t.Errorf("duplicate after normalizing: %v", err)
+	}
+}

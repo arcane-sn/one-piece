@@ -18,15 +18,16 @@ import (
 )
 
 type server struct {
-	st      *store.Store
-	static  string
-	mu      sync.Mutex
-	turns   map[int64]context.CancelFunc // running brainstorm turns by board id
-	runs    map[int64]context.CancelFunc // running Agent Task executions by item id
-	chains  map[int64]context.CancelFunc // Run All chains by card id
-	discuss map[int64]context.CancelFunc // running Discuss turns by card id
-	rchats  map[int64]context.CancelFunc // running Claude Review turns by card id
-	qaBusy  string                       // "" or what holds the one QA lock: run | login | check
+	st          *store.Store
+	static      string
+	mu          sync.Mutex
+	turns       map[int64]context.CancelFunc // running brainstorm turns by board id
+	runs        map[int64]context.CancelFunc // running Agent Task executions by item id
+	chains      map[int64]context.CancelFunc // Run All chains by card id
+	discuss     map[int64]context.CancelFunc // running Discuss turns by card id
+	rchats      map[int64]context.CancelFunc // running Claude Review turns by card id
+	qaLoginStop context.CancelFunc           // ends the open QA login window
+	qaBusy      string                       // "" or what holds the one QA lock: run | login | check
 }
 
 // New builds the handler: /api/* (authenticated) plus static files from staticDir.
@@ -106,6 +107,7 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/cards/{id}/discuss/new", s.newDiscuss)
 	mux.HandleFunc("GET /api/boards/{id}/qa", s.getQA)
 	mux.HandleFunc("PUT /api/boards/{id}/qa", s.putQA)
+	mux.HandleFunc("DELETE /api/boards/{id}/qa/login", s.qaLoginStopHandler)
 	mux.HandleFunc("POST /api/boards/{id}/qa/login", s.qaLoginHandler)
 	mux.HandleFunc("POST /api/boards/{id}/qa/session/check", s.qaCheckHandler)
 	mux.HandleFunc("DELETE /api/boards/{id}/qa/session", s.qaForgetHandler)

@@ -143,6 +143,9 @@ var qaLogin = func(ctx context.Context, p qa.Paths, boardID int64, loginURL stri
 	if err := os.MkdirAll(p.AuthDir(), 0o700); err != nil {
 		return err
 	}
+	if err := p.WriteRunnerFiles(); err != nil { // keep the login script current
+		return err
+	}
 	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "TMPDIR=" + os.TempDir(), "PLAYWRIGHT_BROWSERS_PATH=" + p.Browsers()}
 	_, err := qa.Exec(ctx, p.Runner(), env, "node", filepath.Join(p.Runner(), "login.mjs"), loginURL, p.Auth(boardID))
 	return err
@@ -168,10 +171,18 @@ func (s *server) qaLoginHandler(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, store.ConflictError{Msg: "Another QA action is in progress."})
 		return
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	s.mu.Lock()
+	s.qaLoginStop = cancel
+	s.mu.Unlock()
 	go func() {
 		defer s.qaUnlock()
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
-		defer cancel()
+		defer func() {
+			s.mu.Lock()
+			s.qaLoginStop = nil
+			s.mu.Unlock()
+			cancel()
+		}()
 		if err := qaLogin(ctx, p, b.ID, cfg.LoginURL); err != nil {
 			log.Printf("qa login board %d: %v", b.ID, err)
 		}
@@ -262,3 +273,17 @@ func (s *server) getQAEvidence(w http.ResponseWriter, r *http.Request) {
 
 var _ = json.Marshal
 var _ = errors.New
+
+// DELETE /api/boards/{id}/qa/login ends the open login window (the session was autosaved while the owner logged in).
+func (s *server) qaLoginStopHandler(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.qaBoard(w, r); !ok {
+		return
+	}
+	s.mu.Lock()
+	stop := s.qaLoginStop
+	s.mu.Unlock()
+	if stop != nil {
+		stop()
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -164,4 +165,73 @@ func parseFlowReply(out string) (title, source string) {
 		title = string([]rune(title)[:200])
 	}
 	return title, source + "\n"
+}
+
+const autoFlowNote = `
+You may read the product's code (Read, Grep, Glob; a handful of tool calls). Name the real files, components, functions and endpoints this task touches or calls, and make the lanes those files or modules; never invent a name you did not see. If the code is not there yet (a new file), say so in the message, e.g. "(new) useActivityLog.ts".`
+
+// autoTechnicalFlow drafts the Technical Flow of a freshly generated Agent Task from the code, so every task starts with
+// one. A failure only means the task has no flow yet; the owner can still press Generate in the task.
+func (s *server) autoTechnicalFlow(ctx context.Context, card store.Card, it store.Item, b store.Board) error {
+	var msg strings.Builder
+	fmt.Fprintf(&msg, "Product: %s\n", b.Name)
+	if b.Description != "" {
+		fmt.Fprintf(&msg, "About the product: %s\n", b.Description)
+	}
+	fmt.Fprintf(&msg, "\nTicket ID: %s\nTicket title: %s\n\nTicket description (Markdown):\n%s\n", card.Ident, card.Title, card.Description)
+	fmt.Fprintf(&msg, "\nAgent Task: %s\n%s\n", it.Title, it.Body)
+	if fl, _ := s.st.ListFlows(card.ID); len(fl) > 0 {
+		for _, f := range fl {
+			fmt.Fprintf(&msg, "\nBusiness Flow %q (swimlane text):\n%s\n", f.Title, f.Source)
+		}
+	}
+	msg.WriteString("\nWhat the owner wants drawn:\nThe technical flow of this task between the real files and functions that implement it.\n")
+	dirs := b.Folders
+	if repos, _ := s.ticketRepos(card.ID); len(repos) > 0 {
+		dirs = nil
+		for _, r := range repos {
+			dirs = append(dirs, r.Repo)
+		}
+	}
+	out, err := streamClaude(ctx, technicalFlowPrompt+autoFlowNote, msg.String(), dirs, func(string) {})
+	title, source := parseFlowReply(out)
+	if err != nil || !flowArrow.MatchString(source) {
+		return fmt.Errorf("no readable flow (err=%v)", err)
+	}
+	if title == "" {
+		title = "Technical Flow"
+	}
+	_, err = s.st.CreateItemFlow(it.ID, title, source)
+	return err
+}
+
+// autoFlows runs autoTechnicalFlow for each task, three at a time.
+func (s *server) autoFlows(ctx context.Context, card store.Card, items []store.Item) (made int) {
+	b, err := s.st.GetBoard(card.BoardID)
+	if err != nil {
+		return 0
+	}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 3)
+	for _, it := range items {
+		wg.Add(1)
+		go func(it store.Item) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			if ctx.Err() != nil {
+				return
+			}
+			if err := s.autoTechnicalFlow(ctx, card, it, b); err != nil {
+				log.Printf("auto flow for %s: %v", it.Ident, err)
+				return
+			}
+			mu.Lock()
+			made++
+			mu.Unlock()
+		}(it)
+	}
+	wg.Wait()
+	return made
 }

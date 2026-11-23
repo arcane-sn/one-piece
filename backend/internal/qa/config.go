@@ -19,6 +19,7 @@ type Service struct {
 	Port          int    `json:"port"`
 	ReadyURL      string `json:"readyUrl"`
 	ReadyTimeoutS int    `json:"readyTimeoutS"`
+	External      bool   `json:"external"` // already running (started by the owner): never started or stopped by One Piece, only checked
 }
 
 // Config is a board's QA stack.
@@ -33,6 +34,26 @@ type Config struct {
 
 // Configured reports whether the board has a QA stack (a base URL and at least one service).
 func (c Config) Configured() bool { return c.BaseURL != "" && len(c.Services) > 0 }
+
+// slugName turns any name into lowercase letters, digits and single dashes, at most 30 characters.
+func slugName(s string) string {
+	var b strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			dash = false
+		} else if b.Len() > 0 && !dash {
+			b.WriteByte('-')
+			dash = true
+		}
+	}
+	out := strings.TrimRight(b.String(), "-")
+	if len(out) > 30 {
+		out = strings.TrimRight(out[:30], "-")
+	}
+	return out
+}
 
 var nameRe = regexp.MustCompile(`^[a-z0-9-]{1,30}$`)
 
@@ -91,16 +112,19 @@ func (c *Config) Validate(boardFolders []string) error {
 	names, ports := map[string]bool{}, map[int]bool{}
 	for i := range c.Services {
 		s := &c.Services[i]
-		s.Name = strings.TrimSpace(s.Name)
-		if !nameRe.MatchString(s.Name) || names[s.Name] {
-			return fmt.Errorf("service name %q must be unique, lowercase letters, digits and dashes", s.Name)
+		s.Name = slugName(s.Name) // BASE_SERVICE, "Base Service" -> base-service (the name also names the log file)
+		if !nameRe.MatchString(s.Name) {
+			return errors.New("give every service a name")
+		}
+		if names[s.Name] {
+			return fmt.Errorf("two services are both called %q; give them different names", s.Name)
 		}
 		names[s.Name] = true
 		if s.Port < 1024 || s.Port > 65535 || ports[s.Port] {
 			return fmt.Errorf("service %s: port must be 1024-65535 and unique", s.Name)
 		}
 		ports[s.Port] = true
-		if strings.TrimSpace(s.Command) == "" || len(s.Command) > 1000 {
+		if !s.External && (strings.TrimSpace(s.Command) == "" || len(s.Command) > 1000) {
 			return fmt.Errorf("service %s: a start command is required", s.Name)
 		}
 		ru, err := httpURL("Ready URL of "+s.Name, s.ReadyURL)
@@ -115,6 +139,10 @@ func (c *Config) Validate(boardFolders []string) error {
 		}
 		if s.ReadyTimeoutS < 5 || s.ReadyTimeoutS > 900 {
 			return fmt.Errorf("service %s: ready timeout must be 5-900 seconds", s.Name)
+		}
+		if s.External { // nothing to start: no command, no folder
+			s.Command, s.Folder = "", ""
+			continue
 		}
 		real, err := filepath.EvalSymlinks(s.Folder)
 		if err != nil {

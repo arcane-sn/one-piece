@@ -17,4 +17,10 @@ const save = async () => {
 const timer = setInterval(save, 3000)
 page.on('framenavigated', () => setTimeout(save, 1500))
 browser.on('disconnected', () => { clearInterval(timer); process.exit(0) })
+// On macOS closing the last window leaves the browser app running, so end it when no page is left
+const watch = (p) => p.on('close', async () => {
+  if (ctx.pages().length === 0) { await save(); await browser.close().catch(() => {}); process.exit(0) }
+})
+ctx.pages().forEach(watch)
+ctx.on('page', watch)
 await page.goto(loginUrl).catch(() => {})

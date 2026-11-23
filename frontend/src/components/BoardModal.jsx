@@ -55,7 +55,7 @@ export default function BoardModal({ initial, onSaved, onClose }) {
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !picking && onClose()}>
-      <form className="modal" role="dialog" aria-modal="true" aria-label={initial ? 'Edit Board' : 'New Board'} onSubmit={submit}>
+      <form className="modal board-modal" role="dialog" aria-modal="true" aria-label={initial ? 'Edit Board' : 'New Board'} onSubmit={submit}>
         <div className="modal-head">
           <h2>{initial ? 'Edit Board' : 'New Board'}</h2>
           <p>One board per product. Add the folders its agents may read and edit.</p>

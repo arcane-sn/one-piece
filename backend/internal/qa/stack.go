@@ -82,11 +82,22 @@ func CleanupStale(stateFile string) {
 // StartStack starts every service in its own process group, then waits until each ready URL answers.
 // Ports must be free first: a server One Piece did not start is never reused. Output goes to logDir/<name>.log.
 func StartStack(ctx context.Context, svcs []Service, logDir, stateFile string) (*Stack, error) {
+	var ext []Service // already running: checked, never started or stopped
+	own := svcs[:0:0]
 	for _, s := range svcs {
-		if PortBusy(s.Port) {
+		switch {
+		case s.External:
+			if !PortBusy(s.Port) {
+				return nil, fmt.Errorf("%s is not running on port %d. Start it first (it is marked as already running).", s.Name, s.Port)
+			}
+			ext = append(ext, s)
+		case PortBusy(s.Port):
 			return nil, fmt.Errorf("Port %d is already in use by a process One Piece did not start. Stop it and run again.", s.Port)
+		default:
+			own = append(own, s)
 		}
 	}
+	svcs = own
 	if err := os.MkdirAll(logDir, 0o700); err != nil {
 		return nil, err
 	}
@@ -114,6 +125,12 @@ func StartStack(ctx context.Context, svcs []Service, logDir, stateFile string) (
 	}
 	for _, p := range st.procs {
 		if err := waitReady(ctx, p); err != nil {
+			st.Stop()
+			return nil, err
+		}
+	}
+	for _, s := range ext { // no process of ours behind it (p.done stays nil)
+		if err := waitReady(ctx, &proc{svc: s}); err != nil {
 			st.Stop()
 			return nil, err
 		}

@@ -7,7 +7,7 @@ const Ctx = createContext({ rows: [], finished: [], forCard: () => [], dismiss: 
 const KEEP = 'op-activity-finished'
 export const rowKey = (r) => `${r.kind}:${r.boardId}:${r.cardId}`
 export const useActivity = () => useContext(Ctx)
-export const KIND = { discuss: 'Discuss', review: 'Review', brainstorm: 'Brainstorming', agent: 'Agent', chain: 'Run All' }
+export const KIND = { discuss: 'Discuss', review: 'Review', brainstorm: 'Brainstorming', agent: 'Agent', chain: 'Run All', agent_tasks: 'Generate Tasks', qa_cases: 'Generate QA', flow: 'Flow', description: 'Description' }
 
 export function ActivityProvider({ children }) {
   const [rows, setRows] = useState([])

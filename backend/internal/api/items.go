@@ -23,10 +23,16 @@ Write in the same language as the ticket.`
 
 const qaSystemPromptGen = `You write QA test cases for a Business ticket whose Agent Tasks are done.
 Return ONLY one JSON object, no prose and no code fence:
-{"qa_cases":[{"title":"...","body":"Markdown: steps and expected result"}]}
+{"qa_cases":[{"title":"...","body":"Markdown: prerequisites, steps and expected result"}]}
 Rules:
 - 3-8 test cases covering the Definition of Done, the failure paths and the Business Flow.
-- Keep each title short (one line, under about 80 characters); put steps and the expected result in the body.
+- Keep each title short (one line, under about 80 characters); put the rest in the body.
+- You may read the product's code (Read, Grep, Glob; a handful of tool calls). Name the real screens, buttons, routes and fields the steps use; never invent any. Say so when something only appears after a change you could not find.
+- Start every body with a "## Prerequisites" section, one bullet each, or "- none" when nothing special is needed:
+  - Login: the kind of account the case needs (for example "admin", "a user without a PIN"); say "no login" for public pages.
+  - Services: any other application or API that must be running besides the product itself (name it and what for).
+  - Data: records or settings that must exist before the steps (for example "a transaction in pending status").
+  Then "## Steps" and "## Expected result".
 - Each test case must be checkable by reading the code, plus what a person would see when using the product.
 Write in the same language as the ticket.`
 
@@ -214,7 +220,9 @@ func (s *server) generateItems(w http.ResponseWriter, r *http.Request) {
 	}
 	system := itemsSystemPrompt
 	var msg strings.Builder
+	var codeDirs []string // where Claude may read the code (QA cases are grounded in it)
 	if b, err := s.st.GetBoard(c.BoardID); err == nil {
+		codeDirs = b.Folders
 		fmt.Fprintf(&msg, "Product: %s\n", b.Name)
 		if b.Description != "" {
 			fmt.Fprintf(&msg, "About the product: %s\n", b.Description)
@@ -240,10 +248,29 @@ func (s *server) generateItems(w http.ResponseWriter, r *http.Request) {
 	if in.Kind == "qa" {
 		label, jkind = "QA Test Cases "+c.Ident, "qa_cases"
 	}
+	if repos, _ := s.ticketRepos(c.ID); len(repos) > 0 {
+		codeDirs = nil
+		for _, r := range repos {
+			codeDirs = append(codeDirs, r.Repo)
+		}
+	}
 	prompt, kind, version := msg.String(), in.Kind, c.ContentVersion
-	s.startJob(w, store.Job{Kind: jkind, Scope: "card", TargetID: id, CardID: id, Label: label}, 4*time.Minute,
+	timeout := 4 * time.Minute
+	if in.Kind == "qa" {
+		timeout = 8 * time.Minute // it reads the code first
+	}
+	if in.Kind == "agent" {
+		timeout = 12 * time.Minute // plus a Technical Flow drafted from the code for each task
+	}
+	s.startJob(w, store.Job{Kind: jkind, Scope: "card", TargetID: id, CardID: id, Label: label}, timeout,
 		func(ctx context.Context) (any, bool, error) {
-			out, err := runClaude(ctx, system, prompt)
+			var out string
+			var err error
+			if kind == "qa" && len(codeDirs) > 0 {
+				out, err = streamClaude(ctx, system, prompt, codeDirs, func(string) {})
+			} else {
+				out, err = runClaude(ctx, system, prompt)
+			}
 			var rep generatedItems
 			if err == nil {
 				a, b := strings.Index(out, "{"), strings.LastIndex(out, "}")
@@ -278,6 +305,10 @@ func (s *server) generateItems(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return nil, false, err
 			}
-			return map[string]any{"split": false, "reason": "", "count": len(items)}, true, nil
+			flows := 0
+			if kind == "agent" {
+				flows = s.autoFlows(ctx, c, items)
+			}
+			return map[string]any{"split": false, "reason": "", "count": len(items), "flows": flows}, true, nil
 		})
 }

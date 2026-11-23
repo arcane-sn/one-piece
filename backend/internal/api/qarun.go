@@ -23,6 +23,7 @@ Rules:
 - If the run failed because of your own spec (a wrong selector, timing, a broken import), repair the spec and run it again. You have a small fixed number of runs. Never weaken an assertion, remove a step, or change an expected result to get a pass.
 - After a run, open EVERY screenshot of the final attempt with Read and compare it with the expected result. Pass only when the run passed AND the screenshots show the expected result.
 - If the page differs from the expected result, that is a finding: report fail. If the problem is the environment (a login page, an error page, a missing service) and not the product code, run qa-blocked with a short reason instead of reporting fail.
+- The test case starts with a "Prerequisites" section (login, services, data). Before writing the spec, check what you can: if a prerequisite cannot hold (the browser is logged in as a different kind of account, a named service is not in the running stack, the needed data is missing), run qa-blocked saying exactly which prerequisite is missing instead of guessing.
 - You cannot edit product code, run other commands, or read anything outside the listed folders.
 Your final message must be ONLY one JSON object and nothing else:
 {"result":"pass"|"fail","issue":"one sentence (max 140 characters) naming what is wrong; empty with pass","desc":"with fail: what the page shows now, what the test case expects, and the screenshot step involved, so a developer can fix it; with pass: one or two sentences of evidence"}
@@ -132,6 +133,9 @@ func qaRepoRoots(b store.Board, ticket []store.Branch, cfg qa.Config) []string {
 		add(r.Repo)
 	}
 	for _, sv := range cfg.Services {
+		if sv.Folder == "" { // an already-running service has no folder here
+			continue
+		}
 		for _, f := range b.Folders {
 			if root, err := gitx.RepoRootWithin(f, sv.Folder); err == nil {
 				add(root)

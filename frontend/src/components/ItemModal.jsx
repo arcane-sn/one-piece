@@ -114,7 +114,7 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
 
   return createPortal(
     <div className="modal-backdrop item-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <form className="modal ticket" role="dialog" aria-modal="true" aria-label={(current ? 'Edit ' : 'New ') + NAME[k]} onSubmit={save}>
+      <form className="modal ticket ticket-xl" role="dialog" aria-modal="true" aria-label={(current ? 'Edit ' : 'New ') + NAME[k]} onSubmit={save}>
         <div className="ticket-head">
           <h2>{current ? 'Edit ' : 'New '}{NAME[k]}{current?.ident && <span className="ident">{current.ident}</span>}{current?.superseded && <span className="item-status stale">Superseded</span>}</h2>
           <button type="button" className="icon-btn" aria-label="Close" onClick={close}>×</button>
@@ -133,6 +133,7 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
               <FlowsSection parent={current ? `/api/items/${current.id}` : null} label="Technical Flow"
                 emptyHint="No technical flow yet." onChanged={() => {}} onModal={setFlowOpen} />
             )}
+            {current && k === 'agent' && <ChangesPanel itemId={current.id} refreshKey={current.status + (current.log?.length ?? 0)} />}
           </div>
           <aside className="ticket-side">
             <div className="field">
@@ -171,7 +172,6 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
                 )}
               </div>
             )}
-            {current && k === 'agent' && <ChangesPanel itemId={current.id} refreshKey={current.status + (current.log?.length ?? 0)} />}
             {current && k === 'qa' && <QARunPanel itemId={current.id} refreshKey={current.status + (current.log?.length ?? 0)} />}
             <div className="field review-side">
               <span>Claude Log</span>

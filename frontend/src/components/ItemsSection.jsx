@@ -34,6 +34,15 @@ export default function ItemsSection({ card, onModal }) {
   useEffect(() => { load() }, [load])
 
   const anyDoing = items.some((i) => i.status === 'doing')
+  // Run All answers before the server has marked the first task Doing, so show it as started right away
+  const [starting, setStarting] = useState('') // kind | ''
+  useEffect(() => {
+    if (!starting) return
+    if (anyDoing) { setStarting(''); return }
+    const t = setInterval(load, 700)
+    const stop = setTimeout(() => setStarting(''), 8000)
+    return () => { clearInterval(t); clearTimeout(stop) }
+  }, [starting, anyDoing, load])
   // follow runs started here or from the task modal
   useEffect(() => {
     if (!anyDoing) return
@@ -44,9 +53,12 @@ export default function ItemsSection({ card, onModal }) {
   async function runAll(action, kind) {
     setError('')
     try {
+      if (action === 'run-all') setStarting(kind)
       await api(`/api/cards/${card.id}/${action}`, { method: 'POST', body: { kind } })
+      if (action === 'stop-all') setStarting('')
       await load()
     } catch (err) {
+      setStarting('')
       toast(err.message)
     }
   }
@@ -102,7 +114,7 @@ export default function ItemsSection({ card, onModal }) {
         const all = items.filter((i) => i.kind === kind)
         const list = all.filter((i) => !i.superseded)
         const struck = all.filter((i) => i.superseded)
-        const running = list.some((i) => i.status === 'doing')
+        const running = list.some((i) => i.status === 'doing') || starting === kind
         return (
           <div className="field items-block" key={kind}>
             <div className="items-head">
@@ -114,7 +126,7 @@ export default function ItemsSection({ card, onModal }) {
                   </button>
                 )}
                 {card.approved && (running
-                  ? <button type="button" className="ai-btn" onClick={() => runAll('stop-all', kind)}><span className="spinner" aria-hidden="true" /> Working… ■ Stop</button>
+                  ? <button type="button" className="ai-btn" onClick={() => runAll('stop-all', kind)}><span className="spinner" aria-hidden="true" /> In progress · ■ Stop</button>
                   : <button type="button" className="ai-btn" disabled={!!busy || anyDoing || !list.some((i) => i.status === 'todo')}
                       title={kind === 'qa' ? 'Runs after all Agent Tasks are Done' : undefined} onClick={() => runAll('run-all', kind)}>▶ Run All</button>)}
                 <button type="button" className="ai-btn" onClick={() => open({ kind })}>+ {add}</button>
