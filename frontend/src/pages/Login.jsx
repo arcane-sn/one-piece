@@ -26,7 +26,7 @@ export default function Login({ onLoggedIn }) {
   return (
     <div className="login-page">
       <form className="login" onSubmit={submit}>
-        <Logo size={56} wordmark={false} />
+        <Logo size={56} />
         <h1>Ready When You Are</h1>
         <p className="sub">Sign in to see what your agents have finished.</p>
         <input placeholder="Username" autoFocus autoComplete="username" value={username} aria-invalid={!!error}

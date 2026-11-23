@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64" role="img" aria-label="One Piece">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F2A56F"/>
+      <stop offset="1" stop-color="#D65A42"/>
+    </linearGradient>
+    <mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="#fff"/>
+      <path d="M32 11V19a3.6 3.6 0 1 1 0 6V32M11 32H19a3.6 3.6 0 1 0 6 0H32M32 53V45a3.6 3.6 0 1 1 0-6V32H39a3.6 3.6 0 1 1 6 0H53" fill="none" stroke="#000" stroke-width="2.6"/>
+    </mask>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#g)"/>
+  <g mask="url(#m)">
+    <rect x="12" y="12" width="40" height="40" rx="7" fill="#fff"/>
+    <path d="M32 32H39a3.6 3.6 0 1 1 6 0H52V45a7 7 0 0 1-7 7H32V45a3.6 3.6 0 1 1 0-6Z" fill="#B0E3E3"/>
+  </g>
+</svg>

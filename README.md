@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/brand/logo.svg" width="96" alt="One Piece logo" /></p>
+
 # One Piece
 
 AI workflow pribadi untuk membuat product. Slice 1: login + dashboard + kanban board.

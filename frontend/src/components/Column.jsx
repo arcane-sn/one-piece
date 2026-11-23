@@ -38,7 +38,7 @@ export default function Column({ status, label, dot, cards, onMove, onOpen, foot
       ))}
       {cards.length === 0 && (
         <div className="col-empty">
-          <Logo glyph size={32} />
+          <Logo variant="glyph" size={84} />
           <b>{emptyTitle}</b>
           <span>{emptyHint}</span>
         </div>

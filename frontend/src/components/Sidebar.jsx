@@ -11,7 +11,7 @@ export default function Sidebar({ user, boards, onLogout, onNewBoard, collapsed,
   return (
     <aside className="sidebar">
       <div className="brand-line">
-        <NavLink to="/" className="brand-row" aria-label="One Piece home"><Logo size={28} /></NavLink>
+        <NavLink to="/" className="brand-row" aria-label="One Piece home"><Logo size={28} wordmark /></NavLink>
         <button type="button" className="side-collapse" title="Hide sidebar" aria-label="Hide sidebar" onClick={onToggle}>«</button>
       </div>
       <NavLink to="/" end className="nav-item">
