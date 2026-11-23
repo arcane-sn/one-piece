@@ -1,3 +1,4 @@
+import CommandPalette from './components/CommandPalette'
 import { useCallback, useEffect, useState } from 'react'
 import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { api } from './api'
@@ -31,6 +32,7 @@ function Shell({ user, onLogout }) {
 
   return (
     <>
+      <CommandPalette boards={boards ?? []} />
       <Sidebar user={user} boards={boards ?? []} onLogout={onLogout} onNewBoard={() => setModal('new')} collapsed={collapsed} onToggle={toggleSide} />
       <main className={'main' + (collapsed ? ' wide' : '')}>
         <Routes>

@@ -3,6 +3,13 @@ import { Link } from 'react-router-dom'
 import { api, baseName } from '../api'
 import { FolderIcon } from '../components/Logo'
 import { totalCards } from '../components/Sidebar'
+import Tip from '../components/Tip'
+
+const icon = (d) => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+)
+const EDIT = icon('M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z')
+const TRASH = icon('M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6M10 11v6M14 11v6')
 
 const STATUSES = ['draft', 'business', 'agent', 'qa', 'done']
 
@@ -48,21 +55,19 @@ export default function Dashboard({ user, boards, reload, onNew, onEdit }) {
                 <span className="board-name">{b.name}</span>
                 <span className="board-count">{plural(totalCards(b), 'card')}</span>
               </div>
-              {b.description && <p className="board-desc">{b.description}</p>}
-              {b.folders.length > 0 && (
-                <div className="chips">
-                  {b.folders.map((f) => (
-                    <span className="chip" key={f} title={f}><FolderIcon />{baseName(f)}</span>
-                  ))}
-                </div>
-              )}
+              <p className="board-desc">{b.description}</p>
+              <div className="chips board-chips">
+                {b.folders.map((f) => (
+                  <span className="chip" key={f}><FolderIcon />{baseName(f)}</span>
+                ))}
+              </div>
               <div className="statbar" aria-hidden="true">
                 {STATUSES.map((s) => <span key={s} style={{ flex: b.counts[s] }} />)}
               </div>
             </Link>
             <div className="board-actions">
-              <button onClick={() => onEdit(b)}>Edit</button>
-              <button className="danger" onClick={() => remove(b)}>Delete</button>
+              <Tip label="Edit" side="top"><button aria-label={`Edit ${b.name}`} onClick={() => onEdit(b)}>{EDIT}</button></Tip>
+              <Tip label="Delete" side="top"><button className="danger" aria-label={`Delete ${b.name}`} onClick={() => remove(b)}>{TRASH}</button></Tip>
             </div>
           </div>
         ))}

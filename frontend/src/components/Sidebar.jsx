@@ -1,42 +1,82 @@
 import { NavLink } from 'react-router-dom'
 import Logo from './Logo'
+import Tip from './Tip'
 
 const SWATCH = ['#EA9259', '#7FC9C9', '#D65A42']
 export const totalCards = (b) => Object.values(b.counts || {}).reduce((a, n) => a + n, 0)
 
+const Chevrons = ({ flip }) => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: flip ? 'scaleX(-1)' : 'none', transition: 'transform 0.28s var(--ease)' }}>
+    <path d="M7.5 3 3.5 7l4 4M12 3 8 7l4 4" />
+  </svg>
+)
+const GridIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" />
+    <rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
+  </svg>
+)
+const SearchIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+)
+const LogoutIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+  </svg>
+)
+
 export default function Sidebar({ user, boards, onLogout, onNewBoard, collapsed, onToggle }) {
-  if (collapsed) {
-    return <button type="button" className="side-open" title="Show sidebar" aria-label="Show sidebar" onClick={onToggle}>»</button>
-  }
+  const r = collapsed // icon-only rail (same DOM, CSS animates between the two)
   return (
-    <aside className="sidebar">
-      <div className="brand-line">
-        <NavLink to="/" className="brand-row" aria-label="One Piece home"><Logo size={28} wordmark /></NavLink>
-        <button type="button" className="side-collapse" title="Hide sidebar" aria-label="Hide sidebar" onClick={onToggle}>«</button>
-      </div>
-      <NavLink to="/" end className="nav-item">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" />
-          <rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
-        </svg>
-        <span className="grow">Dashboard</span>
-      </NavLink>
-      <div className="side-head">
-        <span className="side-label">Boards</span>
-        <button className="side-plus" title="New Board" aria-label="New Board" onClick={onNewBoard} />
-      </div>
-      {boards.map((b, i) => (
-        <NavLink key={b.id} to={`/boards/${b.id}`} className="nav-item board-link">
-          <span className="swatch" style={{ background: SWATCH[i % SWATCH.length] }} />
-          <span className="grow">{b.name}</span>
-          <span className="count">{totalCards(b)}</span>
-        </NavLink>
-      ))}
-      <div className="side-user">
-        <span className="avatar">{user.charAt(0).toUpperCase()}</span>
-        <span className="grow user-name">{user}</span>
-        <button className="link" onClick={onLogout}>Log Out</button>
-      </div>
-    </aside>
+    <>
+      <aside className={'sidebar' + (r ? ' rail' : '')}>
+        <Tip label="One Piece" off={!r}>
+          <NavLink to="/" className="brand-row" aria-label="One Piece home"><Logo size={30} wordmark /></NavLink>
+        </Tip>
+        <Tip label="Search  ⌘K" off={!r}>
+          <button type="button" className="nav-item search-item" aria-label="Search" onClick={() => window.dispatchEvent(new Event('op:cmdk'))}>
+            <SearchIcon />
+            <span className="grow">Search</span>
+            <kbd className="count">⌘K</kbd>
+          </button>
+        </Tip>
+        <Tip label="Dashboard" off={!r}>
+          <NavLink to="/" end className="nav-item" aria-label="Dashboard">
+            <GridIcon />
+            <span className="grow">Dashboard</span>
+          </NavLink>
+        </Tip>
+        <div className="side-head">
+          <span className="side-label">Boards</span>
+          <Tip label="New Board" off={!r}>
+            <button className="side-plus" aria-label="New Board" onClick={onNewBoard} />
+          </Tip>
+        </div>
+        {boards.map((b, i) => (
+          <Tip key={b.id} label={`${b.name} · ${totalCards(b)}`} off={!r}>
+            <NavLink to={`/boards/${b.id}`} className="nav-item board-link" aria-label={b.name}>
+              <span className="board-tile" style={{ background: SWATCH[i % SWATCH.length] }}>{b.name.charAt(0).toUpperCase()}</span>
+              <span className="grow">{b.name}</span>
+              <span className="count">{totalCards(b)}</span>
+            </NavLink>
+          </Tip>
+        ))}
+        <div className="side-user">
+          <Tip label={user} off={!r}>
+            <span className="avatar">{user.charAt(0).toUpperCase()}</span>
+          </Tip>
+          <span className="grow user-name">{user}</span>
+          <Tip label="Log Out" off={!r}>
+            <button className="link logout" aria-label="Log Out" onClick={onLogout}>
+              <span className="only-rail"><LogoutIcon /></span>
+              <span className="only-full">Log Out</span>
+            </button>
+          </Tip>
+        </div>
+      </aside>
+      <Tip label={r ? 'Show sidebar' : 'Hide sidebar'}>
+        <button type="button" className={'side-collapse' + (r ? ' rail' : '')} aria-label={r ? 'Show sidebar' : 'Hide sidebar'} onClick={onToggle}><Chevrons flip={r} /></button>
+      </Tip>
+    </>
   )
 }

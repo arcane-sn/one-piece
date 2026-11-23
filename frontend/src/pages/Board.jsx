@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api, baseName } from '../api'
 import Column from '../components/Column'
 import BoardModal from '../components/BoardModal'
@@ -17,6 +17,7 @@ const COLUMNS = [
 
 export default function Board({ reloadBoards }) {
   const { id } = useParams()
+  const [search, setSearch] = useSearchParams()
   const [board, setBoard] = useState(null) // null = loading, false = not found
   const [cards, setCards] = useState([])
   const [error, setError] = useState('')
@@ -35,6 +36,15 @@ export default function Board({ reloadBoards }) {
     }
   }, [id])
   useEffect(() => { load() }, [load])
+
+  // ?card=<id> (from the Cmd+K palette) opens that ticket once the board has loaded.
+  const wanted = search.get('card')
+  useEffect(() => {
+    if (!wanted || !board || String(board.id) !== String(id)) return
+    const c = cards.find((x) => String(x.id) === wanted)
+    if (c) setTicket(c)
+    setSearch({}, { replace: true })
+  }, [wanted, board, cards, id, setSearch])
 
   const upsert = (card) => {
     setCards((cs) => (cs.some((x) => x.id === card.id) ? cs.map((x) => (x.id === card.id ? card : x)) : [...cs, card]))
