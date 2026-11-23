@@ -6,6 +6,7 @@ import BoardModal from '../components/BoardModal'
 import BrainstormModal from '../components/BrainstormModal'
 import TicketModal from '../components/TicketModal'
 import { FolderIcon } from '../components/Logo'
+import SearchButton from '../components/SearchButton'
 
 const COLUMNS = [
   ['draft', 'Draft', '#9A8F86'],
@@ -102,6 +103,7 @@ export default function Board({ reloadBoards }) {
           {board.folders.map((f) => (
             <span className="chip soft" key={f} title={f}><FolderIcon />{baseName(f)}</span>
           ))}
+          <SearchButton />
           <button onClick={() => setBrainstorm(true)}>Brainstorming</button>
           <button onClick={() => setEditing(true)}>Edit Board</button>
         </div>

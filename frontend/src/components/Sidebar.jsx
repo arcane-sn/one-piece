@@ -16,9 +16,6 @@ const GridIcon = () => (
     <rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
   </svg>
 )
-const SearchIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-)
 const LogoutIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
@@ -32,13 +29,6 @@ export default function Sidebar({ user, boards, onLogout, onNewBoard, collapsed,
       <aside className={'sidebar' + (r ? ' rail' : '')}>
         <Tip label="One Piece" off={!r}>
           <NavLink to="/" className="brand-row" aria-label="One Piece home"><Logo size={30} wordmark /></NavLink>
-        </Tip>
-        <Tip label="Search  ⌘K" off={!r}>
-          <button type="button" className="nav-item search-item" aria-label="Search" onClick={() => window.dispatchEvent(new Event('op:cmdk'))}>
-            <SearchIcon />
-            <span className="grow">Search</span>
-            <kbd className="count">⌘K</kbd>
-          </button>
         </Tip>
         <Tip label="Dashboard" off={!r}>
           <NavLink to="/" end className="nav-item" aria-label="Dashboard">

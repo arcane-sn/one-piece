@@ -4,6 +4,7 @@ import { api, baseName } from '../api'
 import { FolderIcon } from '../components/Logo'
 import { totalCards } from '../components/Sidebar'
 import Tip from '../components/Tip'
+import SearchButton from '../components/SearchButton'
 
 const icon = (d) => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
@@ -43,6 +44,7 @@ export default function Dashboard({ user, boards, reload, onNew, onEdit }) {
             {boards === null ? 'Loading…' : `${plural(boards.length, 'board')} · ${plural(cards, 'card')}`}
           </div>
         </div>
+        <SearchButton />
       </div>
 
       {error && <p className="error" style={{ marginBottom: 16 }}>{error}</p>}
