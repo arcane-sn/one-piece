@@ -66,6 +66,7 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/boards/{id}/brainstorm", s.getBrainstorm)
 	mux.HandleFunc("POST /api/boards/{id}/brainstorm/messages", s.postBrainstormMessage)
 	mux.HandleFunc("POST /api/boards/{id}/brainstorm/stop", s.stopBrainstorm)
+	mux.HandleFunc("POST /api/boards/{id}/drafts", s.createChatDraft)
 	mux.HandleFunc("POST /api/boards/{id}/brainstorm/new", s.newBrainstorm)
 	mux.HandleFunc("GET /api/boards/{id}/plan/{v}", s.getPlanVersion)
 	mux.HandleFunc("POST /api/boards/{id}/plan/{v}/restore", s.restorePlan)

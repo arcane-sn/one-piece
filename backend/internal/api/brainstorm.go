@@ -19,20 +19,25 @@ import (
 	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
 
-const brainstormTurnTimeout = 5 * time.Minute
+const brainstormTurnTimeout = 10 * time.Minute
+
+// brainstormMaxTurns is the step budget of one chat turn (reading code takes steps; the default 12 ran out).
+const brainstormMaxTurns = 25
 
 // The system prompt is byte-identical on every turn so the prompt cache keeps hitting;
 // per-turn facts (ticket changes) travel in the user message.
 const brainstormSystemPrompt = `You are a planning partner for one product owner. You help them plan a whole product, one conversation per product (board). You plan; you never build or write code.
-How to talk:
-- Ask ONE question per turn. Start from what the owner wants and why, not from solutions. Offer a short menu only if they are stuck; if they ask you to guess, propose something concrete.
-- Now and then play back what you understood in a few short sentences, mark anything you are guessing as "my guess", and end by asking what is wrong or missing.
-- Keep replies short. Reply in the language the owner writes in.
+How a session goes. Move to the next phase only when the owner has answered the current one:
+1. Understand. Ask ONE question per turn: what they want, why, who it is for, what success looks like, what constrains it. Start from the goal, not from solutions. Offer a short menu only if they are stuck; if they ask you to guess, propose something concrete. Look in the product folders before asking what the code can answer.
+2. Explore approaches. Once the goal is clear, give 2-3 approaches, each in 2-3 lines with its main trade-off. Recommend one and say why, then ask which they choose.
+3. Validate. Present the plan in small sections (scope, key flows, ticket breakdown), a few sentences each, and after each ask whether it looks right. Mark anything you are guessing as "my guess". Fix what they correct.
+4. Write down. Only after the owner confirms, update the plan document and create Draft tickets. Never create Drafts for ideas still under discussion.
+Always: keep replies short, reply in the language the owner writes in, and be frugal with steps (Grep before Read, read only what you need).
 Where things live (the first message of a session gives the exact paths):
 - Tickets: the command given there lists them ("tickets") and shows one ("ticket <id>"). Read a ticket only when you need its details.
 - Draft tickets: "draft-add '<title>'" and "draft-update <id> '<title>'" create and change Draft tickets; put the description on stdin with a shell heredoc. A Draft is a rough ticket: what and why in 2-6 lines, it may be incomplete. You cannot change any other ticket.
-- The plan: one Markdown document at the plan path from the first message. Keep it current with Edit or Write: product overview, goals and non-goals, the ticket list (title, one-line summary, card id), open questions. You may write no other file.
-- Product folders (read-only) can be searched with Read, Grep and Glob.`
+- The plan: one Markdown document at the plan path from the first message. Keep it current with Edit or Write, always with these sections in this order: Overview; Goals; Non-goals; Users and key flows; Chosen approach (with the alternatives you rejected and why); Tickets (title, one-line summary, card id); Open questions. Leave a section out only when it does not apply, and keep it short. You may write no other file.
+- Product folders (read-only) can be searched with Read, Grep and Glob. Secret files (.env, .env.local, ...) are blocked on purpose; .env.example may be read.`
 
 // brainstormRun is everything one Claude turn needs.
 type brainstormRun struct {
@@ -58,7 +63,7 @@ var runBrainstorm = func(ctx context.Context, in brainstormRun, onText func(stri
 		return "", err
 	}
 	return runSession(ctx, sessionSpec{
-		System: in.System, Prompt: in.Prompt, SessionID: in.SessionID,
+		System: in.System, Prompt: in.Prompt, SessionID: in.SessionID, MaxTurns: brainstormMaxTurns,
 		Dirs: append([]string{planDir}, in.Dirs...),
 		AllowedTools: []string{"Read", "Grep", "Glob",
 			"Bash(" + in.Exe + " tickets:*)", "Bash(" + in.Exe + " ticket:*)",
@@ -72,6 +77,7 @@ var runBrainstorm = func(ctx context.Context, in brainstormRun, onText func(stri
 // sessionSpec is one resumable `claude -p` turn: the Brainstorming chat and the Discuss session share it.
 type sessionSpec struct {
 	System, Prompt, SessionID string
+	MaxTurns                  int          // --max-turns; 0 = 12
 	Dirs                      []string     // --add-dir, readable
 	AllowedTools              []string     // --allowedTools entries
 	Env                       []string     // KEY=VALUE added to the process environment
@@ -87,7 +93,11 @@ func runSession(ctx context.Context, spec sessionSpec, onText func(string)) (str
 	}
 	defer os.RemoveAll(tmp)
 
-	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--max-turns", "12",
+	maxTurns := spec.MaxTurns
+	if maxTurns <= 0 {
+		maxTurns = 12
+	}
+	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--max-turns", strconv.Itoa(maxTurns),
 		"--setting-sources", "project", "--system-prompt", spec.System}
 	if spec.SessionID != "" {
 		args = append(args, "--resume", spec.SessionID)
@@ -99,6 +109,7 @@ func runSession(ctx context.Context, spec sessionSpec, onText func(string)) (str
 		args = append(args, "--allowedTools")
 		args = append(args, spec.AllowedTools...)
 	}
+	args = append(args, denyArgs(spec.Dirs)...) // .env files stay unreadable
 
 	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Dir = tmp
@@ -114,12 +125,13 @@ func runSession(ctx context.Context, spec sessionSpec, onText func(string)) (str
 		return "", err
 	}
 	var final, sessionID string
-	var isErr, announced bool
+	var isErr, announced, outOfSteps bool
 	sc := bufio.NewScanner(out)
 	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	for sc.Scan() {
 		var ev struct {
 			Type      string `json:"type"`
+			Subtype   string `json:"subtype"`
 			IsError   bool   `json:"is_error"`
 			Result    string `json:"result"`
 			SessionID string `json:"session_id"`
@@ -146,11 +158,16 @@ func runSession(ctx context.Context, spec sessionSpec, onText func(string)) (str
 			}
 		case "result":
 			final, isErr, sessionID = ev.Result, ev.IsError, ev.SessionID
+			outOfSteps = ev.Subtype == "error_max_turns"
 		}
 	}
 	werr := cmd.Wait()
 	if ctx.Err() != nil {
 		return "", ctx.Err()
+	}
+	if outOfSteps && sessionID != "" { // not a failure: the session is intact, the owner can say "continue"
+		onText("I ran out of steps before finishing. Reply \"continue\" and I will pick up where I stopped.")
+		return sessionID, nil
 	}
 	if isErr || werr != nil {
 		return "", fmt.Errorf("claude: %v: %s", werr, shorten(strings.TrimSpace(stderr.String()+" "+final), 200))
@@ -283,6 +300,9 @@ func (s *server) runTurn(ctx context.Context, cancel context.CancelFunc, b store
 	run := brainstormRun{System: brainstormSystemPrompt, SessionID: st.SessionID, Exe: exe, DB: s.st.Path,
 		PlanPath: s.st.PlanPath(b.ID), BoardID: b.ID, Dirs: b.Folders}
 	run.Prompt = brainstormPrompt(b, exe, run.PlanPath, index, st, text)
+	if paths, _ := mentionedPaths(b.Folders, text); len(paths) > 0 { // "@folder/path": point Claude at them
+		run.Prompt += "\n\nThe owner referenced these paths with @. Open them (Read/Glob) before you answer; a handful of tool calls at most:\n" + mentionContext(paths)
+	}
 	run.Dirs, run.Prompt = s.attachImages(text, run.Dirs, run.Prompt)
 
 	wrote := false
@@ -291,18 +311,14 @@ func (s *server) runTurn(ctx context.Context, cancel context.CancelFunc, b store
 		s.st.AppendBrainstormText(msgID, t)
 	}
 	var announced string // session id the CLI reported, even if the turn never finishes
-	run.OnSession = func(id string) { announced = id }
 	fresh := st.SessionID == ""
-	sid, err := runBrainstorm(ctx, run, onText)
-	// Only a dead session may restart, and only before anything happened: replaying a turn that already
-	// wrote text (or created Drafts) would do its work twice.
-	if err != nil && !fresh && !wrote && ctx.Err() == nil && strings.Contains(err.Error(), "No conversation found") {
-		log.Printf("brainstorm board %d: resume failed (%v), starting a fresh session", b.ID, err)
-		run.SessionID, fresh, announced = "", true, ""
-		run.Prompt = brainstormPrompt(b, exe, run.PlanPath, index, store.BrainstormState{}, text)
-		_, run.Prompt = s.attachImages(text, nil, run.Prompt) // run.Dirs already has the uploads folder
-		sid, err = runBrainstorm(ctx, run, onText)
+	run.OnSession = func(id string) {
+		announced = id
+		if fresh { // saved at once: a server restart mid-turn must not orphan the conversation ("continue" resumes it)
+			s.st.SetBrainstormState(b.ID, store.BrainstormState{SessionID: id, SentIndex: index})
+		}
 	}
+	sid, err := runBrainstorm(ctx, run, onText)
 	if _, gone := s.st.GetBoard(b.ID); gone != nil { // deleted while Claude was working
 		return
 	}
@@ -315,8 +331,12 @@ func (s *server) runTurn(ctx context.Context, cancel context.CancelFunc, b store
 		log.Printf("brainstorm board %d failed: %v", b.ID, err)
 		if !wrote {
 			msg := "Claude could not answer. Try again."
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			switch {
+			case errors.Is(ctx.Err(), context.DeadlineExceeded):
 				msg = "Claude took too long to answer. Try again."
+			case strings.Contains(err.Error(), "No conversation found"):
+				// Never swap in a fresh session behind the owner's back: it would lose what was agreed.
+				msg = "Claude's earlier session could not be found, so I did not start a new one silently. Use New conversation (top right) to continue with a fresh session; the chat history and the plan stay."
 			}
 			onText(msg)
 		}
@@ -425,6 +445,29 @@ func (s *server) postBrainstormMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	go s.runTurn(ctx, cancel, b, exe, am.ID, text)
 	writeJSON(w, http.StatusAccepted, map[string]bool{"running": true})
+}
+
+// POST /api/boards/{id}/drafts {"title","description"} → 201: one click turns a chat reply into a Draft ticket.
+func (s *server) createChatDraft(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	var in struct {
+		Title       string `json:"title"`
+		Description string `json:"description"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, err)
+		return
+	}
+	c, err := s.st.CreateDraft(id, in.Title, in.Description)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, c)
 }
 
 // POST /api/boards/{id}/brainstorm/stop

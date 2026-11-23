@@ -159,27 +159,22 @@ func TestBrainstormStopKeepsPartialReplyAsStopped(t *testing.T) {
 	}
 }
 
-func TestBrainstormResumeFailureFallsBackToFreshSession(t *testing.T) {
+func TestBrainstormLostSessionFailsInsteadOfStartingFresh(t *testing.T) {
 	calls := useBrainstorm(t, func(_ context.Context, in brainstormRun, onText func(string)) (string, error) {
-		if in.SessionID == "dead" {
-			return "", errors.New("No conversation found with session ID: dead")
-		}
-		onText("ok")
-		return "sess-new", nil
+		return "", errors.New("No conversation found with session ID: dead")
 	})
 	s, bp, ck, bid := bsSetup(t)
 	s.St.SetBrainstormState(bid, store.BrainstormState{SessionID: "dead", SentIndex: ""})
 	bsSend(t, s, bp, ck, "hello again")
 	v := bsIdle(t, s, bp, ck)
-	if a := v.Messages[1]; a.Text != "ok" || a.Status != "done" {
+	if a := v.Messages[1]; a.Status != "failed" || !strings.Contains(a.Text, "New conversation") {
 		t.Fatalf("assistant = %+v", a)
 	}
-	if len(*calls) != 2 || (*calls)[0].SessionID != "dead" || (*calls)[1].SessionID != "" ||
-		!strings.Contains((*calls)[1].Prompt, "Board: B") {
-		t.Fatalf("calls = %+v", *calls)
+	if len(*calls) != 1 || (*calls)[0].SessionID != "dead" {
+		t.Fatalf("must not start a fresh session on its own: %+v", *calls)
 	}
-	if st, _ := s.St.GetBrainstormState(bid); st.SessionID != "sess-new" {
-		t.Fatalf("state = %+v", st)
+	if st, _ := s.St.GetBrainstormState(bid); st.SessionID != "dead" {
+		t.Fatalf("the stored session must stay: %+v", st)
 	}
 }
 
@@ -356,5 +351,16 @@ func TestBrainstormNewConversationClearsSession(t *testing.T) {
 	}
 	if st, _ := s.St.GetBrainstormState(bid); st != (store.BrainstormState{}) {
 		t.Fatalf("state = %+v", st)
+	}
+}
+
+func TestChatDraftEndpointCreatesDraft(t *testing.T) {
+	s, bp, ck, _ := bsSetup(t)
+	resp, _ := s.req(t, "POST", bp+"/drafts", map[string]any{"title": "From chat", "description": "body"}, ck)
+	if resp.StatusCode != 201 {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if resp, _ := s.req(t, "POST", bp+"/drafts", map[string]any{"title": "  "}, ck); resp.StatusCode != 400 {
+		t.Fatalf("blank title status = %d", resp.StatusCode)
 	}
 }

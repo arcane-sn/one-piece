@@ -29,6 +29,7 @@ var streamClaude = func(ctx context.Context, system, user string, dirs []string,
 	for _, d := range dirs {
 		args = append(args, "--add-dir", d)
 	}
+	args = append(args, denyArgs(dirs)...)
 	return runStream(ctx, args, tmp, user, onLog)
 }
 

@@ -143,10 +143,29 @@ func (s *Store) UpdateDraft(boardID, id int64, title, description string) (Card,
 }
 
 // TicketIndex renders one "#id status title" line per card; "" when there are none.
+// summaryLine is the first non-empty line of a description, flattened and cut to 100 runes ("" if none).
+func summaryLine(desc string) string {
+	for _, l := range strings.Split(desc, "\n") {
+		l = strings.Join(strings.Fields(strings.TrimLeft(strings.TrimSpace(l), "#>*-• ")), " ")
+		if l == "" {
+			continue
+		}
+		if r := []rune(l); len(r) > 100 {
+			l = string(r[:100]) + "…"
+		}
+		return l
+	}
+	return ""
+}
+
 func TicketIndex(cards []Card) string {
 	lines := make([]string, 0, len(cards))
 	for _, c := range cards {
-		lines = append(lines, "#"+strconv.FormatInt(c.ID, 10)+" "+c.Status+" "+c.Title)
+		line := "#" + strconv.FormatInt(c.ID, 10) + " " + c.Status + " " + c.Title
+		if sum := summaryLine(c.Description); sum != "" {
+			line += " — " + sum
+		}
+		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
 }

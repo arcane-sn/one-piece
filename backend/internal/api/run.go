@@ -37,6 +37,7 @@ var agentRun = func(ctx context.Context, cwd string, dirs []string, system, user
 	for _, d := range dirs {
 		args = append(args, "--add-dir", d)
 	}
+	args = append(args, denyArgs(append([]string{cwd}, dirs...))...)
 	return runStream(ctx, args, cwd, user, onLog)
 }
 

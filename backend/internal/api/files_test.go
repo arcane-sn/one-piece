@@ -138,3 +138,38 @@ func TestRepoMentions(t *testing.T) {
 		t.Errorf("notRepos = %v", not)
 	}
 }
+
+func TestSecretDenyRulesBlockEnvButNotTemplates(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{".env", ".env.example", ".env.local", "sub/.env.sample", "sub/.env.production", "sub/prod.env", "node_modules/x/.env.local"} {
+		p := filepath.Join(root, filepath.FromSlash(f))
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte("X=1"), 0o644)
+	}
+	got := strings.Join(secretDenyRules([]string{root}), "\n")
+	for _, want := range []string{"Read(/" + root + "/**/.env)", root + "/.env.local)", root + "/sub/.env.production)", root + "/sub/prod.env)"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing rule %q in\n%s", want, got)
+		}
+	}
+	for _, bad := range []string{".env.example", ".env.sample", "node_modules"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("must not deny %q:\n%s", bad, got)
+		}
+	}
+}
+
+func TestMentionContextListsFoldersAndHidesSecrets(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "src"), 0o755)
+	os.WriteFile(filepath.Join(root, "main.go"), []byte("package main"), 0o644)
+	os.WriteFile(filepath.Join(root, ".env"), []byte("S=1"), 0o644)
+	os.WriteFile(filepath.Join(root, ".env.example"), []byte("S="), 0o644)
+	got := mentionContext([]string{root, filepath.Join(root, "main.go"), filepath.Join(root, ".env")})
+	if !strings.Contains(got, "main.go, src/") || strings.Contains(got, "(folder: .env") || strings.Contains(got, ", .env") {
+		t.Fatalf("context = %q", got)
+	}
+	if !strings.Contains(got, "(file, 12 bytes)") || !strings.Contains(got, "(secret file, blocked)") {
+		t.Fatalf("context = %q", got)
+	}
+}

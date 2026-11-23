@@ -97,8 +97,8 @@ func TestTicketIndexLines(t *testing.T) {
 	if got := TicketIndex(nil); got != "" {
 		t.Fatalf("empty index = %q", got)
 	}
-	got := TicketIndex([]Card{{ID: 1, Status: "draft", Title: "A"}, {ID: 2, Status: "business", Title: "B"}})
-	if got != "#1 draft A\n#2 business B" {
+	got := TicketIndex([]Card{{ID: 1, Status: "draft", Title: "A", Description: "\n## What and why\nmore"}, {ID: 2, Status: "business", Title: "B"}})
+	if got != "#1 draft A — What and why\n#2 business B" {
 		t.Fatalf("index = %q", got)
 	}
 }
