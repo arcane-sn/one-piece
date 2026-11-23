@@ -1,3 +1,4 @@
+import Thinking from './Thinking'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import PromptModal from './PromptModal'
@@ -5,6 +6,7 @@ import FlowsSection from './FlowsSection'
 import ItemsSection from './ItemsSection'
 import BranchingSection from './BranchingSection'
 import DiscussModal from './DiscussModal'
+import { useActivity } from '../lib/activity'
 import DecisionLog from './DecisionLog'
 import { useJobs } from '../lib/jobs'
 import RichEditor from './RichEditor'
@@ -30,6 +32,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
   const [reviewOpen, setReviewOpen] = useState(false)
   const [flowTick, setFlowTick] = useState(0) // bumps when Claude may have changed the Business Flows
   // While a Claude Review turn runs, the ticket is Claude's to edit: the editors lock and reload after.
+  const discussing = useActivity().forCard(current?.id).some((r) => r.kind === 'discuss')
   const reviewing = useJobs().running('review_chat', 'card', current?.id)
   const [branchTick, setBranchTick] = useState(0) // bumps when a Discuss turn ends, so Branching reloads
       const titleRef = useRef(null)
@@ -164,10 +167,10 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
           <h2>{current ? 'Edit Ticket' : 'New Ticket'}{current?.ident && <span className="ident">{current.ident}</span>}</h2>
           {reviewing && <span className="review-badge running ticket-lock"><span className="spinner" /> Claude is editing…</span>}
           {current && ['draft', 'business', 'done'].includes(current.status) && (
-            <button type="button" className="ai-btn discuss-btn"
+            <button type="button" className={'ai-btn discuss-btn' + (discussing ? ' working' : '')}
               title={current.status === 'done' ? 'Guided close-out: integrate, push, open PRs' : 'Shape the description and Business Flow, and set up branches'}
               onClick={() => { setDiscussOpen(true); setFlowOpen(true) }}>
-              <span aria-hidden="true">✦</span> {current.status === 'done' ? 'Close out' : 'Discuss'}
+              {discussing ? <span className="spinner" aria-hidden="true" /> : <span aria-hidden="true">✦</span>} {current.status === 'done' ? 'Close out' : 'Discuss'}{discussing && ' · working'}
             </button>
           )}
           <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}>×</button>
@@ -183,7 +186,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
               <div className="field-row">
                 <span>Description</span>
                 <button type="button" className="ai-btn" disabled={reviewing} title="Generate Description With Claude" onClick={() => setPromptOpen(true)}>
-                  {describing ? <><span className="spinner" aria-hidden="true" /> Thinking…</> : <><span aria-hidden="true">✦</span> Generate</>}
+                  {describing ? <><span className="spinner" aria-hidden="true" /> <Thinking inline /></> : <><span aria-hidden="true">✦</span> Generate</>}
                 </button>
               </div>
               <RichEditor value={description} placeholder="Describe the change and what “done” looks like."

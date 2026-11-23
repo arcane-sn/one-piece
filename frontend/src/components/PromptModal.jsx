@@ -1,3 +1,4 @@
+import Thinking from './Thinking'
 import { useEffect, useState } from 'react'
 import { jobError, jobResult, useJob } from '../lib/jobs'
 import MentionTextarea from './MentionTextarea'
@@ -61,7 +62,7 @@ export default function PromptModal({ boardId, cardId, title, description, onUse
           <button type="button" onClick={onClose}>Close</button>
           <button type={result ? 'button' : 'submit'} className={result ? '' : 'primary'} disabled={busy || !prompt.trim()}
             onClick={result ? generate : undefined}>
-            {busy ? <><span className="spinner" aria-hidden="true" /> Thinking…</> : result ? 'Regenerate' : 'Generate'}
+            {busy ? <><span className="spinner" aria-hidden="true" /> <Thinking inline /></> : result ? 'Regenerate' : 'Generate'}
           </button>
           {result && !busy && (
             <button type="button" className="primary" onClick={use}>Use This Draft</button>

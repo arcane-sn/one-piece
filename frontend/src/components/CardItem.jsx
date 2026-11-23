@@ -1,4 +1,5 @@
 import { useJobs } from '../lib/jobs'
+import { KIND, useActivity } from '../lib/activity'
 
 // Markdown -> one short plain-text line for the card preview.
 const plain = (md) => md.replace(/```[\s\S]*?```/g, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/[#>*_`~\\[\]()!-]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -6,9 +7,10 @@ const plain = (md) => md.replace(/```[\s\S]*?```/g, ' ').replace(/!\[[^\]]*\]\([
 // A draggable kanban card; click opens the ticket modal.
 export default function CardItem({ card, onOpen, onDropOn }) {
   const generating = useJobs().busyCards.has(card.id)
+  const work = useActivity().forCard(card.id)[0]
   return (
     <div
-      className="kcard"
+      className={'kcard' + (work ? ' working' : '')}
       draggable
       onDragStart={(e) => e.dataTransfer.setData('text/plain', String(card.id))}
       onDragOver={(e) => e.preventDefault()}
@@ -16,7 +18,9 @@ export default function CardItem({ card, onOpen, onDropOn }) {
       onClick={() => onOpen(card)}
     >
       <div className="kcard-title">{card.ident && <span className="ident">{card.ident}</span>}{card.title}{generating && <span className="spinner" title="Claude is generating" aria-label="Claude is generating" style={{ marginLeft: 6 }} />}</div>
+      {work && <span className="working-chip"><span className="spinner" aria-hidden="true" /> {KIND[work.kind]} · Claude is working</span>}
       {card.branch && <span className="branch-tag" title={'Worked on branch ' + card.branch}>⑂ {card.branch}</span>}
+      {card.qaTotal > 0 && <span className={'branch-tag' + (card.qaRan < card.qaTotal ? ' ev-warn' : '')} title="QA test cases executed in the browser / passed">QA {card.qaRan}/{card.qaTotal} run · {card.qaPassed} passed</span>}
       {card.approved && <span className="approved-chip">Approved ✓</span>}
       {plain(card.description) && <div className="kcard-desc">{plain(card.description)}</div>}
       {card.deadline && (

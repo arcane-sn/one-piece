@@ -9,21 +9,22 @@ import (
 
 // Item is an Agent Task (kind "agent") or QA Test Case (kind "qa") of a card.
 type Item struct {
-	ID          int64    `json:"id"`
-	CardID      int64    `json:"cardId"`
-	Kind        string   `json:"kind"`
-	Ident       string   `json:"ident"` // e.g. MID-12-T3; generated, never changes
-	Title       string   `json:"title"`
-	Body        string   `json:"body"`
-	Position    int      `json:"position"`
-	Status      string   `json:"status"` // todo | doing | done
-	Log         []string `json:"log"`
-	Version     int      `json:"version"`     // ticket version it was generated from; 0 = added by hand
-	Failure     string   `json:"failure"`     // QA: the one-line issue of the last failed run; "" when it has not failed
-	FailureDesc string   `json:"failureDesc"` // QA: the detailed explanation of that failure
-	FixFor      int64    `json:"fixFor"`      // Agent: the failed QA item this [FIX] task is for; 0 otherwise
-	Superseded  bool     `json:"superseded"`  // struck through: replaced by a newer Generate, kept for history
-	Running     bool     `json:"running"`     // Claude is working on it right now; set by the API, never stored
+	ID          int64     `json:"id"`
+	CardID      int64     `json:"cardId"`
+	Kind        string    `json:"kind"`
+	Ident       string    `json:"ident"` // e.g. MID-12-T3; generated, never changes
+	Title       string    `json:"title"`
+	Body        string    `json:"body"`
+	Position    int       `json:"position"`
+	Status      string    `json:"status"` // todo | doing | done
+	Log         []string  `json:"log"`
+	Version     int       `json:"version"`            // ticket version it was generated from; 0 = added by hand
+	Failure     string    `json:"failure"`            // QA: the one-line issue of the last failed run; "" when it has not failed
+	FailureDesc string    `json:"failureDesc"`        // QA: the detailed explanation of that failure
+	FixFor      int64     `json:"fixFor"`             // Agent: the failed QA item this [FIX] task is for; 0 otherwise
+	Superseded  bool      `json:"superseded"`         // struck through: replaced by a newer Generate, kept for history
+	Evidence    *Evidence `json:"evidence,omitempty"` // QA: the latest browser run, set by ListItems; nil = never run
+	Running     bool      `json:"running"`            // Claude is working on it right now; set by the API, never stored
 }
 
 const itemCols = `id,card_id,kind,ident,title,body,position,status,log,version,failure,failure_desc,fix_for,superseded`
@@ -68,7 +69,10 @@ func (s *Store) ListItems(cardID int64) ([]Item, error) {
 		}
 		out = append(out, i)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, s.attachEvidence(cardID, out)
 }
 
 func (s *Store) GetItem(id int64) (Item, error) {
@@ -289,4 +293,58 @@ func (s *Store) AddFixTask(qa Item, issue, desc string) (Item, bool, error) {
 	}
 	it.FixFor = qa.ID
 	return it, true, tx.Commit()
+}
+
+// Evidence is the proof that a QA test case was run: its latest browser run. State is passed | failed |
+// blocked | stopped | running, or "stale" when the ticket changed after a passing run.
+type Evidence struct {
+	RunID       int64  `json:"runId"`
+	State       string `json:"state"`
+	At          string `json:"at"`
+	Steps       int    `json:"steps"`
+	StepsPassed int    `json:"stepsPassed"`
+	Shots       string `json:"shot"` // screenshot of the last step of the last attempt ("" = none)
+	Runs        int    `json:"runs"`
+}
+
+func (s *Store) attachEvidence(cardID int64, items []Item) error {
+	var ver int
+	if err := s.DB.QueryRow(`SELECT content_version FROM cards WHERE id=?`, cardID).Scan(&ver); err != nil {
+		return err
+	}
+	for k := range items {
+		if items[k].Kind != "qa" {
+			continue
+		}
+		var e Evidence
+		var attempts, rv int
+		err := s.DB.QueryRow(`SELECT id,status,COALESCE(NULLIF(finished_at,''),started_at),attempts,content_version,
+			(SELECT COUNT(*) FROM qa_runs WHERE item_id=?) FROM qa_runs WHERE item_id=? ORDER BY id DESC LIMIT 1`,
+			items[k].ID, items[k].ID).Scan(&e.RunID, &e.State, &e.At, &attempts, &rv, &e.Runs)
+		if err != nil {
+			continue // never run
+		}
+		if attempts < 1 {
+			attempts = 1
+		}
+		rows, err := s.DB.Query(`SELECT status,screenshot FROM qa_steps WHERE run_id=? AND attempt=? ORDER BY position`, e.RunID, attempts)
+		if err == nil {
+			for rows.Next() {
+				var st, shot string
+				if rows.Scan(&st, &shot) == nil {
+					e.Steps++
+					if st == "passed" {
+						e.StepsPassed++
+					}
+					e.Shots = shot
+				}
+			}
+			rows.Close()
+		}
+		if e.State == "passed" && rv > 0 && rv < ver {
+			e.State = "stale"
+		}
+		items[k].Evidence = &e
+	}
+	return nil
 }

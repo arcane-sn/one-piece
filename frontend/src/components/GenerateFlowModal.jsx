@@ -1,3 +1,4 @@
+import Thinking from './Thinking'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
@@ -123,7 +124,7 @@ export default function GenerateFlowModal({ kind, id, createPath, onSaved, onClo
         )}
         <div className="modal-actions">
           <button type="button" onClick={onClose} disabled={saving}>Close</button>
-          <button type="submit" className={ready ? '' : 'primary'} disabled={busy || saving || !prompt.trim()}>{busy ? <><span className="spinner" aria-hidden="true" /> Thinking…</> : ready ? 'Regenerate' : 'Generate'}</button>
+          <button type="submit" className={ready ? '' : 'primary'} disabled={busy || saving || !prompt.trim()}>{busy ? <><span className="spinner" aria-hidden="true" /> <Thinking inline /></> : ready ? 'Regenerate' : 'Generate'}</button>
           {ready && (
             <button type="button" className="primary" disabled={saving || !title.trim() || !svg} onClick={save}>Save Flow</button>
           )}

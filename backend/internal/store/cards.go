@@ -22,6 +22,9 @@ type Card struct {
 	Status         string `json:"status"`
 	Position       int    `json:"position"`
 	Branch         string `json:"branch,omitempty"` // feature branch, set by ListCards only
+	QATotal        int    `json:"qaTotal"`          // live QA test cases, set by ListCards only
+	QARan          int    `json:"qaRan"`            // ... of which have a browser run
+	QAPassed       int    `json:"qaPassed"`
 }
 
 // Statuses are the kanban columns, in display order.
@@ -205,10 +208,34 @@ func (s *Store) ListCards(boardID int64) ([]Card, error) {
 			feat[id] = f // oldest row wins (ORDER BY id DESC, last write)
 		}
 	}
+	if err := br.Err(); err != nil {
+		return nil, err
+	}
+	qr, err := s.DB.Query(`SELECT i.card_id, COUNT(*), SUM(r.id IS NOT NULL), SUM(r.status='passed')
+		FROM card_items i JOIN cards c ON c.id=i.card_id
+		LEFT JOIN qa_runs r ON r.id=(SELECT MAX(id) FROM qa_runs WHERE item_id=i.id)
+		WHERE c.board_id=? AND i.kind='qa' AND i.superseded=0 GROUP BY i.card_id`, boardID)
+	if err != nil {
+		return nil, err
+	}
+	defer qr.Close()
+	type qa struct{ total, ran, ok int }
+	stats := map[int64]qa{}
+	for qr.Next() {
+		var id int64
+		var q qa
+		var ran, ok sql.NullInt64
+		if qr.Scan(&id, &q.total, &ran, &ok) == nil {
+			q.ran, q.ok = int(ran.Int64), int(ok.Int64)
+			stats[id] = q
+		}
+	}
 	for i := range cards {
 		cards[i].Branch = feat[cards[i].ID]
+		q := stats[cards[i].ID]
+		cards[i].QATotal, cards[i].QARan, cards[i].QAPassed = q.total, q.ran, q.ok
 	}
-	return cards, br.Err()
+	return cards, qr.Err()
 }
 
 func (s *Store) UpdateCard(id int64, title, description, deadline string) (Card, error) {

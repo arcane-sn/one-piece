@@ -114,6 +114,7 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/cards/{id}/items", s.listItems)
 	mux.HandleFunc("POST /api/cards/{id}/items", s.createItem)
 	mux.HandleFunc("POST /api/cards/{id}/generate-items", s.generateItems)
+	mux.HandleFunc("GET /api/activity", s.activity)
 	mux.HandleFunc("GET /api/jobs", s.listJobs)
 	mux.HandleFunc("GET /api/jobs/active", s.activeJobs)
 	mux.HandleFunc("POST /api/jobs/{id}/seen", s.markJob("seen"))

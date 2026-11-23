@@ -1,3 +1,4 @@
+import { KIND, rowKey, useActivity } from '../lib/activity'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, baseName } from '../api'
@@ -22,6 +23,7 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export default function Dashboard({ user, boards, reload, onNew, onEdit }) {
   const [error, setError] = useState('')
+  const { rows, finished, dismiss, clearFinished } = useActivity()
 
   async function remove(b) {
     if (!window.confirm(`Delete board "${b.name}" and all its cards?`)) return
@@ -77,7 +79,34 @@ export default function Dashboard({ user, boards, reload, onNew, onEdit }) {
       </div>
 
       <div className="section-title"><span className="pulse" />Agents at Work</div>
-      <div className="panel"><span className="muted">All quiet on deck. No agents are running.</span></div>
+      <div className="panel">
+        {rows.length === 0 && finished.length === 0 ? <span className="muted">All quiet on deck. No agents are running.</span> : (
+          <ul className="activity-list">
+            {rows.map((r) => (
+              <li key={'run' + rowKey(r)}>
+                <Link to={`/boards/${r.boardId}`}>
+                  <span className="spinner" aria-hidden="true" />
+                  <strong>{KIND[r.kind]}</strong>
+                  <span>{r.ident && <span className="ident">{r.ident}</span>}{r.title}</span>
+                  <span className="muted">{r.board}</span>
+                </Link>
+              </li>
+            ))}
+            {finished.map((r) => (
+              <li key={'done' + rowKey(r)} className="done">
+                <Link to={`/boards/${r.boardId}`}>
+                  <span className="done-flag">Done ✓</span>
+                  <strong>{KIND[r.kind]}</strong>
+                  <span>{r.ident && <span className="ident">{r.ident}</span>}{r.title}</span>
+                  <span className="muted">{r.board} · {new Date(r.finishedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </Link>
+                <button type="button" className="icon-btn" aria-label="Dismiss" onClick={() => dismiss(rowKey(r))}>×</button>
+              </li>
+            ))}
+            {finished.length > 1 && <li><button type="button" className="link" onClick={clearFinished}>Clear finished</button></li>}
+          </ul>
+        )}
+      </div>
     </>
   )
 }

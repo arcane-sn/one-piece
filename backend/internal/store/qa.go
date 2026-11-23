@@ -108,7 +108,7 @@ const qaKeep = 10
 
 func (s *Store) CreateQARun(itemID, cardID, boardID int64, repos []qa.RepoState) (int64, error) {
 	b, _ := json.Marshal(repos)
-	res, err := s.DB.Exec(`INSERT INTO qa_runs(item_id,card_id,board_id,repos) VALUES(?,?,?,?)`, itemID, cardID, boardID, string(b))
+	res, err := s.DB.Exec(`INSERT INTO qa_runs(item_id,card_id,board_id,repos,content_version) VALUES(?,?,?,?,(SELECT content_version FROM cards WHERE id=?))`, itemID, cardID, boardID, string(b), cardID)
 	if err != nil {
 		return 0, err
 	}

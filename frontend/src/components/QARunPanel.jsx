@@ -11,7 +11,7 @@ export default function QARunPanel({ itemId, refreshKey }) {
   useEffect(() => {
     api(`/api/items/${itemId}/qa-runs`).then((r) => { setRuns(r ?? []); setOpen((o) => o ?? r?.[0]?.id ?? null) }).catch(() => {})
   }, [itemId, refreshKey])
-  if (runs.length === 0) return null
+  if (runs.length === 0) return <div className="field qa-runs"><span>Browser QA</span><p className="hint ev-summary warn">Not run yet: no browser evidence for this test case.</p></div>
   return (
     <div className="field qa-runs">
       <span>Browser QA</span>

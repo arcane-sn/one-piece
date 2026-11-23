@@ -1,3 +1,4 @@
+import Thinking from './Thinking'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import FlowModal from './FlowModal'
@@ -32,7 +33,7 @@ export default function FlowsSection({ parent, label = 'Business Flow', emptyHin
         <span>{label}</span>
         <span className="items-actions">
           <button type="button" className="ai-btn" disabled={!parent || locked} title={parent ? 'Describe it and let Claude draw the flow' : 'Save first'} onClick={() => open('generate')}>
-            {thinking ? <><span className="spinner" aria-hidden="true" /> Thinking…</> : <><span aria-hidden="true">✦</span> Generate</>}
+            {thinking ? <><span className="spinner" aria-hidden="true" /> <Thinking inline /></> : <><span aria-hidden="true">✦</span> Generate</>}
           </button>
           <button type="button" className="ai-btn" disabled={!parent || locked} title={parent ? 'Add A Swimlane Flow' : 'Save first'} onClick={() => open('new')}>
             + Add Flow

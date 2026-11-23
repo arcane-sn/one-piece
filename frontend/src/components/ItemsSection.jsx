@@ -1,3 +1,4 @@
+import Thinking from './Thinking'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import ItemModal from './ItemModal'
@@ -109,7 +110,7 @@ export default function ItemsSection({ card, onModal }) {
               <span className="items-actions">
                 {card.approved && (
                   <button type="button" className="ai-btn" disabled={busy === kind || anyDoing} onClick={() => generate(kind)}>
-                    {busy === kind ? <><span className="spinner" aria-hidden="true" /> Thinking…</> : <><span aria-hidden="true">✦</span> {list.some((i) => !i.fixFor) ? 'Regenerate' : 'Generate'}</>}
+                    {busy === kind ? <><span className="spinner" aria-hidden="true" /> <Thinking inline /></> : <><span aria-hidden="true">✦</span> {list.some((i) => !i.fixFor) ? 'Regenerate' : 'Generate'}</>}
                   </button>
                 )}
                 {card.approved && (running
@@ -123,6 +124,7 @@ export default function ItemsSection({ card, onModal }) {
             {list.length === 0 && busy !== kind && (
               <p className="hint">{kind === 'qa' ? 'No test cases yet. Generate them once the Agent Tasks are done.' : 'No tasks yet.'}</p>
             )}
+            {kind === 'qa' && list.length > 0 && <EvidenceSummary list={list} />}
             <ul className="flow-list">
               {list.map((i) => (
                 <li key={i.id}>
@@ -138,6 +140,7 @@ export default function ItemsSection({ card, onModal }) {
                       {i.status === 'todo' && !i.failure && i.log.length > 0 && /^(Failed|Blocked):/.test(i.log[i.log.length - 1]) && (
                         <span className="item-status stale" title={i.log[i.log.length - 1]}>Blocked</span>
                       )}
+                      {i.kind === 'qa' && <EvidenceChip e={i.evidence} />}
                       <span className={'item-status ' + i.status}>{i.running && <span className="spinner" aria-hidden="true" />}{STATUS[i.status]}</span>
                     </span>
                   </button>
@@ -184,5 +187,31 @@ export default function ItemsSection({ card, onModal }) {
         />
       )}
     </>
+  )
+}
+
+const EV = { passed: 'Run · passed', failed: 'Run · failed', blocked: 'Run · blocked', stopped: 'Run · stopped', running: 'Running…', stale: 'Run · outdated' }
+const when = (s) => new Date(s).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+
+// Proof that a QA test case was actually executed in the browser: state, time and steps passed.
+function EvidenceChip({ e }) {
+  if (!e) return <span className="item-status ev-none" title="No browser run yet">Not run</span>
+  const bad = e.state !== 'passed' && e.state !== 'running'
+  return (
+    <span className={'item-status ' + (bad ? 'stale' : '')} title={`${when(e.at)} · ${e.stepsPassed}/${e.steps} steps passed · ${e.runs} run${e.runs === 1 ? '' : 's'}`}>
+      {EV[e.state] ?? e.state}{e.steps > 0 ? ` ${e.stepsPassed}/${e.steps}` : ''}
+    </span>
+  )
+}
+
+function EvidenceSummary({ list }) {
+  const live = list.filter((i) => !i.superseded)
+  const ran = live.filter((i) => i.evidence).length
+  const ok = live.filter((i) => i.evidence?.state === 'passed').length
+  const stale = live.filter((i) => i.evidence?.state === 'stale').length
+  return (
+    <p className={'hint ev-summary' + (ran < live.length ? ' warn' : '')}>
+      Executed in the browser: {ran}/{live.length} · passed {ok}{stale > 0 ? ` · outdated ${stale}` : ''}{ran < live.length ? ` · ${live.length - ran} not run yet` : ''}
+    </p>
   )
 }

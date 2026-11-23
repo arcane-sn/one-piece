@@ -508,8 +508,8 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 /* Ticket modals: header, sidebar and action bar stay put; only the main content scrolls. */
 .modal.ticket { height: min(900px, calc(100vh - 32px)); overflow: hidden; }
 .modal.ticket .ticket-body { flex: 1; min-height: 0; align-items: stretch; }
-.modal.ticket .ticket-main { overflow-y: auto; min-height: 0; padding-right: 8px; }
-.modal.ticket .ticket-side { overflow-y: auto; min-height: 0; align-self: stretch; }
+.modal.ticket .ticket-main { overflow-y: auto; min-height: 0; padding: 5px 8px 5px 5px; margin: -5px 0 -5px -5px; } /* room for the 4px focus glow, which overflow would clip */
+.modal.ticket .ticket-side { overflow-y: auto; min-height: 0; align-self: stretch; padding: 5px; margin: -5px; }
 @media (max-width: 900px) {
   .modal.ticket .ticket-body { overflow-y: auto; }
   .modal.ticket .ticket-main, .modal.ticket .ticket-side { overflow: visible; align-self: start; }
@@ -713,3 +713,35 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 .columns > *:nth-child(5) { animation-delay: 0.42s; }
 .kcard, .board-card, .stat-card { animation: enter 0.45s var(--ease) 0.3s backwards; }
 @media (prefers-reduced-motion: reduce) { .sidebar, .page-head, .board-head, .board-tools, .columns > *, .kcard, .board-card, .stat-card { animation: none; } }
+
+.ev-none { color: var(--muted, #8a7a6f); background: rgba(0,0,0,.05); }
+.ev-summary.warn { color: #B8452E; }
+.branch-tag.ev-warn { color: #B8452E; background: rgba(184,69,46,.1); }
+
+/* animated "Thinking": shimmering word, bouncing dots, elapsed time */
+.thinking { display: inline-flex; align-items: baseline; gap: 2px; }
+.thinking-word { background: linear-gradient(90deg, #8a7a6f 0%, #EA9259 40%, #8a7a6f 80%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: think-shimmer 1.8s linear infinite; }
+.thinking-dots { display: inline-flex; gap: 3px; margin-left: 4px; }
+.thinking-dots i { width: 4px; height: 4px; border-radius: 50%; background: #EA9259; animation: think-dot 1.2s ease-in-out infinite; }
+.thinking-dots i:nth-child(2) { animation-delay: 0.15s; }
+.thinking-dots i:nth-child(3) { animation-delay: 0.3s; }
+.thinking-time { margin-left: 10px; font-size: 12px; color: var(--muted, #8a7a6f); font-variant-numeric: tabular-nums; }
+@keyframes think-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes think-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .4; } 30% { transform: translateY(-4px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .thinking-word, .thinking-dots i { animation: none; color: inherit; } .thinking-word { background: none; color: inherit; } }
+
+/* Claude is working: animated border on the card and the Discuss button, plus a list on the dashboard */
+@keyframes work-glow { 0%, 100% { box-shadow: 0 0 0 2px rgba(234,146,89,.35), 0 0 14px rgba(234,146,89,.25); } 50% { box-shadow: 0 0 0 2px rgba(234,146,89,.95), 0 0 20px rgba(234,146,89,.5); } }
+.kcard.working, .ai-btn.working { animation: work-glow 1.6s ease-in-out infinite; }
+.kcard.working { border-color: var(--orange, #EA9259); }
+.ai-btn.working { border-color: var(--orange, #EA9259); }
+.working-chip { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #B8452E; background: rgba(234,146,89,.18); }
+.activity-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.activity-list a { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; }
+.activity-list a .muted { margin-left: auto; }
+@media (prefers-reduced-motion: reduce) { .kcard.working, .ai-btn.working { animation: none; box-shadow: 0 0 0 2px rgba(234,146,89,.8); } }
+
+.activity-list li { display: flex; align-items: center; gap: 8px; }
+.activity-list li > a { flex: 1; min-width: 0; }
+.activity-list li.done { opacity: .85; }
+.done-flag { padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #2f7a4a; background: rgba(76,175,110,.18); }
