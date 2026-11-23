@@ -174,7 +174,7 @@ body:has(.login-page)::after { display: none; } /* login has its own centered ri
 .side-plus::before { width: 10px; height: 2px; }
 .side-plus::after { width: 2px; height: 10px; }
 .side-plus:hover:not(:disabled) { background: rgba(255, 255, 255, 0.95); }
-.side-user { margin-top: auto; padding: 10px 6px 0; border-top: 1px solid rgba(59, 36, 23, 0.1); display: flex; align-items: center; gap: 10px; }
+.side-user { margin-top: 10px; padding: 10px 6px 0; border-top: 1px solid rgba(59, 36, 23, 0.1); display: flex; align-items: center; gap: 10px; }
 .avatar { width: 32px; height: 32px; flex: none; border-radius: 50%; background: var(--aqua); display: grid; place-items: center; font-size: 13px; font-weight: 800; }
 .user-name { font-size: 13px; font-weight: 700; }
 .main { margin-left: 256px; padding: 32px 40px 48px; max-width: 1500px; }
@@ -619,3 +619,36 @@ h2 .ident { font-size: 12px; margin-left: 10px; }
 .bs-count { flex: none; font-size: 12px; font-weight: 700; color: var(--faint); }
 .bs-draft { display: block; margin-top: 8px; height: 24px; padding: 0 10px; border-radius: 12px; font-size: 11.5px; font-weight: 700; color: var(--deep); opacity: 0; transition: opacity 0.15s; }
 .bs-msg:hover .bs-draft, .bs-draft:focus-visible, .bs-draft:disabled { opacity: 1; }
+
+/* Claude usage */
+.side-spacer { flex: 1; }
+.usage { width: 100%; display: flex; align-items: center; gap: 0; padding: 10px 12px; border: 0; border-radius: 14px; background: rgba(255, 255, 255, 0.55); text-align: left; transition: padding 0.28s var(--ease), background 0.15s; }
+.usage:hover:not(:disabled), .usage.open { background: rgba(255, 255, 255, 0.9); }
+.usage-full { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; overflow: hidden; max-width: 200px; transition: max-width 0.28s var(--ease), opacity 0.2s var(--ease); }
+.usage-ring { flex: none; max-width: 0; opacity: 0; overflow: hidden; transition: max-width 0.28s var(--ease), opacity 0.2s var(--ease); line-height: 0; }
+.rail .usage { padding: 8px 0; justify-content: center; background: none; }
+.rail .usage-full { max-width: 0; opacity: 0; flex: 0 0 0; }
+.rail .usage-ring { max-width: 30px; opacity: 1; }
+.usage-model { font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+.usage-empty { font-size: 12px; font-weight: 600; color: var(--faint); white-space: nowrap; }
+.usage-row { display: grid; grid-template-columns: 32px 1fr 34px; grid-template-areas: "l b v" ". r r"; column-gap: 6px; align-items: center; white-space: nowrap; }
+.usage-lbl { grid-area: l; font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.usage-bar { grid-area: b; height: 6px; border-radius: 3px; background: rgba(59, 36, 23, 0.1); overflow: hidden; }
+.usage-bar > span { display: block; height: 100%; border-radius: 3px; background: #7FC9C9; transition: width 0.4s var(--ease); }
+.usage-bar.warm > span { background: var(--orange); }
+.usage-bar.hot > span { background: var(--red); }
+.usage-val { grid-area: v; text-align: right; font-size: 11.5px; font-weight: 800; }
+.usage-reset { grid-area: r; font-size: 10.5px; font-weight: 600; color: var(--faint); }
+.usage-ringsvg .bg { stroke: rgba(59, 36, 23, 0.12); }
+.usage-ringsvg .fg { stroke: #7FC9C9; transition: stroke-dashoffset 0.4s var(--ease); }
+.usage-ringsvg.warm .fg { stroke: var(--orange); }
+.usage-ringsvg.hot .fg { stroke: var(--red); }
+.usage-scrim { position: fixed; inset: 0; z-index: 80; }
+.usage-pop { position: fixed; z-index: 81; width: 300px; max-height: calc(100vh - 32px); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 16px; background: rgba(255, 250, 243, 0.97); border: 1px solid var(--glass-border); box-shadow: var(--shadow-glass); animation: op-pop 0.14s var(--ease); }
+.usage-pophead { display: flex; align-items: center; justify-content: space-between; }
+.usage-chip { padding: 2px 9px; border-radius: 999px; background: rgba(234, 146, 89, 0.22); font-size: 11.5px; font-weight: 800; color: var(--deep); }
+.usage-note { margin: 0; font-size: 11.5px; line-height: 1.4; color: var(--faint); }
+.usage-sec { display: flex; flex-direction: column; gap: 3px; padding-top: 10px; border-top: 1px solid rgba(59, 36, 23, 0.1); font-size: 12.5px; }
+.usage-line { display: flex; justify-content: space-between; gap: 10px; font-weight: 600; }
+.usage-line.sub { padding-left: 10px; color: var(--faint); font-weight: 500; }
+.usage-refresh { height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--deep); }

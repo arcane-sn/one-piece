@@ -1,14 +1,12 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -36,16 +34,9 @@ var runClaude = func(ctx context.Context, system, user string) (string, error) {
 		return "", err
 	}
 	defer os.RemoveAll(dir)
-	cmd := exec.CommandContext(ctx, "claude", "-p", "--tools", "", "--no-session-persistence",
-		"--setting-sources", "project", "--system-prompt", system)
-	cmd.Dir = dir // empty dir: nothing project-specific gets loaded
-	cmd.Stdin = strings.NewReader(user)
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("claude: %w: %s", err, strings.TrimSpace(errb.String()))
-	}
-	return out.String(), nil
+	// stream-json (not plain text) so the run reports its token use and the account limits (see observeUsage).
+	return runStream(ctx, []string{"-p", "--output-format", "stream-json", "--verbose", "--tools", "", "--no-session-persistence",
+		"--setting-sources", "project", "--system-prompt", system}, dir, user, func(string) {}) // empty dir: nothing project-specific gets loaded
 }
 
 type generateIn struct {

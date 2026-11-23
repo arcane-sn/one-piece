@@ -142,6 +142,7 @@ func runSession(ctx context.Context, spec sessionSpec, onText func(string)) (str
 				} `json:"content"`
 			} `json:"message"`
 		}
+		observeUsage(sc.Bytes())
 		if json.Unmarshal(sc.Bytes(), &ev) != nil {
 			continue
 		}

@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import Logo from './Logo'
 import Tip from './Tip'
+import UsageCard from './UsageCard'
 
 const SWATCH = ['#EA9259', '#7FC9C9', '#D65A42']
 export const totalCards = (b) => Object.values(b.counts || {}).reduce((a, n) => a + n, 0)
@@ -51,6 +52,8 @@ export default function Sidebar({ user, boards, onLogout, onNewBoard, collapsed,
             </NavLink>
           </Tip>
         ))}
+        <div className="side-spacer" />
+        <UsageCard rail={r} />
         <div className="side-user">
           <Tip label={user} off={!r}>
             <span className="avatar">{user.charAt(0).toUpperCase()}</span>

@@ -35,6 +35,7 @@ func New(st *store.Store, staticDir string) http.Handler {
 	if err := st.FailRunningReviews(); err != nil { // reviews cut short by a previous shutdown
 		log.Printf("sweeping stale reviews: %v", err)
 	}
+	usageStore = st
 	if err := st.FailRunningBrainstorm(); err != nil { // chat replies cut short by a previous shutdown
 		log.Printf("sweeping stale brainstorm replies: %v", err)
 	}
@@ -67,6 +68,8 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/boards/{id}/brainstorm/messages", s.postBrainstormMessage)
 	mux.HandleFunc("POST /api/boards/{id}/brainstorm/stop", s.stopBrainstorm)
 	mux.HandleFunc("POST /api/boards/{id}/drafts", s.createChatDraft)
+	mux.HandleFunc("GET /api/usage", s.getUsage)
+	mux.HandleFunc("POST /api/usage/refresh", s.refreshUsage)
 	mux.HandleFunc("POST /api/boards/{id}/brainstorm/new", s.newBrainstorm)
 	mux.HandleFunc("GET /api/boards/{id}/plan/{v}", s.getPlanVersion)
 	mux.HandleFunc("POST /api/boards/{id}/plan/{v}/restore", s.restorePlan)

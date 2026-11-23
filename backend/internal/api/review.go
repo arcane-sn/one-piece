@@ -75,6 +75,7 @@ func runStreamEnv(ctx context.Context, args []string, cwd, user string, env []st
 				} `json:"content"`
 			} `json:"message"`
 		}
+		observeUsage(sc.Bytes())
 		if json.Unmarshal(sc.Bytes(), &ev) != nil {
 			continue
 		}
