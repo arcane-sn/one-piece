@@ -1,3 +1,4 @@
+import { confirmDialog } from '../lib/confirm'
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api, baseName } from '../api'
@@ -105,7 +106,7 @@ function BranchModal({ cardId, row, onDone, onClose }) {
   }
 
   async function remove() {
-    if (!window.confirm('Remove this repo from the ticket’s branching?')) return
+    if (!(await confirmDialog('Remove this repo from the ticket’s branching?', { okLabel: 'Delete', danger: true }))) return
     setBusy(true)
     try {
       await api(`${url}?repo=${encodeURIComponent(row.repo)}`, { method: 'DELETE' })

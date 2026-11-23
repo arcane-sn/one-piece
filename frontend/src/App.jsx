@@ -5,6 +5,7 @@ import { api } from './api'
 import BoardModal from './components/BoardModal'
 import Sidebar from './components/Sidebar'
 import Toaster from './components/Toaster'
+import Confirmer from './components/Confirmer'
 import { JobsProvider } from './lib/jobs'
 import { ActivityProvider } from './lib/activity'
 import Board from './pages/Board'
@@ -43,6 +44,7 @@ function Shell({ user, onLogout }) {
         </Routes>
       </main>
       <Toaster />
+      <Confirmer />
       {modal && (
         <BoardModal key={modal === 'new' ? 'new' : modal.id} initial={modal === 'new' ? undefined : modal} onSaved={saved} onClose={closeModal} />
       )}

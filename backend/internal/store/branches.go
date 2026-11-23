@@ -92,6 +92,12 @@ func (s *Store) ListBranches(cardID int64) ([]Branch, error) {
 // PlanBranch records (or, while still "planned", updates) the branching of one repo for a card.
 // repo may be any path inside the board's first folder; it is stored as the repository root.
 func (s *Store) PlanBranch(cardID int64, repo, baseBranch string) (Branch, error) {
+	return s.PlanBranchNamed(cardID, repo, baseBranch, "", "")
+}
+
+// PlanBranchNamed is PlanBranch with the owner's own branch names: feature "" = the board's prefix + ticket id,
+// dev "" = feature + "-dev". Any valid git branch name is accepted.
+func (s *Store) PlanBranchNamed(cardID int64, repo, baseBranch, featureName, devName string) (Branch, error) {
 	c, err := getCard(s.DB, cardID)
 	if err != nil {
 		return Branch{}, err
@@ -111,16 +117,26 @@ func (s *Store) PlanBranch(cardID int64, repo, baseBranch string) (Branch, error
 		return Branch{}, ValidationError{err.Error()}
 	}
 	feature := b.BranchPrefix + c.Ident
+	if featureName != "" {
+		feature = featureName
+	}
+	dev := feature + "-dev"
+	if devName != "" {
+		dev = devName
+	}
+	if !gitx.ValidBranch(feature) || !gitx.ValidBranch(dev) {
+		return Branch{}, ValidationError{"branch name is not a valid git branch name"}
+	}
 	var status string
 	err = s.DB.QueryRow(`SELECT status FROM card_branches WHERE card_id=? AND repo=?`, cardID, root).Scan(&status)
 	switch {
 	case err == nil && status != "planned":
 		return Branch{}, ConflictError{"This repo is already being branched. Change it from the Branching list."}
 	case err == nil:
-		_, err = s.DB.Exec(`UPDATE card_branches SET base_branch=? WHERE card_id=? AND repo=?`, baseBranch, cardID, root)
+		_, err = s.DB.Exec(`UPDATE card_branches SET base_branch=?,feature_branch=?,dev_branch=? WHERE card_id=? AND repo=?`, baseBranch, feature, dev, cardID, root)
 	case errors.Is(err, sql.ErrNoRows):
 		_, err = s.DB.Exec(`INSERT INTO card_branches(card_id,repo,base_branch,feature_branch,dev_branch) VALUES(?,?,?,?,?)`,
-			cardID, root, baseBranch, feature, feature+"-dev")
+			cardID, root, baseBranch, feature, dev)
 	}
 	if err != nil {
 		return Branch{}, err

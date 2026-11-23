@@ -1,3 +1,5 @@
+import { confirmDialog } from '../lib/confirm'
+import { useStickyScroll } from '../lib/stickyScroll'
 import Thinking from './Thinking'
 import Markdown from './Markdown'
 import ChatComposer, { ContinueChip, NewChatButton } from './ChatComposer'
@@ -39,10 +41,7 @@ export default function DiscussModal({ card, boardId, onTurnDone, onCardChanged,
     wasRunning.current = !!view?.running
   }, [view, onTurnDone])
 
-  useEffect(() => {
-    const el = listRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [view?.messages])
+  useStickyScroll(listRef, view?.messages, null)
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
@@ -68,7 +67,7 @@ export default function DiscussModal({ card, boardId, onTurnDone, onCardChanged,
   }
 
   async function undo(ref) {
-    if (!window.confirm('Go back to the ticket text from before this change?')) return
+    if (!(await confirmDialog('Go back to the ticket text from before this change?', { okLabel: 'Undo', danger: true }))) return
     try {
       onCardChanged?.(await api(`/api/cards/${card.id}/revisions/${ref}/restore`, { method: 'POST', body: {} }))
       await load()
@@ -78,7 +77,7 @@ export default function DiscussModal({ card, boardId, onTurnDone, onCardChanged,
   }
 
   const newSession = () =>
-    window.confirm('Start a new session? The chat and the Branching list stay; Claude just starts fresh.') && act('/new')
+    confirmDialog('Start a new session? The chat and the Branching list stay; Claude just starts fresh.').then((ok) => ok && act('/new'))
 
   const running = !!view?.running
   const stage = view?.stage

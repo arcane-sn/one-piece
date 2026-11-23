@@ -1,3 +1,5 @@
+import { confirmDialog } from '../lib/confirm'
+import { useStickyScroll } from '../lib/stickyScroll'
 import Thinking from './Thinking'
 import Markdown from './Markdown'
 import ChatComposer, { ContinueChip, NewChatButton } from './ChatComposer'
@@ -43,10 +45,7 @@ export default function BrainstormModal({ boardId, onClose, onCardsChanged }) {
     wasRunning.current = !!view?.running
   }, [view, onCardsChanged])
 
-  useEffect(() => {
-    const el = listRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [view?.messages, tab])
+  useStickyScroll(listRef, view?.messages, tab)
 
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
@@ -101,10 +100,9 @@ export default function BrainstormModal({ boardId, onClose, onCardsChanged }) {
   }
 
   const newConversation = () =>
-    window.confirm('Start a new conversation? The chat history and the plan stay; Claude just starts fresh.') &&
-    act('/brainstorm/new')
+    confirmDialog('Start a new conversation? The chat history and the plan stay; Claude just starts fresh.').then((ok) => ok && act('/brainstorm/new'))
   const restore = (v) =>
-    window.confirm(`Restore plan version ${v}? It becomes the newest version; nothing is deleted.`) && act(`/plan/${v}/restore`)
+    confirmDialog(`Restore plan version ${v}? It becomes the newest version; nothing is deleted.`).then((ok) => ok && act(`/plan/${v}/restore`))
 
   const running = !!view?.running
   const q = (query ?? '').trim().toLowerCase()

@@ -1,3 +1,4 @@
+import { confirmDialog } from '../lib/confirm'
 import Thinking from './Thinking'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
@@ -43,8 +44,8 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
     description !== (current?.description ?? '') ||
     deadline !== (current?.deadline ?? '')
 
-  const requestClose = useCallback(() => {
-    if (dirty && !window.confirm('Discard unsaved changes?')) return
+  const requestClose = useCallback(async () => {
+    if (dirty && !(await confirmDialog('Discard unsaved changes?', { okLabel: 'Discard', danger: true }))) return
     onClose()
   }, [dirty, onClose])
 
@@ -79,7 +80,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
   }
 
   async function remove() {
-    if (!window.confirm(`Delete "${current.title}"?`)) return
+    if (!(await confirmDialog(`Delete "${current.title}"?`, { okLabel: 'Delete', danger: true }))) return
     setBusy(true)
     setError('')
     try {

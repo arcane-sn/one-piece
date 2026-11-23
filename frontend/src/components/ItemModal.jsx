@@ -1,3 +1,4 @@
+import { confirmDialog } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
@@ -25,8 +26,8 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
   const running = current?.status === 'doing'
 
   const dirty = title !== (current?.title ?? '') || body !== (current?.body ?? '') || status !== (current?.status ?? 'todo')
-  const close = () => {
-    if (dirty && !window.confirm('Discard unsaved changes?')) return
+  const close = async () => {
+    if (dirty && !(await confirmDialog('Discard unsaved changes?', { okLabel: 'Discard', danger: true }))) return
     onClose()
   }
 
@@ -99,7 +100,7 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
   }
 
   async function remove() {
-    if (!window.confirm(`Delete "${current.title}"?`)) return
+    if (!(await confirmDialog(`Delete "${current.title}"?`, { okLabel: 'Delete', danger: true }))) return
     setBusy(true)
     try {
       await api(`/api/items/${current.id}`, { method: 'DELETE' })

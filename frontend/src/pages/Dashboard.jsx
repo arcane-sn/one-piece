@@ -1,3 +1,4 @@
+import { confirmDialog } from '../lib/confirm'
 import { KIND, rowKey, useActivity } from '../lib/activity'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -26,7 +27,7 @@ export default function Dashboard({ user, boards, reload, onNew, onEdit }) {
   const { rows, finished, dismiss, clearFinished } = useActivity()
 
   async function remove(b) {
-    if (!window.confirm(`Delete board "${b.name}" and all its cards?`)) return
+    if (!(await confirmDialog(`Delete board "${b.name}" and all its cards?`, { okLabel: 'Delete', danger: true }))) return
     try {
       await api(`/api/boards/${b.id}`, { method: 'DELETE' })
       reload()

@@ -21,15 +21,19 @@ export default function CardItem({ card, onOpen, onDropOn }) {
       {work && <span className="working-chip"><span className="spinner" aria-hidden="true" /> {KIND[work.kind]} · Claude is working</span>}
       {card.branch && <span className="branch-tag" title={'Worked on branch ' + card.branch}>⑂ {card.branch}</span>}
       {card.qaTotal > 0 && <span className={'branch-tag' + (card.qaRan < card.qaTotal ? ' ev-warn' : '')} title="QA test cases executed in the browser / passed">QA {card.qaRan}/{card.qaTotal} run · {card.qaPassed} passed</span>}
-      {card.approved && <span className="approved-chip">Approved ✓</span>}
       {plain(card.description) && <div className="kcard-desc">{plain(card.description)}</div>}
-      {card.deadline && (
-        <span className="deadline-chip" title="Deadline">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="3" y="5" width="18" height="16" rx="3" /><path d="M3 10h18M8 3v4M16 3v4" />
-          </svg>
-          {card.deadline}
-        </span>
+      {(card.deadline || card.approved) && (
+        <div className="kcard-foot">
+          {card.deadline ? (
+            <span className="deadline-chip" title="Deadline">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="5" width="18" height="16" rx="3" /><path d="M3 10h18M8 3v4M16 3v4" />
+              </svg>
+              {card.deadline}
+            </span>
+          ) : <span />}
+          {card.approved && <span className="approved-chip">Approved ✓</span>}
+        </div>
       )}
     </div>
   )

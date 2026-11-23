@@ -39,7 +39,7 @@ var branchCommands = map[string]bool{"branches": true, "branch-plan": true, "bra
 // Discuss sessions (ONE_PIECE_CARD set) also get, for that ticket only:
 //
 //	branches                          the ticket's branching rows
-//	branch-plan <repo> <base>         record repo + base branch (names come from the board's prefix)
+//	branch-plan <repo> <base> [feature [dev]]   record repo + base branch; names default to the board's prefix, any valid name is accepted
 //	branch-status <repo> <status> [note…]
 //	branch-pr <repo> <url>            store the PR link, status pr_open
 //	branch-mode <repo> merge|cherry-pick   how the feature is integrated; cherry-pick only after the repo was marked blocked
@@ -265,10 +265,17 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 				r.Repo, r.BaseBranch, r.FeatureBranch, r.DevBranch, r.Status, r.PRURL, r.Mode, gitx.RemoteKind(r.Repo), pending)
 		}
 	case "branch-plan":
-		if len(args) != 3 {
-			return errors.New("usage: branch-plan <repo> <base-branch>")
+		if len(args) < 3 || len(args) > 5 {
+			return errors.New("usage: branch-plan <repo> <base-branch> [feature-branch [dev-branch]]")
 		}
-		r, err := st.PlanBranch(card.ID, args[1], args[2])
+		feature, dev := "", ""
+		if len(args) > 3 {
+			feature = args[3]
+		}
+		if len(args) > 4 {
+			dev = args[4]
+		}
+		r, err := st.PlanBranchNamed(card.ID, args[1], args[2], feature, dev)
 		if err != nil {
 			return err
 		}

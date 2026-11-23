@@ -153,3 +153,18 @@ func TestDirectRepoDoesNotHoldBackPushReady(t *testing.T) {
 		t.Errorf("target must not change after the repo was pushed: %v", err)
 	}
 }
+
+func TestPlanBranchAcceptsAnyName(t *testing.T) {
+	s, _, c, repo := repoBoard(t)
+	b, err := s.PlanBranchNamed(c.ID, repo, "release", "feature/CPG-3529", "")
+	if err != nil || b.FeatureBranch != "feature/CPG-3529" || b.DevBranch != "feature/CPG-3529-dev" {
+		t.Fatalf("custom feature: %+v %v", b, err)
+	}
+	b, err = s.PlanBranchNamed(c.ID, repo, "release", "hotfix/x", "stg/x-integration")
+	if err != nil || b.FeatureBranch != "hotfix/x" || b.DevBranch != "stg/x-integration" {
+		t.Fatalf("re-plan while planned: %+v %v", b, err)
+	}
+	if _, err := s.PlanBranchNamed(c.ID, repo, "release", "bad name;rm", ""); !errors.As(err, &ValidationError{}) {
+		t.Errorf("invalid names are still refused: %v", err)
+	}
+}

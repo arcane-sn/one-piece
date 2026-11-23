@@ -1,3 +1,4 @@
+import { confirmDialog } from '../lib/confirm'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
@@ -38,8 +39,8 @@ export default function FlowModal({ createPath, flow, onSaved, onDeleted, onClos
   )
 
   const dirty = title !== (flow?.title ?? '') || source !== (flow?.source ?? SAMPLE)
-  const close = () => {
-    if (dirty && !window.confirm('Discard unsaved changes?')) return
+  const close = async () => {
+    if (dirty && !(await confirmDialog('Discard unsaved changes?', { okLabel: 'Discard', danger: true }))) return
     onClose()
   }
 
@@ -67,7 +68,7 @@ export default function FlowModal({ createPath, flow, onSaved, onDeleted, onClos
   }
 
   async function remove() {
-    if (!window.confirm(`Delete "${flow.title}"?`)) return
+    if (!(await confirmDialog(`Delete "${flow.title}"?`, { okLabel: 'Delete', danger: true }))) return
     setBusy(true)
     try {
       await api(`/api/flows/${flow.id}`, { method: 'DELETE' })

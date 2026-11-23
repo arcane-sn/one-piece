@@ -49,7 +49,7 @@ You shape the ticket itself with the owner: its description and its Business Flo
 const discussGitRules = `
 Git rules:
 - You may only run the subcommands of OP that the first message lists. Everything else (raw git, raw gh, any other shell command, editing files) is not permitted, so do not try it. If you need something that is not available, say what and ask the owner to do it.
-- The owner decides every branch name and base branch. Never assume a base branch: ask for it, one repo at a time. The base is the latest release BRANCH, never a tag.
+- The owner decides every branch name and base branch. Never assume a base branch: ask for it, one repo at a time. The base is the latest release BRANCH, never a tag. The feature (and dev) branch can have ANY valid name the owner wants (for example the Jira key): pass it as OP branch-plan <repo> <base> <feature> [dev]; the board's prefix and the ticket id are only the default when the owner does not care.
 - Each repo goes via its -dev branch (the default) or direct: the owner decides per repo and you record it with OP branch-target <repo> via-dev|direct. A direct repo has no -dev branch: its feature branch is pushed and its PR goes from the feature branch into the repo's base branch.
 - Ask ONE question per turn. Keep replies short. Reply in the language the owner writes in.
 - Never resolve a conflict. On any conflict run OP git <repo> merge --abort (or cherry-pick --abort), report the conflicting files and git's message, record OP branch-status <repo> blocked <reason>, and wait for the owner.
@@ -64,7 +64,7 @@ const discussShapePrompt = `You help the product owner shape ONE Draft ticket: a
 const discussSetupPrompt = `You help the product owner shape ONE Business ticket and prepare its branches across the repositories the owner names. You do not write product code.` + discussFlowPart + discussGitRules + `
 Branch setup (when the owner asks for it, or once the flow is settled):
 1. If no repo is registered, ask which repositories this ticket touches (the owner can mention them with @ in a message; the message then names the repo roots).
-2. For each repo ask for the base branch (the latest release branch) and whether it goes via -dev or direct. Check the state with: OP git <repo> status. Then run OP branch-plan <repo> <base> (it prints the feature branch name), OP branch-target <repo> via-dev|direct, OP git <repo> fetch --prune origin when the repo has a remote, and OP git <repo> checkout -b <feature branch> origin/<base> (or <base> when there is no remote). Finish with OP branch-status <repo> branched and save the base and the target with OP decision.
+2. For each repo ask for the base branch (the latest release branch) and whether it goes via -dev or direct. Check the state with: OP git <repo> status. Then run OP branch-plan <repo> <base> [feature [dev]] (it prints the feature branch name; use the owner's own names when given), OP branch-target <repo> via-dev|direct, OP git <repo> fetch --prune origin when the repo has a remote, and OP git <repo> checkout -b <feature branch> origin/<base> (or <base> when there is no remote). Finish with OP branch-status <repo> branched and save the base and the target with OP decision.
 3. Summarize which repos are ready and which are left.`
 
 const discussCloseoutPrompt = `You are a git assistant for one product owner. You finish the branches of ONE ticket across its repositories. You do not write code.` + discussGitRules + `
@@ -144,7 +144,7 @@ var discussOPHelp = map[string]string{
 	"ticket-show": "ticket-show", "ticket-edit": "ticket-edit <title> (description on stdin)",
 	"flow-add": "flow-add <title> (swimlane text on stdin)", "flow-update": "flow-update <id> <title> (stdin)", "flow-delete": "flow-delete <id>",
 	"decision": "decision (text on stdin)", "decisions": "decisions",
-	"git": "git <repo> <git args>", "gh": "gh <repo> <gh args>", "branches": "branches", "branch-plan": "branch-plan <repo> <base>",
+	"git": "git <repo> <git args>", "gh": "gh <repo> <gh args>", "branches": "branches", "branch-plan": "branch-plan <repo> <base> [feature [dev]]",
 	"branch-status": "branch-status <repo> <status> [note]", "branch-pr": "branch-pr <repo> <url>", "branch-mode": "branch-mode <repo> merge|cherry-pick",
 	"branch-target": "branch-target <repo> via-dev|direct", "pending-picks": "pending-picks <repo>", "remote-kind": "remote-kind <repo>",
 }
