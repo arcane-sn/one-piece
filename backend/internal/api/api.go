@@ -110,6 +110,8 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/boards/{id}/qa/session/check", s.qaCheckHandler)
 	mux.HandleFunc("DELETE /api/boards/{id}/qa/session", s.qaForgetHandler)
 	mux.HandleFunc("GET /api/items/{id}/qa-runs", s.listQARuns)
+	mux.HandleFunc("GET /api/items/{id}/changes", s.listItemChanges)
+	mux.HandleFunc("GET /api/item-changes/{id}/diff", s.getChangeDiff)
 	mux.HandleFunc("GET /api/qa-evidence/{run}/{attempt}/{file...}", s.getQAEvidence)
 	mux.HandleFunc("GET /api/cards/{id}/items", s.listItems)
 	mux.HandleFunc("POST /api/cards/{id}/items", s.createItem)

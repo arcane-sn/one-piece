@@ -16,6 +16,7 @@ type Review struct {
 	Verdict        string   `json:"verdict"` // pass | needs_work (when done)
 	Summary        string   `json:"summary"`
 	Missing        []string `json:"missing"`
+	Checks         []Check  `json:"checks"` // per criterion: ok | gap | na, with a short reason
 	Log            []string `json:"log"`
 	Error          string   `json:"error"`
 }
@@ -64,9 +65,10 @@ func (s *Store) FailRunningReviews() error {
 func (s *Store) LatestReview(cardID int64) (Review, error) {
 	var r Review
 	var missing, log string
-	err := s.DB.QueryRow(`SELECT id,card_id,content_version,status,verdict,summary,missing,log,error
+	var checks string
+	err := s.DB.QueryRow(`SELECT id,card_id,content_version,status,verdict,summary,missing,log,error,checks
 		FROM card_reviews WHERE card_id=? ORDER BY id DESC LIMIT 1`, cardID).
-		Scan(&r.ID, &r.CardID, &r.ContentVersion, &r.Status, &r.Verdict, &r.Summary, &missing, &log, &r.Error)
+		Scan(&r.ID, &r.CardID, &r.ContentVersion, &r.Status, &r.Verdict, &r.Summary, &missing, &log, &r.Error, &checks)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Review{}, ErrNotFound
 	}
@@ -75,6 +77,8 @@ func (s *Store) LatestReview(cardID int64) (Review, error) {
 	}
 	r.Missing = []string{}
 	json.Unmarshal([]byte(missing), &r.Missing)
+	r.Checks = []Check{}
+	json.Unmarshal([]byte(checks), &r.Checks)
 	r.Log = []string{}
 	if log != "" {
 		r.Log = strings.Split(strings.TrimSuffix(log, "\n"), "\n")

@@ -131,6 +131,11 @@ CREATE TABLE IF NOT EXISTS qa_steps(
   run_id INTEGER NOT NULL REFERENCES qa_runs(id) ON DELETE CASCADE, attempt INTEGER NOT NULL, position INTEGER NOT NULL,
   title TEXT NOT NULL, status TEXT NOT NULL, screenshot TEXT NOT NULL DEFAULT '', duration_ms INTEGER NOT NULL DEFAULT 0,
   error TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS item_changes(
+  id INTEGER PRIMARY KEY, item_id INTEGER NOT NULL REFERENCES card_items(id) ON DELETE CASCADE,
+  repo TEXT NOT NULL, sha TEXT NOT NULL, files TEXT NOT NULL DEFAULT '[]',
+  additions INTEGER NOT NULL DEFAULT 0, deletions INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
 CREATE TABLE IF NOT EXISTS plan_versions(
   id INTEGER PRIMARY KEY, board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
   version INTEGER NOT NULL, content TEXT NOT NULL DEFAULT '',
@@ -168,30 +173,43 @@ func Open(path string) (*Store, error) {
 		{"cards", "deadline", "TEXT NOT NULL DEFAULT ''"},
 		{"cards", "approved", "INTEGER NOT NULL DEFAULT 0"},
 		{"cards", "content_version", "INTEGER NOT NULL DEFAULT 1"},
-		{"card_flows", "item_id", "INTEGER NOT NULL DEFAULT 0"},         // 0 = Business Flow of the card, else Technical Flow of that item
-		{"card_items", "version", "INTEGER NOT NULL DEFAULT 0"},         // ticket content_version it was generated from; 0 = added by hand
-		{"card_items", "failure", "TEXT NOT NULL DEFAULT ''"},           // QA: why the last run failed; "" = not failed
-		{"card_items", "failure_desc", "TEXT NOT NULL DEFAULT ''"},      // QA: the detailed explanation behind failure (the one-line issue)
-		{"card_items", "fix_for", "INTEGER NOT NULL DEFAULT 0"},         // Agent: id of the failed QA item this [FIX] task is for
-		{"boards", "key", "TEXT NOT NULL DEFAULT ''"},                   // prefix of ticket identifiers, e.g. MID
-		{"boards", "card_seq", "INTEGER NOT NULL DEFAULT 0"},            // last ticket number handed out; never reused
-		{"boards", "branch_prefix", "TEXT NOT NULL DEFAULT 'feature/'"}, // new tickets branch off as {prefix}{ident}
-		{"boards", "dev_branch", "TEXT NOT NULL DEFAULT 'dev'"},         // the shared branch the -dev branch is cut from
-		{"cards", "ident", "TEXT NOT NULL DEFAULT ''"},                  // e.g. MID-12; fixed once assigned
-		{"cards", "task_seq", "INTEGER NOT NULL DEFAULT 0"},             // last Agent Task number handed out
-		{"cards", "qa_seq", "INTEGER NOT NULL DEFAULT 0"},               // last QA Test Case number handed out
-		{"card_items", "ident", "TEXT NOT NULL DEFAULT ''"},             // e.g. MID-12-T3 / MID-12-QA1
-		{"qa_runs", "content_version", "INTEGER NOT NULL DEFAULT 0"},    // ticket version the run tested; older than the ticket = stale
-		{"card_branches", "via_dev", "INTEGER NOT NULL DEFAULT 1"},      // 1: via the -dev branch; 0: PR straight from the feature branch
-		{"discuss_messages", "ref", "INTEGER NOT NULL DEFAULT 0"},       // event rows: the card revision to Undo
-		{"discuss_state", "seen_version", "INTEGER NOT NULL DEFAULT 0"}, // ticket content version Claude last saw
-		{"card_branches", "mode", "TEXT NOT NULL DEFAULT 'merge'"},      // how the feature is integrated into the -dev branch: merge | cherry-pick
-		{"card_items", "superseded", "INTEGER NOT NULL DEFAULT 0"},      // 1 = struck through by a newer Generate; kept for history
+		{"card_flows", "item_id", "INTEGER NOT NULL DEFAULT 0"},          // 0 = Business Flow of the card, else Technical Flow of that item
+		{"card_items", "version", "INTEGER NOT NULL DEFAULT 0"},          // ticket content_version it was generated from; 0 = added by hand
+		{"card_items", "failure", "TEXT NOT NULL DEFAULT ''"},            // QA: why the last run failed; "" = not failed
+		{"card_items", "failure_desc", "TEXT NOT NULL DEFAULT ''"},       // QA: the detailed explanation behind failure (the one-line issue)
+		{"card_items", "fix_for", "INTEGER NOT NULL DEFAULT 0"},          // Agent: id of the failed QA item this [FIX] task is for
+		{"boards", "key", "TEXT NOT NULL DEFAULT ''"},                    // prefix of ticket identifiers, e.g. MID
+		{"boards", "card_seq", "INTEGER NOT NULL DEFAULT 0"},             // last ticket number handed out; never reused
+		{"boards", "branch_prefix", "TEXT NOT NULL DEFAULT 'feature/'"},  // new tickets branch off as {prefix}{ident}
+		{"boards", "dev_branch", "TEXT NOT NULL DEFAULT 'dev'"},          // the shared branch the -dev branch is cut from
+		{"cards", "ident", "TEXT NOT NULL DEFAULT ''"},                   // e.g. MID-12; fixed once assigned
+		{"cards", "task_seq", "INTEGER NOT NULL DEFAULT 0"},              // last Agent Task number handed out
+		{"cards", "qa_seq", "INTEGER NOT NULL DEFAULT 0"},                // last QA Test Case number handed out
+		{"card_items", "ident", "TEXT NOT NULL DEFAULT ''"},              // e.g. MID-12-T3 / MID-12-QA1
+		{"qa_runs", "content_version", "INTEGER NOT NULL DEFAULT 0"},     // ticket version the run tested; older than the ticket = stale
+		{"card_branches", "via_dev", "INTEGER NOT NULL DEFAULT 1"},       // 1: via the -dev branch; 0: PR straight from the feature branch
+		{"discuss_messages", "ref", "INTEGER NOT NULL DEFAULT 0"},        // event rows: the card revision to Undo
+		{"discuss_state", "seen_version", "INTEGER NOT NULL DEFAULT 0"},  // ticket content version Claude last saw
+		{"card_branches", "mode", "TEXT NOT NULL DEFAULT 'merge'"},       // how the feature is integrated into the -dev branch: merge | cherry-pick
+		{"card_reviews", "checks", "TEXT NOT NULL DEFAULT '[]'"},         // the review checklist (see ReviewCriteria)
+		{"review_state", "seen_version", "INTEGER NOT NULL DEFAULT 0"},   // ticket content version Claude last saw in the review chat
+		{"review_state", "seen_decisions", "INTEGER NOT NULL DEFAULT 0"}, // decision-log size Claude last saw
+		{"cards", "updated_at", "TEXT NOT NULL DEFAULT ''"},              // last real change (see the cards_touch trigger)
+		{"card_items", "superseded", "INTEGER NOT NULL DEFAULT 0"},       // 1 = struck through by a newer Generate; kept for history
 	} {
 		if err := addColumn(db, m[0], m[1], m[2]); err != nil {
 			db.Close()
 			return nil, err
 		}
+	}
+	// updated_at moves on a real change to a ticket (text, deadline, status, approval, content version), not when
+	// a sibling's position is renumbered. The WHEN clause also stops the trigger from re-firing on its own update.
+	if _, err := db.Exec(`CREATE TRIGGER IF NOT EXISTS cards_touch AFTER UPDATE ON cards
+		WHEN NEW.updated_at = OLD.updated_at AND (NEW.title<>OLD.title OR NEW.description<>OLD.description OR NEW.deadline<>OLD.deadline
+			OR NEW.status<>OLD.status OR NEW.approved<>OLD.approved OR NEW.content_version<>OLD.content_version)
+		BEGIN UPDATE cards SET updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=NEW.id; END`); err != nil {
+		db.Close()
+		return nil, err
 	}
 	abs, err := filepath.Abs(path) // Claude's file permissions need absolute paths
 	if err != nil {

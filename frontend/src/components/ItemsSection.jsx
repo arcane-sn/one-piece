@@ -141,6 +141,7 @@ export default function ItemsSection({ card, onModal }) {
                         <span className="item-status stale" title={i.log[i.log.length - 1]}>Blocked</span>
                       )}
                       {i.kind === 'qa' && <EvidenceChip e={i.evidence} />}
+                      {i.kind === 'agent' && i.changes && <span className="item-status ev-none" title="What this task committed">{i.changes.files} file{i.changes.files === 1 ? '' : 's'} +{i.changes.additions} −{i.changes.deletions}</span>}
                       <span className={'item-status ' + i.status}>{i.running && <span className="spinner" aria-hidden="true" />}{STATUS[i.status]}</span>
                     </span>
                   </button>

@@ -245,3 +245,23 @@ echo '{"type":"result","is_error":false,"result":"ok","session_id":"s9"}'
 		}
 	}
 }
+
+func TestReviewPromptIsLeanOnResume(t *testing.T) {
+	b := store.Board{Name: "B", Folders: []string{"/x"}}
+	c := store.Card{Ident: "B-1", Title: "T", ContentVersion: 3}
+	last := &store.Review{Status: "done", Verdict: "needs_work", Missing: []string{"no DoD"}}
+	fresh := reviewChatPrompt(b, c, "/x/op", "review", true, 0, "Decision log:\n- release/2", false, nil)
+	for _, want := range []string{"Run OP ticket-show first", "release/2", "/x/op"} {
+		if !strings.Contains(fresh, want) {
+			t.Errorf("fresh prompt lacks %q", want)
+		}
+	}
+	same := reviewChatPrompt(b, c, "/x/op", "again", false, 3, "Decision log:\n- release/2", false, last)
+	if strings.Contains(same, "release/2") || strings.Contains(same, "Product folders") || !strings.Contains(same, "no DoD") || !strings.Contains(same, "no need to run ticket-show") {
+		t.Errorf("an unchanged resumed turn sends only the last verdict:\n%s", same)
+	}
+	moved := reviewChatPrompt(b, c, "/x/op", "again", false, 2, "Decision log:\n- release/2", true, last)
+	if !strings.Contains(moved, "changed since you last looked") || !strings.Contains(moved, "release/2") {
+		t.Errorf("a changed ticket and a grown decision log are resent:\n%s", moved)
+	}
+}

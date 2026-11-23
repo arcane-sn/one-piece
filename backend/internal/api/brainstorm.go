@@ -98,7 +98,7 @@ func runSession(ctx context.Context, spec sessionSpec, onText func(string)) (str
 		maxTurns = 12
 	}
 	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--max-turns", strconv.Itoa(maxTurns),
-		"--setting-sources", "project", "--system-prompt", spec.System}
+		"--setting-sources", "project", "--permission-mode", "dontAsk", "--system-prompt", spec.System}
 	if spec.SessionID != "" {
 		args = append(args, "--resume", spec.SessionID)
 	}

@@ -1,15 +1,49 @@
+import { useLayoutEffect, useRef } from 'react'
 import { useJobs } from '../lib/jobs'
 import { KIND, useActivity } from '../lib/activity'
 
 // Markdown -> one short plain-text line for the card preview.
 const plain = (md) => md.replace(/```[\s\S]*?```/g, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/[#>*_`~\\[\]()!-]+/g, ' ').replace(/\s+/g, ' ').trim()
 
+// Where each card last was on screen, captured as its element unmounts. A card that moves to another column is a
+// new element there, so the new one reads this to fly in from where the old one was (FLIP).
+const lastSeen = new Map()
+
+function landFrom(el, id) {
+  if (!el || el.closest('.columns')?.classList.contains('intro') || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  const prev = lastSeen.get(id)
+  lastSeen.delete(id)
+  const to = el.getBoundingClientRect()
+  const moved = prev && performance.now() - prev.at < 600
+  const dx = moved ? prev.left - to.left : 0
+  const dy = moved ? prev.top - to.top : -12 // a brand-new card just settles in
+  const dist = Math.hypot(dx, dy)
+  el.style.position = 'relative'
+  el.style.zIndex = '30'
+  const anim = el.animate(
+    [
+      { transform: `translate(${dx}px, ${dy}px) scale(1.04) rotate(${Math.max(-2, Math.min(2, dx / 120))}deg)`, boxShadow: '0 24px 36px -12px rgba(120, 60, 20, 0.5)' },
+      { transform: 'translate(0, 0) scale(0.99)', boxShadow: '0 8px 14px -8px rgba(120, 60, 20, 0.3)', offset: 0.8 },
+      { transform: 'none' },
+    ],
+    { duration: Math.min(520, 240 + dist * 0.5), easing: 'cubic-bezier(0.25, 0.8, 0.3, 1)' },
+  )
+  anim.onfinish = anim.oncancel = () => { el.style.position = ''; el.style.zIndex = '' }
+}
+
 // A draggable kanban card; click opens the ticket modal.
 export default function CardItem({ card, onOpen, onDropOn }) {
   const generating = useJobs().busyCards.has(card.id)
   const work = useActivity().forCard(card.id)[0]
+  const ref = useRef(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    landFrom(el, card.id)
+    return () => { const r = el?.getBoundingClientRect(); if (r && r.width > 0) lastSeen.set(card.id, { left: r.left, top: r.top, at: performance.now() }) }
+  }, [card.id])
   return (
     <div
+      ref={ref}
       className={'kcard' + (work ? ' working' : '')}
       draggable
       onDragStart={(e) => e.dataTransfer.setData('text/plain', String(card.id))}

@@ -314,3 +314,43 @@ func TestReviewCommandsAreScopedToTheReviewSession(t *testing.T) {
 		t.Fatal("a card of another board must not be reachable")
 	}
 }
+
+func TestReviewChecklistVerdictAndImageGuard(t *testing.T) {
+	st, env, _, _, biz, _ := cliFixture(t)
+	renv := reviewEnv(env, biz)
+	all := func(status string) string {
+		lines := []string{"summary: ok, all good"}
+		for _, k := range store.ReviewCriteria {
+			lines = append(lines, k.Key+": "+status+" | because: it holds")
+		}
+		return strings.Join(lines, "\n")
+	}
+	if _, err := runCLI(renv, "plain text", "review-verdict", "pass"); err == nil {
+		t.Fatal("a bare pass must be refused: it needs the checklist")
+	}
+	if _, err := runCLI(renv, all("gap"), "review-verdict", "pass"); err == nil {
+		t.Fatal("a gap cannot pass")
+	}
+	if _, err := runCLI(renv, "summary: x\ndod: ok | fine", "review-verdict", "pass"); err == nil {
+		t.Fatal("an incomplete checklist is refused")
+	}
+	if _, err := runCLI(renv, all("ok"), "review-verdict", "pass"); err != nil {
+		t.Fatal(err)
+	}
+	r, _ := st.LatestReview(biz)
+	if r.Verdict != "pass" || len(r.Checks) != len(store.ReviewCriteria) {
+		t.Fatalf("review = %+v", r)
+	}
+
+	// a rewrite may not drop the ticket's images
+	img := `<img src="/uploads/a.png">`
+	if _, err := runCLI(renv, "text "+img, "ticket-edit", "T"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runCLI(renv, "rewritten without the picture", "ticket-edit", "T"); err == nil || !strings.Contains(err.Error(), "/uploads/a.png") {
+		t.Fatalf("dropping an image must be refused: %v", err)
+	}
+	if _, err := runCLI(renv, "rewritten, picture kept "+img, "ticket-edit", "T"); err != nil {
+		t.Fatalf("keeping it is fine: %v", err)
+	}
+}

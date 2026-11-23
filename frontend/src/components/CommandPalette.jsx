@@ -29,6 +29,14 @@ function score(text, ident, q) {
   return best
 }
 
+function ago(iso) {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000)
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
+}
+
 // Cmd/Ctrl+K: jump to a ticket (by identifier or title), a board, or the dashboard.
 export default function CommandPalette({ boards }) {
   const navigate = useNavigate()
@@ -69,10 +77,14 @@ export default function CommandPalette({ boards }) {
     const all = [
       { key: 'dash', kind: 'page', title: 'Dashboard', sub: 'All boards', ident: '', to: '/' },
       ...boards.map((b) => ({ key: `b${b.id}`, kind: 'board', title: b.name, sub: 'Board', ident: '', to: `/boards/${b.id}` })),
-      ...cards.map((c) => ({ key: `c${c.id}`, kind: 'ticket', title: c.title, sub: c.boardName, ident: c.ident, status: c.status, to: `/boards/${c.boardId}?card=${c.id}` })),
+      ...cards.map((c) => ({ key: `c${c.id}`, kind: 'ticket', title: c.title, sub: c.boardName, ident: c.ident, status: c.status, at: c.updatedAt || '', id: c.id, to: `/boards/${c.boardId}?card=${c.id}` })),
     ]
     const query = q.trim()
-    if (!query) return all.filter((i) => i.kind !== 'ticket').concat(all.filter((i) => i.kind === 'ticket')).slice(0, MAX)
+    // no query: pages and boards, then the tickets changed most recently first
+    if (!query) {
+      const recent = all.filter((i) => i.kind === 'ticket').sort((a, b) => (b.at > a.at ? 1 : b.at < a.at ? -1 : b.id - a.id))
+      return all.filter((i) => i.kind !== 'ticket').concat(recent).slice(0, MAX)
+    }
     return all
       .map((i) => ({ i, s: score(i.title + ' ' + i.sub, i.ident, query) }))
       .filter((x) => x.s >= 0)
@@ -121,6 +133,7 @@ export default function CommandPalette({ boards }) {
               {it.kind !== 'ticket' && <span className="cmdk-kind">{it.kind === 'board' ? 'Board' : 'Page'}</span>}
               <span className="cmdk-title">{it.title}</span>
               {it.kind === 'ticket' && <span className="cmdk-sub">{it.sub}</span>}
+              {it.kind === 'ticket' && !q.trim() && it.at && <span className="cmdk-ago">{ago(it.at)}</span>}
               {it.status && <span className="cmdk-status" style={{ '--c': STATUS[it.status]?.[1] }}>{STATUS[it.status]?.[0] ?? it.status}</span>}
             </div>
           ))}

@@ -67,7 +67,7 @@ export default function Sidebar({ user, boards, onLogout, onNewBoard, collapsed,
           </Tip>
         </div>
       </aside>
-      <Tip label={r ? 'Show sidebar' : 'Hide sidebar'}>
+      <Tip label={(r ? 'Show sidebar' : 'Hide sidebar') + (/Mac/.test(navigator.platform) ? '  ⌘B' : '  Ctrl+B')}>
         <button type="button" className={'side-collapse' + (r ? ' rail' : '')} aria-label={r ? 'Show sidebar' : 'Hide sidebar'} onClick={onToggle}><Chevrons flip={r} /></button>
       </Tip>
     </>

@@ -15,24 +15,38 @@ import (
 
 const reviewTurnTimeout = 10 * time.Minute
 
+// reviewMaxTurns is the step budget of one Review turn (like Discuss and Brainstorming; "continue" resumes).
+const reviewMaxTurns = 25
+
 // reviewChatSystem keeps the same bytes across turns. OP is the command path named in the first message.
-const reviewChatSystem = `You are the reviewer of ONE Business ticket for a product team, working WITH the product owner in a chat until the ticket is good enough to approve. You improve the ticket yourself; you do not write product code and you never approve it (the owner does).
-What a passing ticket has:
-1. A clear title and description: a developer can tell what to build, with no contradictions.
-2. A testable Definition of Done (concrete, checkable outcomes).
-3. A small, manageable scope: one focused change, not a whole application.
-4. At least one Business Flow (swimlane text) attached that matches the description: who does what, in order.
+const reviewChatSystem = `You are the business reviewer of ONE Business ticket, working WITH the product owner until the ticket is good enough to approve. You find the gaps and fix what is certain; you do not write product code and you never approve (the owner does). The shape of the ticket (its description and Business Flow) is also worked out in Discuss; here you check it.
+The checklist, six criteria you judge every time (key: what a pass means):
+- description: a developer can tell what to build; no contradictions or duplicates.
+- cases: every case the ticket names or implies (A, B, C...) has a defined behaviour, nothing is left to guess.
+- dod: the Definition of Done lists concrete outcomes a tester can check one by one (each one could become a test case).
+- edge: errors, empty and invalid input, permissions and other edge cases are covered, or consciously out of scope.
+- scope: one focused change, small enough for one agent run; otherwise say how to split it.
+- flows: at least one Business Flow (swimlane text) exists and matches the description: who does what, in order.
 How you work:
-- Start every turn with: OP ticket-show (the owner may have edited the ticket since). You may also use Read, Grep and Glob on the listed product folders to check how the product works today; keep it to a handful of calls.
-- Fix what you are sure of yourself: restructure and tighten the description, remove duplicates, add the missing sections, write or repair Business Flows (one, two or more as the ticket needs). Use OP ticket-edit and OP flow-add / flow-update / flow-delete for that. These apply immediately, so keep the owner's intent and facts; never invent product facts.
-- Ask the owner (ONE focused question, or a short numbered list at most) about what only they can decide: scope, contradictions, missing business rules. Do not change the ticket to guess an answer.
-- End EVERY turn by recording your verdict for the ticket as it stands now: OP review-verdict pass|needs_work, the summary on stdin, and each open point as an extra argument. Use pass only when all four points hold; with needs_work give at least one open point. Then tell the owner in one or two sentences where things stand.
-- Commands that take text read it from stdin: write them with a shell heredoc, for example
+- Findings first. Read the ticket (OP ticket-show, only when the message says it changed or you have not seen it), judge the six criteria, then act. You may use Read, Grep and Glob on the product folders to check how the product works today, a handful of calls.
+- Fix only what is certain: tighten wording, remove duplicates, add a missing DoD structure, write or repair a Business Flow. Use OP ticket-edit and OP flow-add / flow-update / flow-delete; they apply at once. Keep the owner's intent and facts; never invent product facts. ticket-edit replaces the WHOLE description: start from what ticket-show printed and keep every image (<img ...> tag or ![](...)) exactly as it was. If an edit is refused, read why and fix it.
+- Do not guess what only the owner can decide (scope, business rules, a contradiction). Ask ONE focused question, or a short numbered list at most, and mark that criterion as a gap.
+- End EVERY turn that judged the ticket with the verdict: OP review-verdict pass|needs_work [open point...] with this text on stdin (heredoc, plain lines; never JSON):
+  summary: one or two sentences
+  description: ok | why, short
+  cases: gap | what is missing
+  dod: ok | ...
+  edge: ...
+  scope: ...
+  flows: ...
+  (one line per key, all six, status ok, gap or na)
+  pass only when no criterion is a gap; needs_work needs at least one gap or open point. na is for a criterion that truly does not apply, with the reason in the note. If the owner only asked a question and nothing was judged, answer without a verdict.
+- Commands that take text read it from stdin with a shell heredoc, for example
   OP ticket-edit "New title" <<'EOF'
-  ...whole new description in Markdown...
+  ...whole new description...
   EOF
-  ticket-edit replaces the WHOLE description, so start from what ticket-show printed. flow-add "<title>" and flow-update <id> "<title>" take the swimlane text on stdin; if a flow is refused, read the reason and fix the text.
-- Reply in the language the owner writes in. Keep chat replies short.
+  flow-add "<title>" and flow-update <id> "<title>" take swimlane text on stdin.
+- Never narrate tool mechanics. Reply in the language the owner writes in. Keep chat replies short.
 ` + swimlaneRules
 
 // reviewRun is everything one Claude Review turn needs.
@@ -53,14 +67,16 @@ func realRunReviewChat(ctx context.Context, in reviewRun, onText func(string)) (
 		tools = append(tools, "Bash("+in.Exe+" "+c+":*)")
 	}
 	return runSessionFn(ctx, sessionSpec{
-		System: in.System, Prompt: in.Prompt, SessionID: in.SessionID, Dirs: in.Dirs, AllowedTools: tools,
+		System: in.System, Prompt: in.Prompt, SessionID: in.SessionID, MaxTurns: reviewMaxTurns, Dirs: in.Dirs, AllowedTools: tools,
 		Env: []string{"ONE_PIECE_DB=" + in.DB, "ONE_PIECE_BOARD=" + strconv.FormatInt(in.BoardID, 10),
 			"ONE_PIECE_CARD=" + strconv.FormatInt(in.CardID, 10), "ONE_PIECE_MODE=review"},
 		OnSession: in.OnSession,
 	}, onText)
 }
 
-func reviewChatPrompt(b store.Board, c store.Card, exe, text string, fresh bool) string {
+// reviewChatPrompt is lean on purpose: a fresh session gets the context once; a resumed one gets only what moved
+// (the ticket is resent as "run ticket-show" only when its content version changed, the decision log only when it grew).
+func reviewChatPrompt(b store.Board, c store.Card, exe, text string, fresh bool, seenVer int, decisions string, decisionsChanged bool, last *store.Review) string {
 	var m strings.Builder
 	fmt.Fprintf(&m, "Ticket: %s — %s\n", c.Ident, c.Title)
 	if fresh {
@@ -71,7 +87,24 @@ func reviewChatPrompt(b store.Board, c store.Card, exe, text string, fresh bool)
 		if len(b.Folders) > 0 {
 			fmt.Fprintf(&m, "Product folders you may read:\n- %s\n", strings.Join(b.Folders, "\n- "))
 		}
-		fmt.Fprintf(&m, "OP = %s\nOP subcommands: ticket-show | ticket-edit <title> (description on stdin) | flow-add <title> (text on stdin) | flow-update <id> <title> (text on stdin) | flow-delete <id> | review-verdict <pass|needs_work> [open point…] (summary on stdin)\n", exe)
+		fmt.Fprintf(&m, "OP = %s\nOP subcommands: ticket-show | ticket-edit <title> (description on stdin) | flow-add <title> (text on stdin) | flow-update <id> <title> (text on stdin) | flow-delete <id> | review-verdict <pass|needs_work> [open point…] (summary and one line per criterion on stdin)\n", exe)
+		m.WriteString("Run OP ticket-show first: it prints the description and the Business Flows.\n")
+	} else {
+		// a resumed session may still remember an older verdict format (JSON is blocked by the shell filter)
+		m.WriteString("Verdict format (replaces any earlier instruction): plain lines on stdin, never JSON: \"summary: …\" then \"key: ok|gap|na | note\" for description, cases, dod, edge, scope, flows.\n")
+	}
+	if fresh {
+	} else if c.ContentVersion != seenVer {
+		fmt.Fprintf(&m, "The ticket changed since you last looked (content version %d). Run OP ticket-show before relying on it.\n", c.ContentVersion)
+	} else if last != nil && last.Status == "done" {
+		fmt.Fprintf(&m, "The ticket is unchanged since your last look; no need to run ticket-show. Your last verdict: %s", last.Verdict)
+		if len(last.Missing) > 0 {
+			fmt.Fprintf(&m, ", open: %s", strings.Join(last.Missing, "; "))
+		}
+		m.WriteString("\n")
+	}
+	if decisions != "" && (fresh || decisionsChanged) {
+		m.WriteString("\nThe owner and Discuss agreed on these; do not flag them as gaps:\n" + decisions + "\n")
 	}
 	m.WriteString("\n" + text)
 	return m.String()
@@ -103,7 +136,13 @@ func (s *server) runReviewTurn(ctx context.Context, cancel context.CancelFunc, b
 	}()
 	sid, _ := s.st.GetReviewState(c.ID)
 	run := reviewRun{System: reviewChatSystem, SessionID: sid, Exe: exe, DB: s.st.Path, BoardID: b.ID, CardID: c.ID, Dirs: b.Folders}
-	run.Prompt = reviewChatPrompt(b, c, exe, text, sid == "")
+	seenVer, seenDec := s.st.ReviewSeen(c.ID)
+	decs, _ := s.st.ListDecisions(c.ID)
+	var last *store.Review
+	if r, err := s.st.LatestReview(c.ID); err == nil {
+		last = &r
+	}
+	run.Prompt = reviewChatPrompt(b, c, exe, text, sid == "", seenVer, store.DecisionBlock(decs), len(decs) != seenDec, last)
 	run.Dirs, run.Prompt = s.attachImages(text, run.Dirs, run.Prompt)
 	wrote := false
 	onText := func(t string) {
@@ -137,6 +176,9 @@ func (s *server) runReviewTurn(ctx context.Context, cancel context.CancelFunc, b
 		}
 	}
 	if status == "done" {
+		if cur, err := s.st.GetCard(c.ID); err == nil {
+			s.st.SetReviewSeen(c.ID, cur.ContentVersion, len(decs)) // Claude's own edits are not "a change" next turn
+		}
 		s.st.SetReviewState(c.ID, newSID)
 	} else if announced != "" && (fresh || sid == "") {
 		s.st.SetReviewState(c.ID, announced)

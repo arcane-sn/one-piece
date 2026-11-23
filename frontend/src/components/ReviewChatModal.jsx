@@ -1,3 +1,4 @@
+import ReviewChecklist from './ReviewChecklist'
 import { confirmDialog } from '../lib/confirm'
 import { useStickyScroll } from '../lib/stickyScroll'
 import Thinking from './Thinking'
@@ -105,8 +106,9 @@ export default function ReviewChatModal({ card, boardId, onTurnDone, onCardChang
           {!available && view ? 'Claude Review is available while the ticket is in Business.' : (
             verdict
               ? <><span className={'review-badge ' + verdict[0]}>{verdict[1]}</span> {current.summary}</>
-              : <>Not reviewed yet. Say hello and Claude reviews the ticket and fixes what it can.</>
+              : <>Not reviewed yet. Claude checks six things: description, cases, Definition of Done, edge cases, scope and the Business Flow.</>
           )}
+          {current && <ReviewChecklist checks={current.checks} />}
           {current?.verdict === 'needs_work' && current.missing.length > 0 && (
             <ul className="review-open">{current.missing.map((m, i) => <li key={i}>{m}</li>)}</ul>
           )}
@@ -114,7 +116,10 @@ export default function ReviewChatModal({ card, boardId, onTurnDone, onCardChang
         <div className="bs-list" ref={listRef}>
           {view === null && <p className="muted">Loading…</p>}
           {view?.messages.length === 0 && (
-            <p className="muted">Tell Claude what to focus on, or just send “review”. It edits the description and Business Flows directly; use Undo on a change line to go back.</p>
+            <div className="review-start">
+              <p className="muted">Claude reports the gaps first and only fixes what is certain, directly in the description and Business Flows. Images stay as they are, and Undo on a change line goes back.</p>
+              <button type="button" className="primary" disabled={running || !available} onClick={() => send('review')}>Start review</button>
+            </div>
           )}
           {view?.messages.map((m) => m.role === 'marker' ? (
             <div key={m.id} className="discuss-marker"><span>{m.text}</span></div>

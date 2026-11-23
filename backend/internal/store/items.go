@@ -9,22 +9,23 @@ import (
 
 // Item is an Agent Task (kind "agent") or QA Test Case (kind "qa") of a card.
 type Item struct {
-	ID          int64     `json:"id"`
-	CardID      int64     `json:"cardId"`
-	Kind        string    `json:"kind"`
-	Ident       string    `json:"ident"` // e.g. MID-12-T3; generated, never changes
-	Title       string    `json:"title"`
-	Body        string    `json:"body"`
-	Position    int       `json:"position"`
-	Status      string    `json:"status"` // todo | doing | done
-	Log         []string  `json:"log"`
-	Version     int       `json:"version"`            // ticket version it was generated from; 0 = added by hand
-	Failure     string    `json:"failure"`            // QA: the one-line issue of the last failed run; "" when it has not failed
-	FailureDesc string    `json:"failureDesc"`        // QA: the detailed explanation of that failure
-	FixFor      int64     `json:"fixFor"`             // Agent: the failed QA item this [FIX] task is for; 0 otherwise
-	Superseded  bool      `json:"superseded"`         // struck through: replaced by a newer Generate, kept for history
-	Evidence    *Evidence `json:"evidence,omitempty"` // QA: the latest browser run, set by ListItems; nil = never run
-	Running     bool      `json:"running"`            // Claude is working on it right now; set by the API, never stored
+	ID          int64          `json:"id"`
+	CardID      int64          `json:"cardId"`
+	Kind        string         `json:"kind"`
+	Ident       string         `json:"ident"` // e.g. MID-12-T3; generated, never changes
+	Title       string         `json:"title"`
+	Body        string         `json:"body"`
+	Position    int            `json:"position"`
+	Status      string         `json:"status"` // todo | doing | done
+	Log         []string       `json:"log"`
+	Version     int            `json:"version"`            // ticket version it was generated from; 0 = added by hand
+	Failure     string         `json:"failure"`            // QA: the one-line issue of the last failed run; "" when it has not failed
+	FailureDesc string         `json:"failureDesc"`        // QA: the detailed explanation of that failure
+	FixFor      int64          `json:"fixFor"`             // Agent: the failed QA item this [FIX] task is for; 0 otherwise
+	Superseded  bool           `json:"superseded"`         // struck through: replaced by a newer Generate, kept for history
+	Changes     *ChangeSummary `json:"changes,omitempty"`  // Agent: what its commits changed, set by ListItems
+	Evidence    *Evidence      `json:"evidence,omitempty"` // QA: the latest browser run, set by ListItems; nil = never run
+	Running     bool           `json:"running"`            // Claude is working on it right now; set by the API, never stored
 }
 
 const itemCols = `id,card_id,kind,ident,title,body,position,status,log,version,failure,failure_desc,fix_for,superseded`
@@ -70,6 +71,9 @@ func (s *Store) ListItems(cardID int64) ([]Item, error) {
 		out = append(out, i)
 	}
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.attachChanges(cardID, out); err != nil {
 		return nil, err
 	}
 	return out, s.attachEvidence(cardID, out)

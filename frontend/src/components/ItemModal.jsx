@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { api } from '../api'
 import FlowsSection from './FlowsSection'
 import QARunPanel from './QARunPanel'
+import ChangesPanel from './ChangesPanel'
 import RichEditor from './RichEditor'
 import { toast } from '../lib/toast'
 
@@ -170,6 +171,7 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
                 )}
               </div>
             )}
+            {current && k === 'agent' && <ChangesPanel itemId={current.id} refreshKey={current.status + (current.log?.length ?? 0)} />}
             {current && k === 'qa' && <QARunPanel itemId={current.id} refreshKey={current.status + (current.log?.length ?? 0)} />}
             <div className="field review-side">
               <span>Claude Log</span>

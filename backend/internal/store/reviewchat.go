@@ -148,6 +148,67 @@ func (s *Store) RestoreRevision(cardID, revID int64) (Card, int64, error) {
 
 // RecordVerdict stores a finished review of the ticket as it is right now.
 func (s *Store) RecordVerdict(cardID int64, verdict, summary string, missing []string) (Review, error) {
+	return s.recordVerdict(cardID, verdict, summary, missing, nil)
+}
+
+// Check is one line of the review checklist.
+type Check struct {
+	Key    string `json:"key"`
+	Status string `json:"status"` // ok | gap | na
+	Note   string `json:"note"`
+}
+
+// ReviewCriteria are the checklist keys, in display order; every verdict with a checklist covers all of them.
+var ReviewCriteria = []struct{ Key, Label string }{
+	{"description", "Clear description, no contradictions"},
+	{"cases", "Every case (A, B, C…) has defined behaviour"},
+	{"dod", "Definition of Done is concrete and testable"},
+	{"edge", "Error and edge cases are covered"},
+	{"scope", "One focused change, small enough"},
+	{"flows", "Business Flow matches the description"},
+}
+
+// RecordChecklistVerdict records a verdict backed by the full checklist. Pass needs every criterion ok or na
+// (never a gap); needs_work needs at least one gap or open point. Evidence, not a bare opinion.
+func (s *Store) RecordChecklistVerdict(cardID int64, verdict, summary string, missing []string, checks []Check) (Review, error) {
+	seen := map[string]bool{}
+	gaps := 0
+	for i := range checks {
+		c := &checks[i]
+		ok := false
+		for _, k := range ReviewCriteria {
+			ok = ok || k.Key == c.Key
+		}
+		if !ok || seen[c.Key] {
+			return Review{}, ValidationError{"unknown or repeated checklist key: " + c.Key}
+		}
+		if c.Status != "ok" && c.Status != "gap" && c.Status != "na" {
+			return Review{}, ValidationError{"checklist status must be ok, gap or na (" + c.Key + ")"}
+		}
+		c.Note = strings.TrimSpace(c.Note)
+		if len([]rune(c.Note)) > 400 {
+			c.Note = string([]rune(c.Note)[:400])
+		}
+		if c.Status == "gap" {
+			gaps++
+		}
+		seen[c.Key] = true
+	}
+	for _, k := range ReviewCriteria {
+		if !seen[k.Key] {
+			return Review{}, ValidationError{"the checklist is missing: " + k.Key}
+		}
+	}
+	switch {
+	case verdict == "pass" && gaps > 0:
+		return Review{}, ValidationError{"a gap in the checklist means needs_work, not pass"}
+	case verdict == "needs_work" && gaps == 0 && len(missing) == 0:
+		return Review{}, ValidationError{"needs_work needs a gap in the checklist or an open point"}
+	}
+	return s.recordVerdict(cardID, verdict, summary, missing, checks)
+}
+
+func (s *Store) recordVerdict(cardID int64, verdict, summary string, missing []string, checks []Check) (Review, error) {
 	if verdict != "pass" && verdict != "needs_work" {
 		return Review{}, ValidationError{"verdict must be pass or needs_work"}
 	}
@@ -158,14 +219,49 @@ func (s *Store) RecordVerdict(cardID int64, verdict, summary string, missing []s
 	if missing == nil {
 		missing = []string{}
 	}
+	if checks == nil {
+		checks = []Check{}
+	}
 	m, _ := json.Marshal(missing)
-	res, err := s.DB.Exec(`INSERT INTO card_reviews(card_id,content_version,status,verdict,summary,missing) VALUES(?,?,'done',?,?,?)`,
-		cardID, c.ContentVersion, verdict, strings.TrimSpace(summary), string(m))
+	ck, _ := json.Marshal(checks)
+	res, err := s.DB.Exec(`INSERT INTO card_reviews(card_id,content_version,status,verdict,summary,missing,checks) VALUES(?,?,'done',?,?,?,?)`,
+		cardID, c.ContentVersion, verdict, strings.TrimSpace(summary), string(m), string(ck))
 	if err != nil {
 		return Review{}, err
 	}
 	id, _ := res.LastInsertId()
-	return Review{ID: id, CardID: cardID, ContentVersion: c.ContentVersion, Status: "done", Verdict: verdict, Summary: summary, Missing: missing, Log: []string{}}, nil
+	return Review{ID: id, CardID: cardID, ContentVersion: c.ContentVersion, Status: "done", Verdict: verdict, Summary: summary, Missing: missing, Checks: checks, Log: []string{}}, nil
+}
+
+// ReviewSeen is what Claude last saw in the review chat, so a resumed turn only resends what changed.
+func (s *Store) ReviewSeen(cardID int64) (version, decisions int) {
+	_ = s.DB.QueryRow(`SELECT seen_version,seen_decisions FROM review_state WHERE card_id=?`, cardID).Scan(&version, &decisions)
+	return
+}
+
+func (s *Store) SetReviewSeen(cardID int64, version, decisions int) error {
+	_, err := s.DB.Exec(`INSERT INTO review_state(card_id,session_id,seen_version,seen_decisions) VALUES(?,'',?,?)
+		ON CONFLICT(card_id) DO UPDATE SET seen_version=excluded.seen_version, seen_decisions=excluded.seen_decisions`, cardID, version, decisions)
+	return err
+}
+
+var imgRe = regexp.MustCompile(`(?i)<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']|!\[[^\]]*\]\(([^)\s]+)`)
+
+// MissingImages lists the images of oldDesc that newDesc no longer contains. Claude rewrites the whole
+// description, and a pasted screenshot must never disappear in the rewrite.
+func MissingImages(oldDesc, newDesc string) []string {
+	have := map[string]bool{}
+	for _, m := range imgRe.FindAllStringSubmatch(newDesc, -1) {
+		have[m[1]+m[2]] = true
+	}
+	var lost []string
+	for _, m := range imgRe.FindAllStringSubmatch(oldDesc, -1) {
+		if src := m[1] + m[2]; !have[src] {
+			lost = append(lost, src)
+			have[src] = true
+		}
+	}
+	return lost
 }
 
 var swimlaneStep = regexp.MustCompile(`\S\s+(<->|-->>|->>|-->|<--|->|<-|-x|=>|<=)\s+\S`)

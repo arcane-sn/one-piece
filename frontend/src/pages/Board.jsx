@@ -32,6 +32,7 @@ export default function Board({ reloadBoards }) {
   const [ticket, setTicket] = useState(null) // null | 'new' | Card
   const [editing, setEditing] = useState(false)
   const [brainstorm, setBrainstorm] = useState(false)
+  const [intro, setIntro] = useState(true) // the page-load fade is only for the first moments
 
   const load = useCallback(async () => {
     try {
@@ -44,6 +45,22 @@ export default function Board({ reloadBoards }) {
     }
   }, [id])
   useEffect(() => { load() }, [load])
+  // Cmd/Ctrl+N: new ticket on this board (not while a modal is already open)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'n') return
+      if (!board || ticket || editing || brainstorm || document.querySelector('.modal-backdrop, .cmdk-overlay')) return
+      e.preventDefault()
+      setTicket('new')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [board, ticket, editing, brainstorm])
+  useEffect(() => {
+    setIntro(true)
+    const t = setTimeout(() => setIntro(false), 1400)
+    return () => clearTimeout(t)
+  }, [id])
 
   // ?card=<id> (from the Cmd+K palette) opens that ticket once the board has loaded.
   const wanted = search.get('card')
@@ -118,7 +135,7 @@ export default function Board({ reloadBoards }) {
         </Tip>
       </div>
       {error && <p className="error" style={{ marginBottom: 16 }}>{error}</p>}
-      <div className="columns">
+      <div className={'columns' + (intro ? ' intro' : '')}>
         {COLUMNS.map(([status, label, dot]) => (
           <Column
             key={status}

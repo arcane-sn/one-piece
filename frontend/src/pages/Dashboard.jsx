@@ -84,24 +84,27 @@ export default function Dashboard({ user, boards, reload, onNew, onEdit }) {
         {rows.length === 0 && finished.length === 0 ? <span className="muted">All quiet on deck. No agents are running.</span> : (
           <ul className="activity-list">
             {rows.map((r) => (
-              <li key={'run' + rowKey(r)}>
+              <li key={'run' + rowKey(r)} className="act-row">
                 <Link to={`/boards/${r.boardId}`}>
-                  <span className="spinner" aria-hidden="true" />
-                  <strong>{KIND[r.kind]}</strong>
-                  <span>{r.ident && <span className="ident">{r.ident}</span>}{r.title}</span>
-                  <span className="muted">{r.board}</span>
+                  <span className="act-flag running"><span className="spinner" aria-hidden="true" />Running</span>
+                  <strong className="act-kind">{KIND[r.kind]}</strong>
+                  <span className="act-title">{r.ident && <span className="ident">{r.ident}</span>}{r.title}</span>
+                  <span className="act-board muted">{r.board}</span>
+                  <span className="act-time muted">now</span>
                 </Link>
+                <span className="act-x" />
               </li>
             ))}
             {finished.map((r) => (
-              <li key={'done' + rowKey(r)} className="done">
+              <li key={'done' + rowKey(r)} className="act-row done">
                 <Link to={`/boards/${r.boardId}`}>
-                  <span className="done-flag">Done ✓</span>
-                  <strong>{KIND[r.kind]}</strong>
-                  <span>{r.ident && <span className="ident">{r.ident}</span>}{r.title}</span>
-                  <span className="muted">{r.board} · {new Date(r.finishedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="act-flag done">Done ✓</span>
+                  <strong className="act-kind">{KIND[r.kind]}</strong>
+                  <span className="act-title">{r.ident && <span className="ident">{r.ident}</span>}{r.title}</span>
+                  <span className="act-board muted">{r.board}</span>
+                  <span className="act-time muted">{new Date(r.finishedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </Link>
-                <button type="button" className="icon-btn" aria-label="Dismiss" onClick={() => dismiss(rowKey(r))}>×</button>
+                <button type="button" className="act-x" aria-label="Remove from this list" title="Remove from this list (the work itself is untouched)" onClick={() => dismiss(rowKey(r))}>×</button>
               </li>
             ))}
             {finished.length > 1 && <li><button type="button" className="link" onClick={clearFinished}>Clear finished</button></li>}

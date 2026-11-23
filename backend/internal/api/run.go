@@ -328,12 +328,20 @@ func (s *server) executeItem(ctx context.Context, it store.Item, c store.Card, b
 		return s.passQA(it, logLine, desc)
 	}
 	if len(repos) > 0 {
+		s.st.ClearItemChanges(it.ID) // a re-run replaces the earlier record
 		changed, cerr := commitTask(repos, it)
 		if cerr != nil {
 			log.Printf("run item %d: commit failed: %v", it.ID, cerr)
 			logLine("Failed: could not commit in " + shorten(cerr.Error(), 300))
 			s.st.SetItemStatus(it.ID, "todo")
 			return runBlocked
+		}
+		for _, p := range changed {
+			if sha, files, ierr := commitInfo(p); ierr == nil {
+				s.st.AddItemChange(it.ID, p, sha, files)
+			} else {
+				log.Printf("run item %d: reading the commit of %s: %v", it.ID, p, ierr)
+			}
 		}
 		if len(changed) > 0 {
 			names := make([]string, len(changed))

@@ -21,6 +21,18 @@ function Shell({ user, onLogout }) {
     try { localStorage.setItem('op-side', c ? '0' : '1') } catch { /* private mode */ }
     return !c
   }), [])
+  // Cmd/Ctrl+B toggles the sidebar, except while typing (the editor uses it for bold)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'b') return
+      const el = e.target
+      if (el instanceof HTMLElement && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return
+      e.preventDefault()
+      toggleSide()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [toggleSide])
   const navigate = useNavigate()
   const reload = useCallback(() => api('/api/boards').then(setBoards).catch(() => setBoards((b) => b ?? [])), [])
   useEffect(() => { reload() }, [reload])

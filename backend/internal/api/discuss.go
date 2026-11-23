@@ -195,8 +195,13 @@ func discussPrompt(b store.Board, c store.Card, branches []store.Branch, decisio
 		if len(branches) == 0 {
 			m.WriteString("none yet\n")
 		}
+		planned := false
 		for _, r := range branches {
 			m.WriteString(branchLine(r) + "\n")
+			planned = planned || r.Status == "planned"
+		}
+		if planned && !fresh { // a resumed session may still remember the old command list
+			m.WriteString("Note: OP branch-plan <repo> <base> [feature [dev]] accepts any branch names, and re-running it renames a repo that is still planned (the git guard follows the registered names).\n")
 		}
 		if repos, not := repoMentions(b.Folders, text); len(repos) > 0 || len(not) > 0 {
 			if len(repos) > 0 {

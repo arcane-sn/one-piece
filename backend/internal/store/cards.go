@@ -21,6 +21,7 @@ type Card struct {
 	ContentVersion int    `json:"contentVersion"`
 	Status         string `json:"status"`
 	Position       int    `json:"position"`
+	UpdatedAt      string `json:"updatedAt"`        // last real change; "" = never changed since this field existed
 	Branch         string `json:"branch,omitempty"` // feature branch, set by ListCards only
 	QATotal        int    `json:"qaTotal"`          // live QA test cases, set by ListCards only
 	QARan          int    `json:"qaRan"`            // ... of which have a browser run
@@ -66,11 +67,11 @@ type queryer interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
-const cardCols = `id,board_id,ident,title,description,deadline,approved,content_version,status,position`
+const cardCols = `id,board_id,ident,title,description,deadline,approved,content_version,status,position,updated_at`
 
 func scanCard(row *sql.Row) (Card, error) {
 	var c Card
-	err := row.Scan(&c.ID, &c.BoardID, &c.Ident, &c.Title, &c.Description, &c.Deadline, &c.Approved, &c.ContentVersion, &c.Status, &c.Position)
+	err := row.Scan(&c.ID, &c.BoardID, &c.Ident, &c.Title, &c.Description, &c.Deadline, &c.Approved, &c.ContentVersion, &c.Status, &c.Position, &c.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Card{}, ErrNotFound
 	}
@@ -187,7 +188,7 @@ func (s *Store) ListCards(boardID int64) ([]Card, error) {
 	cards := []Card{}
 	for rows.Next() {
 		var c Card
-		if err := rows.Scan(&c.ID, &c.BoardID, &c.Ident, &c.Title, &c.Description, &c.Deadline, &c.Approved, &c.ContentVersion, &c.Status, &c.Position); err != nil {
+		if err := rows.Scan(&c.ID, &c.BoardID, &c.Ident, &c.Title, &c.Description, &c.Deadline, &c.Approved, &c.ContentVersion, &c.Status, &c.Position, &c.UpdatedAt); err != nil {
 			return nil, err
 		}
 		cards = append(cards, c)

@@ -318,3 +318,38 @@ func TestFixAfterIntegrationReopensTheRepo(t *testing.T) {
 		t.Errorf("log = %v", done.Log)
 	}
 }
+
+func TestRunRecordsWhatTheTaskChanged(t *testing.T) {
+	g := gitRunFixture(t)
+	useAgent(t, func(_ context.Context, cwd string, _ []string, _, user string, _ func(string)) (string, error) {
+		writeInCwd(user, cwd)
+		return "ok", nil
+	})
+	it, ip := g.addTask(t, "Add endpoint")
+	g.s.req(t, "POST", ip+"/run", map[string]any{}, g.ck)
+	waitItem(t, g.s, g.cp, ip, g.ck, "done")
+
+	var changes []store.ItemChange
+	_, body := g.s.req(t, "GET", ip+"/changes", nil, g.ck)
+	if err := json.Unmarshal(body, &changes); err != nil || len(changes) != 1 {
+		t.Fatalf("changes = %s", body)
+	}
+	c := changes[0]
+	if c.Repo != g.repo || c.SHA != gitIn(t, g.repo, "rev-parse", "HEAD") || len(c.Files) == 0 || c.Additions == 0 {
+		t.Fatalf("change = %+v", c)
+	}
+	diffURL := "/api/item-changes/" + strconv.FormatInt(c.ID, 10) + "/diff?file="
+	resp, body := g.s.req(t, "GET", diffURL+c.Files[0].Path, nil, g.ck)
+	if resp.StatusCode != 200 || !strings.Contains(string(body), "diff --git") {
+		t.Fatalf("diff: %d %s", resp.StatusCode, body)
+	}
+	if resp, _ := g.s.req(t, "GET", diffURL+"../../etc/passwd", nil, g.ck); resp.StatusCode != 404 {
+		t.Errorf("a file the commit did not touch must be refused, got %d", resp.StatusCode)
+	}
+	items, _ := g.s.St.ListItems(g.card.ID)
+	for _, x := range items {
+		if x.ID == it.ID && (x.Changes == nil || x.Changes.Files == 0) {
+			t.Errorf("the task row carries a change summary: %+v", x.Changes)
+		}
+	}
+}

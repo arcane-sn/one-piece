@@ -32,3 +32,24 @@ func TestQAEvidenceStates(t *testing.T) {
 		}
 	}
 }
+
+func TestCardUpdatedAtMovesOnRealChangesOnly(t *testing.T) {
+	s, _, cards := threeCards(t)
+	var before string
+	s.DB.QueryRow(`SELECT updated_at FROM cards WHERE id=?`, cards[1].ID).Scan(&before)
+	s.DB.Exec(`UPDATE cards SET updated_at='2000-01-01T00:00:00.000Z' WHERE id=?`, cards[1].ID)
+	s.DB.Exec(`UPDATE cards SET position=position+5 WHERE id=?`, cards[1].ID) // renumbering is not an update
+	var got string
+	s.DB.QueryRow(`SELECT updated_at FROM cards WHERE id=?`, cards[1].ID).Scan(&got)
+	if got != "2000-01-01T00:00:00.000Z" {
+		t.Fatalf("position change touched updated_at: %q", got)
+	}
+	if _, err := s.UpdateCard(cards[1].ID, "New title", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	s.DB.QueryRow(`SELECT updated_at FROM cards WHERE id=?`, cards[1].ID).Scan(&got)
+	if got <= "2000-01-01T00:00:00.000Z" {
+		t.Errorf("a title change must touch updated_at, got %q", got)
+	}
+	_ = before
+}

@@ -1,3 +1,4 @@
+import ReviewChecklist from './ReviewChecklist'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 
@@ -68,7 +69,7 @@ export function ReviewSide({ card, review, unsaved, busy, reviewing, onOpenRevie
           </span>
         )}
       </div>
-      <button type="button" className="ai-btn review-open-btn" disabled={unsaved || !inBusiness} onClick={onOpenReview}
+      <button type="button" className="ai-btn review-open-btn" disabled={(unsaved && !reviewing) || !inBusiness} onClick={onOpenReview}
         title={inBusiness ? 'Review and improve this ticket with Claude' : 'Claude Review is available while the ticket is in Business'}>
         {reviewing ? <><span className="spinner" aria-hidden="true" /> Open Review</> : <><span aria-hidden="true">✦</span> Review With Claude</>}
       </button>
@@ -80,6 +81,7 @@ export function ReviewSide({ card, review, unsaved, busy, reviewing, onOpenRevie
       ) : (
         <button type="button" disabled={!canApprove || busy} onClick={() => onApprove(true)}>Approve</button>
       )}
+      {review?.status === 'done' && !outdated && <ReviewChecklist checks={review.checks} />}
       {hint && <p className="hint">{hint}</p>}
     </div>
   )

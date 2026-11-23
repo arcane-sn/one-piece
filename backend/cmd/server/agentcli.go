@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -169,6 +170,9 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 		if err != nil {
 			return err
 		}
+		if lost := store.MissingImages(card.Description, desc); len(lost) > 0 {
+			return fmt.Errorf("refused: the new description drops %d image(s) of the ticket. Keep every image exactly as ticket-show printed it (the whole <img ...> tag or ![](...)), then try again. Missing: %s", len(lost), strings.Join(lost, ", "))
+		}
 		c, rev, err := st.ReviseCard(card.ID, args[1], desc)
 		if err != nil {
 			return err
@@ -231,13 +235,20 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 		fmt.Fprintf(out, "flow %d removed\n", f.ID)
 	case "review-verdict":
 		if len(args) < 2 {
-			return errors.New("usage: review-verdict <pass|needs_work> [open point…]  (summary on stdin)")
+			return errors.New("usage: review-verdict <pass|needs_work> [open point…]  (stdin: \"summary: …\" then one line per criterion \"key: ok|gap|na | note\")")
 		}
-		summary, err := description()
+		raw, err := description()
 		if err != nil {
 			return err
 		}
-		r, err := st.RecordVerdict(card.ID, args[1], summary, args[2:])
+		var r store.Review
+		if sum, checks, ok := parseChecklist(raw); ok {
+			r, err = st.RecordChecklistVerdict(card.ID, args[1], sum, args[2:], checks)
+		} else if args[1] == "pass" {
+			return errors.New("a pass needs the checklist: one line per criterion, e.g. \"dod: ok | each action has a checkable outcome\"")
+		} else {
+			r, err = st.RecordVerdict(card.ID, args[1], raw, args[2:])
+		}
 		if err != nil {
 			return err
 		}
@@ -482,4 +493,41 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 		return fmt.Errorf("unknown command %q", args[0])
 	}
 	return nil
+}
+
+// parseChecklist reads the review-verdict stdin: a "summary: …" line, then one "key: ok|gap|na | note" line per
+// criterion. Plain lines on purpose (no braces or commas, which Claude Code's shell filter distrusts). A JSON
+// body {"summary":…,"checks":[…]} is accepted too. ok=false means the text has no checklist at all.
+func parseChecklist(raw string) (summary string, checks []store.Check, ok bool) {
+	raw = strings.TrimSpace(raw)
+	if strings.HasPrefix(raw, "{") {
+		var in struct {
+			Summary string
+			Checks  []store.Check
+		}
+		if json.Unmarshal([]byte(raw), &in) == nil && len(in.Checks) > 0 {
+			return in.Summary, in.Checks, true
+		}
+		return "", nil, false
+	}
+	keys := map[string]bool{}
+	for _, k := range store.ReviewCriteria {
+		keys[k.Key] = true
+	}
+	for _, line := range strings.Split(raw, "\n") {
+		key, rest, found := strings.Cut(line, ":")
+		key = strings.ToLower(strings.TrimSpace(key))
+		if !found {
+			continue
+		}
+		rest = strings.TrimSpace(rest)
+		switch {
+		case key == "summary":
+			summary = rest
+		case keys[key]:
+			status, note, _ := strings.Cut(rest, "|")
+			checks = append(checks, store.Check{Key: key, Status: strings.ToLower(strings.TrimSpace(status)), Note: strings.TrimSpace(note)})
+		}
+	}
+	return summary, checks, len(checks) > 0
 }
