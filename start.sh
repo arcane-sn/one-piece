@@ -5,6 +5,8 @@ cd "$(dirname "$0")"
 
 if [ ! -d frontend/dist ]; then
   (cd frontend && npm ci && npm run build)
+elif [ -n "$(find frontend/src frontend/index.html frontend/package.json -newer frontend/dist/index.html 2>/dev/null | head -1)" ]; then
+  (cd frontend && npm run build)
 fi
 
 cd backend
