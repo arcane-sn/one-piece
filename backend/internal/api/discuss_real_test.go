@@ -37,7 +37,7 @@ func TestRealCLIDiscussSubcommands(t *testing.T) {
 	defer st.DB.Close()
 	b, _ := st.CreateBoard("Midas", "", []string{master})
 	c, _ := st.CreateCard(b.ID, "Login", "", "")
-	run := discussRun{System: discussSystemPrompt("assist"), Exe: exe, DB: st.Path, BoardID: b.ID, CardID: c.ID, Dirs: []string{master}}
+	run := discussRun{System: discussSystemPrompt("setup"), Exe: exe, DB: st.Path, BoardID: b.ID, CardID: c.ID, Dirs: []string{master}}
 	run.Prompt = "OP = " + exe + "\nPlease save the decision \"Release branch is release/2\" with OP decision, then list the log with OP decisions, then try OP git " + repo + " reset --hard and tell me what happened."
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()

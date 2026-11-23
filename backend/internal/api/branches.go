@@ -15,6 +15,7 @@ type branchIn struct {
 	PRURL         *string `json:"prUrl"`
 	Note          *string `json:"note"`
 	Mode          *string `json:"mode"`
+	ViaDev        *bool   `json:"viaDev"`
 }
 
 func (s *server) branchCard(w http.ResponseWriter, r *http.Request) (int64, bool) {
@@ -72,7 +73,7 @@ func (s *server) updateBranch(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	patch := store.BranchPatch{FeatureBranch: in.FeatureBranch, DevBranch: in.DevBranch, Status: in.Status, PRURL: in.PRURL, Note: in.Note, Mode: in.Mode}
+	patch := store.BranchPatch{FeatureBranch: in.FeatureBranch, DevBranch: in.DevBranch, Status: in.Status, PRURL: in.PRURL, Note: in.Note, Mode: in.Mode, ViaDev: in.ViaDev}
 	if in.BaseBranch != "" {
 		patch.BaseBranch = &in.BaseBranch
 	}

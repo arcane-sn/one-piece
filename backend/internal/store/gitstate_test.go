@@ -121,3 +121,35 @@ func mustList(t *testing.T, s *Store, id int64) []Decision {
 	}
 	return l
 }
+
+func TestDirectRepoDoesNotHoldBackPushReady(t *testing.T) {
+	s, _, c, repo := repoBoard(t)
+	s.PlanBranch(c.ID, repo, "release")
+	if br, _ := s.ListBranches(c.ID); !br[0].ViaDev {
+		t.Fatal("a new repo goes via -dev by default")
+	}
+	no, yes := false, true
+	if _, err := s.UpdateBranch(c.ID, repo, BranchPatch{ViaDev: &no}); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := s.PushReady(c.ID); !ok {
+		t.Error("a lone direct repo has nothing to integrate")
+	}
+	repo2 := repo + "2"
+	s.DB.Exec(`INSERT INTO card_branches(card_id,repo,base_branch,feature_branch,dev_branch,status) VALUES(?,?,?,?,?,?)`, c.ID, repo2, "r", "f", "f-dev", "branched")
+	if ok, _ := s.PushReady(c.ID); ok {
+		t.Error("an unintegrated via-dev repo still closes the gate")
+	}
+	blocked := "blocked"
+	s.UpdateBranch(c.ID, repo, BranchPatch{Status: &blocked})
+	merged := "merged_dev"
+	s.UpdateBranch(c.ID, repo2, BranchPatch{Status: &merged})
+	if ok, _ := s.PushReady(c.ID); ok {
+		t.Error("a blocked direct repo still closes the gate")
+	}
+	pushed := "pushed"
+	s.UpdateBranch(c.ID, repo, BranchPatch{Status: &pushed})
+	if _, err := s.UpdateBranch(c.ID, repo, BranchPatch{ViaDev: &yes}); !errors.As(err, &ConflictError{}) {
+		t.Errorf("target must not change after the repo was pushed: %v", err)
+	}
+}

@@ -41,11 +41,12 @@ export default function BranchingSection({ cardId, reloadKey = 0, onModal }) {
               <button type="button" className="branch-row" onClick={() => open(r)}>
                 <span className="branch-repo" title={r.repo}>{baseName(r.repo)}</span>
                 <span className="branch-names">{r.baseBranch} → {r.featureBranch}</span>
-                {r.mode === 'cherry-pick' && <span className="branch-chip" title="Integrated by cherry-pick">Cherry-pick · {r.picked} picked</span>}
+                {!r.viaDev && <span className="branch-chip" title="No -dev branch: the PR goes straight from the feature branch">Direct</span>}
+                {r.viaDev && r.mode === 'cherry-pick' && <span className="branch-chip" title="Integrated by cherry-pick">Cherry-pick · {r.picked} picked</span>}
                 <span className={'branch-chip ' + r.status}>{label(r.status)}</span>
               </button>
               {(r.status === 'pushed' || r.status === 'pr_open') && (
-                <span className="hint" title="Pushed branches">{r.featureBranch}, {r.devBranch}</span>
+                <span className="hint" title="Pushed branches">{r.viaDev ? `${r.featureBranch}, ${r.devBranch}` : r.featureBranch}</span>
               )}
               {r.prUrl && <a href={r.prUrl} target="_blank" rel="noreferrer noopener" className="link-btn">PR</a>}
             </li>
@@ -77,6 +78,7 @@ function BranchModal({ cardId, row, onDone, onClose }) {
   const [prUrl, setPrUrl] = useState(row?.prUrl ?? '')
   const [note, setNote] = useState(row?.note ?? '')
   const [mode, setMode] = useState(row?.mode ?? 'merge')
+  const [viaDev, setViaDev] = useState(row?.viaDev ?? true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const url = `/api/cards/${cardId}/branches`
@@ -94,7 +96,7 @@ function BranchModal({ cardId, row, onDone, onClose }) {
     setError('')
     try {
       if (!row) await api(url, { method: 'POST', body: { repo, baseBranch: base } })
-      else await api(url, { method: 'PUT', body: { repo: row.repo, baseBranch: base, featureBranch: feature, devBranch: dev, status, prUrl, note, mode } })
+      else await api(url, { method: 'PUT', body: { repo: row.repo, baseBranch: base, featureBranch: feature, devBranch: dev, status, prUrl, note, mode, viaDev } })
       onDone()
     } catch (err) {
       setError(err.message)
@@ -140,11 +142,18 @@ function BranchModal({ cardId, row, onDone, onClose }) {
               </select>
             </label>
             <label className="field">
+              <span>Target <em>via a -dev branch, or a PR straight from the feature branch</em></span>
+              <select value={viaDev ? 'dev' : 'direct'} disabled={['merged_dev', 'pushed', 'pr_open'].includes(row.status)} onChange={(e) => setViaDev(e.target.value === 'dev')}>
+                <option value="dev">Via -dev branch</option>
+                <option value="direct">Direct PR into base</option>
+              </select>
+            </label>
+            {viaDev && <label className="field">
               <span>Integration <em>how the feature reaches the -dev branch</em></span>
               <select value={mode} onChange={(e) => setMode(e.target.value)}>
                 {MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
-            </label>
+            </label>}
             <label className="field"><span>PR Link</span><input value={prUrl} onChange={(e) => setPrUrl(e.target.value)} /></label>
             <label className="field"><span>Note</span><textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></label>
           </>

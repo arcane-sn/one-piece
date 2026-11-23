@@ -172,3 +172,22 @@ func TestGHRules(t *testing.T) {
 		t.Errorf("rule check must come first: %v", err)
 	}
 }
+
+func TestValidateGHDirectRepoPrsFeatureIntoBase(t *testing.T) {
+	p := Policy{Feature: "feature/X-1", Dev: "feature/X-1-dev", Base: "release/1.2", PRBase: "dev", Direct: true}
+	ok := []string{"pr", "create", "--base", "release/1.2", "--head", "feature/X-1", "--title", "X-1: t", "--body", "b"}
+	if err := ValidateGH(ok, p); err != nil {
+		t.Fatalf("direct PR refused: %v", err)
+	}
+	bad := []string{"pr", "create", "--base", "dev", "--head", "feature/X-1-dev", "--title", "X-1: t", "--body", "b"}
+	if err := ValidateGH(bad, p); err == nil {
+		t.Fatal("a direct repo must not open the -dev PR")
+	}
+	if err := ValidateGH([]string{"pr", "view", "feature/X-1"}, p); err != nil {
+		t.Fatalf("view of the feature branch refused: %v", err)
+	}
+	via := Policy{Feature: "feature/X-1", Dev: "feature/X-1-dev", Base: "release/1.2", PRBase: "dev"}
+	if err := ValidateGH(ok, via); err == nil {
+		t.Fatal("a via-dev repo must not open the direct PR")
+	}
+}

@@ -114,13 +114,6 @@ func (s *server) runReviewTurn(ctx context.Context, cancel context.CancelFunc, b
 	run.OnSession = func(id string) { announced = id }
 	fresh := sid == ""
 	newSID, err := runReviewChat(ctx, run, onText)
-	if err != nil && !fresh && !wrote && ctx.Err() == nil && strings.Contains(err.Error(), "No conversation found") {
-		log.Printf("review chat card %d: resume failed (%v), starting a fresh session", c.ID, err)
-		run.SessionID, fresh, announced = "", true, ""
-		run.Prompt = reviewChatPrompt(b, c, exe, text, true)
-		_, run.Prompt = s.attachImages(text, nil, run.Prompt)
-		newSID, err = runReviewChat(ctx, run, onText)
-	}
 	if _, gone := s.st.GetCard(c.ID); gone != nil { // deleted while Claude was working
 		return
 	}
@@ -133,8 +126,12 @@ func (s *server) runReviewTurn(ctx context.Context, cancel context.CancelFunc, b
 		log.Printf("review chat card %d failed: %v", c.ID, err)
 		if !wrote {
 			msg := "Claude could not answer. Try again."
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			switch {
+			case errors.Is(ctx.Err(), context.DeadlineExceeded):
 				msg = "Claude took too long to answer. Try again."
+			case strings.Contains(err.Error(), "No conversation found"):
+				// Never swap in a fresh session behind the owner's back: it would lose what was agreed.
+				msg = "Claude's earlier session could not be found, so I did not start a new one silently. Use the new-session button (top right) to continue with a fresh one; the chat history stays."
 			}
 			onText(msg)
 		}

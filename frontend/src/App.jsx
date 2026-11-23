@@ -9,6 +9,7 @@ import { JobsProvider } from './lib/jobs'
 import Board from './pages/Board'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
+import { Splash, useSplash } from './components/Splash'
 
 function Shell({ user, onLogout }) {
   const [boards, setBoards] = useState(null) // null = loading
@@ -55,7 +56,8 @@ export default function App() {
     api('/api/me').then((r) => setUser(r.username)).catch(() => setUser(null))
   }, [])
 
-  if (user === undefined) return <p className="muted" style={{ padding: 24 }}>Loading…</p>
+  const splash = useSplash(!!user) // plays on refresh and right after login
+  if (user === undefined || splash) return <Splash />
   if (!user) return <Login onLoggedIn={setUser} />
 
   async function logout() {

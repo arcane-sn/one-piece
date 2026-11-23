@@ -1,3 +1,4 @@
+import Markdown from './Markdown'
 import ChatComposer, { ContinueChip, NewChatButton } from './ChatComposer'
 import Tip from './Tip'
 import { toast } from '../lib/toast'
@@ -158,7 +159,7 @@ export default function BrainstormModal({ boardId, onClose, onCardsChanged }) {
               {query?.trim() && shown.length === 0 && <p className="muted">No messages match.</p>}
               {shown.map((m) => (
                 <div key={m.id} className={'bs-msg' + (m.role === 'user' ? ' user' : '')}>
-                  {m.text || (m.status === 'running' ? 'Thinking…' : '')}
+                  {m.role === 'assistant' && m.text ? <Markdown text={m.text} /> : (m.text || (m.status === 'running' ? 'Thinking…' : ''))}
                   {m.role === 'assistant' && NOTE[m.status] && <span className="bs-note">{NOTE[m.status]}</span>}
                   {m.role === 'assistant' && m.text && m.status !== 'running' && (
                     <button type="button" className="bs-draft" disabled={drafted.has(m.id)} onClick={() => makeDraft(m)}>

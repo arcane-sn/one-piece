@@ -1,3 +1,4 @@
+import Markdown from './Markdown'
 import ChatComposer, { ContinueChip, NewChatButton } from './ChatComposer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -124,7 +125,7 @@ export default function ReviewChatModal({ card, boardId, onTurnDone, onCardChang
             </div>
           ) : (
             <div key={m.id} className={'bs-msg' + (m.role === 'user' ? ' user' : '')}>
-              {m.text || (m.status === 'running' ? 'Thinking…' : '')}
+              {m.role === 'assistant' && m.text ? <Markdown text={m.text} /> : (m.text || (m.status === 'running' ? 'Thinking…' : ''))}
               {m.role === 'assistant' && NOTE[m.status] && <span className="bs-note">{NOTE[m.status]}</span>}
             </div>
           ))}

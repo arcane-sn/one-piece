@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
+import ClaudeMark from './ClaudeMark'
 import Tip from './Tip'
 
 // "claude-sonnet-5-5" -> "Sonnet 5.5"
@@ -23,27 +24,36 @@ function ago(ts, now) {
 }
 // A window whose reset time has passed has no known utilization until Claude runs again.
 const pct = (l, now) => (l && l.resetsAt > now ? Math.round(l.utilization * 100) : null)
-const tone = (p) => (p === null ? '' : p >= 90 ? 'hot' : p >= 70 ? 'warm' : '')
+const tone = (p) => (p !== null && p >= 90 ? 'hot' : '') // identity colors: 5h aqua, week orange; red near the limit
 
-function Bar({ label, l, now }) {
+function Bar({ label, kind, l, now }) {
   const p = pct(l, now)
   return (
     <div className="usage-row">
       <span className="usage-lbl">{label}</span>
-      <span className={'usage-bar ' + tone(p)}><span style={{ width: (p ?? 0) + '%' }} /></span>
+      <span className={'usage-bar ' + kind + ' ' + tone(p)}><span style={{ width: (p ?? 0) + '%' }} /></span>
       <span className="usage-val">{p === null ? '—' : p + '%'}</span>
       <span className="usage-reset">{l ? until(l.resetsAt, now) : ''}</span>
     </div>
   )
 }
 
-function Ring({ p }) {
-  const r = 11, c = 2 * Math.PI * r
+// Two concentric rings: outer = weekly limit (orange), inner = 5-hour limit (aqua); either turns red at 90%.
+function Ring({ p5, pw }) {
+  const arc = (r, p, cls) => {
+    const c = 2 * Math.PI * r
+    return (
+      <>
+        <circle cx="18" cy="18" r={r} fill="none" strokeWidth="3.2" className="bg" />
+        <circle cx="18" cy="18" r={r} fill="none" strokeWidth="3.2" strokeLinecap="round" className={'fg ' + cls + (p >= 90 ? ' hot' : '')}
+          strokeDasharray={c} strokeDashoffset={c * (1 - (p ?? 0) / 100)} transform="rotate(-90 18 18)" />
+      </>
+    )
+  }
   return (
-    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true" className={'usage-ringsvg ' + tone(p)}>
-      <circle cx="15" cy="15" r={r} fill="none" strokeWidth="3.5" className="bg" />
-      <circle cx="15" cy="15" r={r} fill="none" strokeWidth="3.5" strokeLinecap="round" className="fg"
-        strokeDasharray={c} strokeDashoffset={c * (1 - (p ?? 0) / 100)} transform="rotate(-90 15 15)" />
+    <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true" className="usage-ringsvg">
+      {arc(15, pw, 'week')}
+      {arc(9.5, p5, 'five')}
     </svg>
   )
 }
@@ -116,7 +126,6 @@ export default function UsageCard({ rail }) {
   const now = Math.max(v?.now ?? 0, tick)
   const f = v?.limits?.five_hour, w = v?.limits?.seven_day
   const pf = pct(f, now), pw = pct(w, now)
-  const worst = Math.max(pf ?? 0, pw ?? 0)
   const empty = v && !f && !w
   const summary = `5h ${pf === null ? '—' : pf + '%'} · Week ${pw === null ? '—' : pw + '%'} · ${modelName(v?.model)}`
 
@@ -124,13 +133,13 @@ export default function UsageCard({ rail }) {
     <>
       <Tip label={summary} off={!rail || open}>
         <button type="button" ref={btn} className={'usage' + (open ? ' open' : '')} aria-label="Claude usage" onClick={toggle}>
-          <span className="usage-ring"><Ring p={pf === null && pw === null ? null : worst} /></span>
+          <span className="usage-ring"><Ring p5={pf} pw={pw} /><span className="usage-ringmark"><ClaudeMark size={10} /></span></span>
           <span className="usage-full">
-            <span className="usage-model">{modelName(v?.model)}</span>
+            <span className="usage-model"><ClaudeMark size={13} />{modelName(v?.model)}</span>
             {empty || !v ? <span className="usage-empty">No data yet</span> : (
               <>
-                <Bar label="5h" l={f} now={now} />
-                <Bar label="Week" l={w} now={now} />
+                <Bar label="5h" kind="five" l={f} now={now} />
+                <Bar label="Week" kind="week" l={w} now={now} />
               </>
             )}
           </span>
@@ -141,11 +150,11 @@ export default function UsageCard({ rail }) {
           <div className="usage-scrim" onMouseDown={() => setOpen(false)} />
           <div className="usage-pop" role="dialog" aria-label="Claude usage" style={{ left: pos.left, bottom: pos.bottom }}>
             <div className="usage-pophead">
-              <b>Claude usage</b>
-              <span className="usage-chip">{modelName(v.model)}</span>
+              <b className="usage-title"><ClaudeMark size={16} />Claude usage</b>
+              <span className="usage-chip"><ClaudeMark size={12} />{modelName(v.model)}</span>
             </div>
-            <Bar label="5h" l={f} now={now} />
-            <Bar label="Week" l={w} now={now} />
+            <Bar label="5h" kind="five" l={f} now={now} />
+            <Bar label="Week" kind="week" l={w} now={now} />
             <p className="usage-note">
               {f || w ? `Limits updated ${ago(Math.max(f?.updatedAt ?? 0, w?.updatedAt ?? 0), now)}. ` : ''}
               They only change when Claude runs; Refresh makes one tiny call.

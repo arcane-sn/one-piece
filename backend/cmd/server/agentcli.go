@@ -18,7 +18,7 @@ import (
 var agentCommands = map[string]bool{"tickets": true, "ticket": true, "draft-add": true, "draft-update": true,
 	"branches": true, "branch-plan": true, "branch-status": true, "branch-pr": true, "git": true, "gh": true,
 	"ticket-show": true, "ticket-edit": true, "flow-add": true, "flow-update": true, "flow-delete": true, "review-verdict": true,
-	"branch-mode": true, "pending-picks": true, "remote-kind": true, "decision": true, "decisions": true,
+	"branch-mode": true, "branch-target": true, "pending-picks": true, "remote-kind": true, "decision": true, "decisions": true,
 	"qa-run": true, "qa-blocked": true}
 
 // reviewCommands only work in a Claude Review session (ONE_PIECE_MODE=review, ONE_PIECE_CARD set):
@@ -27,7 +27,7 @@ var reviewCommands = map[string]bool{"ticket-show": true, "ticket-edit": true, "
 
 // branchCommands need ONE_PIECE_CARD: the ticket a Discuss session is about.
 var branchCommands = map[string]bool{"branches": true, "branch-plan": true, "branch-status": true, "branch-pr": true, "git": true, "gh": true,
-	"branch-mode": true, "pending-picks": true, "remote-kind": true, "decision": true, "decisions": true}
+	"branch-mode": true, "branch-target": true, "pending-picks": true, "remote-kind": true, "decision": true, "decisions": true}
 
 // runAgentCLI runs one agent subcommand (args[0] is its name).
 //
@@ -76,8 +76,8 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 
 	var card store.Card
 	if reviewCommands[args[0]] {
-		if getenv("ONE_PIECE_MODE") != "review" {
-			return errors.New(args[0] + " is only available in a Claude Review session")
+		if mode := getenv("ONE_PIECE_MODE"); !(mode == "review" || (mode == "discuss" && args[0] != "review-verdict")) {
+			return errors.New(args[0] + " is only available in a Claude Review or Discuss session")
 		}
 		cid, err := strconv.ParseInt(getenv("ONE_PIECE_CARD"), 10, 64)
 		if err != nil || cid <= 0 {
@@ -125,7 +125,7 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 			return gitx.Policy{}, err
 		}
 		return gitx.Policy{Feature: r.FeatureBranch, Dev: r.DevBranch, Base: r.BaseBranch, PRBase: board.DevBranch,
-			Ident: card.Ident, Mode: r.Mode, Picked: picked, Integrated: store.IntegratedStatus(r.Status), PushReady: ready}, nil
+			Ident: card.Ident, Mode: r.Mode, Picked: picked, Integrated: store.IntegratedStatus(r.Status), PushReady: ready, Direct: !r.ViaDev}, nil
 	}
 
 	// ownFlow finds a Business Flow of THIS ticket by the id in args[1].
@@ -140,7 +140,13 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 		}
 		return f, nil
 	}
-	event := func(text string, ref int64) { st.AddReviewMessage(card.ID, "event", text, "done", ref) }
+	event := func(text string, ref int64) {
+		if getenv("ONE_PIECE_MODE") == "discuss" {
+			st.AddDiscussEvent(card.ID, text, ref)
+			return
+		}
+		st.AddReviewMessage(card.ID, "event", text, "done", ref)
+	}
 
 	switch args[0] {
 	case "ticket-show":
@@ -312,6 +318,19 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 			return err
 		}
 		fmt.Fprintf(out, "%s: mode %s\n", r.Repo, r.Mode)
+	case "branch-target":
+		if len(args) != 3 || (args[2] != "via-dev" && args[2] != "direct") {
+			return errors.New("usage: branch-target <repo> via-dev|direct")
+		}
+		r, err := registered(args[1])
+		if err != nil {
+			return err
+		}
+		via := args[2] == "via-dev"
+		if _, err := st.UpdateBranch(card.ID, r.Repo, store.BranchPatch{ViaDev: &via}); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "%s: %s\n", filepath.Base(r.Repo), args[2])
 	case "pending-picks":
 		if len(args) != 2 {
 			return errors.New("usage: pending-picks <repo>")

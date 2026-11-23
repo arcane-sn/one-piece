@@ -39,6 +39,12 @@ func (s *Store) PushReady(cardID int64) (bool, error) {
 		return false, err
 	}
 	for _, r := range rows {
+		if !r.ViaDev { // a direct repo has no -dev branch to wait for, but a blocked one still holds everything back
+			if r.Status == "blocked" {
+				return false, nil
+			}
+			continue
+		}
 		if !IntegratedStatus(r.Status) {
 			return false, nil
 		}

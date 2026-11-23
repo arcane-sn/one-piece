@@ -112,19 +112,24 @@ func TestDiscussOnlyInBusinessAndDone(t *testing.T) {
 		t.Errorf("resume id = %q", got)
 	}
 
-	s.req(t, "POST", cp+"/move", map[string]any{"status": "agent", "position": 0}, ck)
-	for _, col := range []string{"agent", "qa", "draft"} {
+	for _, col := range []string{"agent", "qa"} { // no Discuss while Agents or QA own the ticket
 		s.req(t, "POST", cp+"/move", map[string]any{"status": col, "position": 0}, ck)
-		if code, body := dSend(t, s, cp, ck, "x"); code != 202 {
-			t.Fatalf("%s column: %d %s", col, code, body)
-		}
-		if v := dIdle(t, s, cp, ck); v.Stage != "assist" {
-			t.Errorf("stage in %s column = %q", col, v.Stage)
+		if code, _ := dSend(t, s, cp, ck, "x"); code != 409 {
+			t.Fatalf("%s column: status %d, want 409", col, code)
 		}
 	}
-	if got := (*calls)[len(*calls)-1].System; !strings.Contains(got, "Stage: assist") {
-		t.Errorf("assist system prompt missing")
+	s.req(t, "POST", cp+"/move", map[string]any{"status": "business", "position": 0}, ck) // Draft is only entered from Business
+	s.req(t, "POST", cp+"/move", map[string]any{"status": "draft", "position": 0}, ck)
+	if code, body := dSend(t, s, cp, ck, "x"); code != 202 {
+		t.Fatalf("draft column: %d %s", code, body)
 	}
+	if v := dIdle(t, s, cp, ck); v.Stage != "shape" {
+		t.Errorf("stage in draft = %q", v.Stage)
+	}
+	if got := (*calls)[len(*calls)-1].System; !strings.Contains(got, "Draft ticket") || strings.Contains(got, "Git rules") {
+		t.Errorf("shape prompt must be about the Draft ticket and carry no git rules")
+	}
+	s.req(t, "POST", cp+"/move", map[string]any{"status": "business", "position": 0}, ck)
 	s.req(t, "POST", cp+"/move", map[string]any{"status": "done", "position": 0}, ck)
 	if code, body := dSend(t, s, cp, ck, "wrap up"); code != 202 {
 		t.Fatalf("done: %d %s", code, body)
@@ -160,22 +165,22 @@ func TestDiscussPromptStages(t *testing.T) {
 	rows := []store.Branch{{Repo: repo, BaseBranch: "main", FeatureBranch: "feature/MID-7", DevBranch: "feature/MID-7-dev", Status: "branched"}}
 	const exe = "/tmp/one-piece-agent/op"
 
-	setup := discussPrompt(b, c, nil, "", exe, "setup", "start", true)
+	setup := discussPrompt(b, c, nil, "", exe, "setup", "start", true, 0)
 	for _, want := range []string{"MID-7", "feature/", "dev", exe, "none yet", "start"} {
 		if !strings.Contains(setup, want) {
 			t.Errorf("setup prompt lacks %q:\n%s", want, setup)
 		}
 	}
-	closeout := discussPrompt(b, c, rows, "", exe, "closeout", "wrap up", true)
+	closeout := discussPrompt(b, c, rows, "", exe, "closeout", "wrap up", true, 0)
 	for _, want := range []string{repo, "feature/MID-7-dev", "branched", "closeout"} {
 		if !strings.Contains(closeout, want) {
 			t.Errorf("closeout prompt lacks %q:\n%s", want, closeout)
 		}
 	}
-	if m := discussPrompt(b, c, rows, "", exe, "setup", "see @"+filepath.Base(master)+"/svc", true); !strings.Contains(m, repo) {
+	if m := discussPrompt(b, c, rows, "", exe, "setup", "see @"+filepath.Base(master)+"/svc", true, 0); !strings.Contains(m, repo) {
 		t.Errorf("an @-mentioned repo must be named in the prompt")
 	}
-	resumed := discussPrompt(b, c, rows, "", exe, "setup", "next", false)
+	resumed := discussPrompt(b, c, rows, "", exe, "setup", "next", false, 0)
 	if strings.Contains(resumed, "Ticket description") || !strings.Contains(resumed, "next") || !strings.Contains(resumed, "branched") {
 		t.Errorf("resumed prompt should carry the state, not the whole context:\n%s", resumed)
 	}
@@ -205,12 +210,15 @@ func TestDiscussPromptStages(t *testing.T) {
 	if st, ok := discussStage("done"); !ok || st != "closeout" {
 		t.Error("done → closeout")
 	}
-	for _, other := range []string{"draft", "agent", "qa"} {
-		if st, ok := discussStage(other); !ok || st != "assist" {
-			t.Errorf("%s must be the general assistant, got %q", other, st)
+	if st, ok := discussStage("draft"); !ok || st != "shape" {
+		t.Error("draft → shape")
+	}
+	for _, other := range []string{"agent", "qa"} {
+		if _, ok := discussStage(other); ok {
+			t.Errorf("%s has no Discuss", other)
 		}
 	}
-	for _, stage := range []string{"setup", "closeout", "assist"} {
+	for _, stage := range []string{"setup", "closeout"} {
 		sys := discussSystemPrompt(stage)
 		for _, want := range []string{"OP decision", "never resolve a conflict", "stash push"} {
 			if !strings.Contains(strings.ToLower(sys), strings.ToLower(want)) {
@@ -222,10 +230,10 @@ func TestDiscussPromptStages(t *testing.T) {
 		t.Error("closeout must integrate everything before pushing, branch on remote kind, and cover cherry-pick")
 	}
 	dec := "Decision log (oldest first):\n- x (claude): release is release/2\n"
-	if m := discussPrompt(b, c, rows, dec, exe, "assist", "hi", true); !strings.Contains(m, "release/2") {
+	if m := discussPrompt(b, c, rows, dec, exe, "setup", "hi", true, 0); !strings.Contains(m, "release/2") {
 		t.Error("a fresh session must carry the decision log")
 	}
-	if m := discussPrompt(b, c, rows, dec, exe, "assist", "hi", false); strings.Contains(m, "release/2") {
+	if m := discussPrompt(b, c, rows, dec, exe, "setup", "hi", false, 0); strings.Contains(m, "release/2") {
 		t.Error("a resumed session must not repeat the log")
 	}
 }

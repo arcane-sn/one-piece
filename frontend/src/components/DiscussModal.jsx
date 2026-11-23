@@ -1,3 +1,4 @@
+import Markdown from './Markdown'
 import ChatComposer, { ContinueChip, NewChatButton } from './ChatComposer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -6,11 +7,11 @@ import MentionTextarea from './MentionTextarea'
 import { toast } from '../lib/toast'
 
 const NOTE = { stopped: 'Stopped', failed: 'Failed' }
-const STAGE = { setup: 'Setting up branches', closeout: 'Closing out: integrate every repo, then push and open pull requests', assist: 'Git assistant for this ticket' }
+const STAGE = { shape: 'Shaping the description and Business Flow', setup: 'Business Flow and branch setup', closeout: 'Closing out: integrate every repo, then push and open pull requests' }
 
 // Per-ticket chat where Claude plans and runs the branching with the owner. Business: create the
 // feature branches. Done: make the -dev branches and open the PRs. `onTurnDone` fires when a turn ends.
-export default function DiscussModal({ card, boardId, onTurnDone, onClose }) {
+export default function DiscussModal({ card, boardId, onTurnDone, onCardChanged, onClose }) {
   const base = `/api/cards/${card.id}/discuss`
   const [view, setView] = useState(null) // { messages, running, stage }
   const [text, setText] = useState('')
@@ -65,6 +66,16 @@ export default function DiscussModal({ card, boardId, onTurnDone, onClose }) {
     if (await act('/messages', { text: t }) && typeof override !== 'string') setText('')
   }
 
+  async function undo(ref) {
+    if (!window.confirm('Go back to the ticket text from before this change?')) return
+    try {
+      onCardChanged?.(await api(`/api/cards/${card.id}/revisions/${ref}/restore`, { method: 'POST', body: {} }))
+      await load()
+    } catch (e) {
+      toast(e.message)
+    }
+  }
+
   const newSession = () =>
     window.confirm('Start a new session? The chat and the Branching list stay; Claude just starts fresh.') && act('/new')
 
@@ -82,22 +93,39 @@ export default function DiscussModal({ card, boardId, onTurnDone, onClose }) {
           </div>
         </div>
         <p className="discuss-stage">{stage ? STAGE[stage] : 'Loading…'}</p>
+        {view?.branches?.length > 0 && (
+          <div className="branch-strip" aria-label="Branches of this ticket">
+            {view.branches.map((b) => (
+              <span className="branch-chip" key={b.id}>
+                <b>{b.repo}</b>
+                <code>{b.featureBranch}</code>
+                <span className={'branch-st ' + b.status}>{b.status.replace('_', ' ')}</span>
+                {b.prUrl && <a href={b.prUrl} target="_blank" rel="noreferrer noopener">PR ↗</a>}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="bs-list" ref={listRef}>
           {view === null && <p className="muted">Loading…</p>}
           {view?.messages.length === 0 && (
             <p className="muted">
               {stage === 'closeout'
                 ? 'Tell Claude to wrap up. It integrates every repo into its -dev branch first, and pushes only when all of them are clean.'
-                : stage === 'assist'
-                  ? 'Ask anything about this ticket’s branches: refresh the -dev branch, pull, stash, switch or integrate. Agreements are saved to the decision log.'
-                  : 'Tell Claude which repos this ticket touches (type @ to pick them) and the release branch each one starts from.'}
+                : stage === 'shape'
+                  ? 'Talk through what this ticket should do. Claude asks about the cases and writes the description and Business Flow as things get settled (type @ to point at code).'
+                  : 'Shape the flow with Claude, then tell it which repos this ticket touches (type @ to pick them), the release branch each starts from, and whether it goes via -dev or direct.'}
             </p>
           )}
           {view?.messages.map((m) => m.role === 'marker' ? (
             <div key={m.id} className="discuss-marker"><span>{m.text}</span></div>
+          ) : m.role === 'event' ? (
+            <div key={m.id} className="review-event">
+              <span>✎ {m.text}</span>
+              {m.ref > 0 && <button type="button" className="link" disabled={!!view?.running} onClick={() => undo(m.ref)}>Undo</button>}
+            </div>
           ) : (
             <div key={m.id} className={'bs-msg' + (m.role === 'user' ? ' user' : '')}>
-              {m.text || (m.status === 'running' ? 'Thinking…' : '')}
+              {m.role === 'assistant' && m.text ? <Markdown text={m.text} /> : (m.text || (m.status === 'running' ? 'Thinking…' : ''))}
               {m.role === 'assistant' && NOTE[m.status] && <span className="bs-note">{NOTE[m.status]}</span>}
             </div>
           ))}

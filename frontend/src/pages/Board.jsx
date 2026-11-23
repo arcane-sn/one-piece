@@ -7,6 +7,13 @@ import BrainstormModal from '../components/BrainstormModal'
 import TicketModal from '../components/TicketModal'
 import { FolderIcon } from '../components/Logo'
 import SearchButton from '../components/SearchButton'
+import Tip from '../components/Tip'
+
+const svg = (children) => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
+)
+const BULB = svg(<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3Z" />)
+const SLIDERS = svg(<><path d="M3 6h9M16 6h5M3 12h3M10 12h11M3 18h11M18 18h3" /><circle cx="14" cy="6" r="2" /><circle cx="8" cy="12" r="2" /><circle cx="16" cy="18" r="2" /></>)
 
 const COLUMNS = [
   ['draft', 'Draft', '#9A8F86'],
@@ -96,17 +103,19 @@ export default function Board({ reloadBoards }) {
   return (
     <>
       <div className="crumb"><Link to="/">Boards</Link> / {board.name}</div>
-      <div className="page-head">
+      <div className="page-head row">
         <h1 className="title">{board.name}</h1>
-        <div className="chips right">
-          {board.folders.length === 0 && <span className="muted">No folders yet</span>}
-          {board.folders.map((f) => (
-            <span className="chip soft" key={f} title={f}><FolderIcon />{baseName(f)}</span>
-          ))}
-          <SearchButton />
-          <button onClick={() => setBrainstorm(true)}>Brainstorming</button>
-          <button onClick={() => setEditing(true)}>Edit Board</button>
-        </div>
+        <SearchButton />
+      </div>
+      <div className="board-tools">
+        {board.folders.length === 0 && <span className="muted">No folders yet</span>}
+        {board.folders.map((f) => (
+          <Tip key={f} label={f} side="top"><span className="chip soft"><FolderIcon />{baseName(f)}</span></Tip>
+        ))}
+        <button className="tool-btn" onClick={() => setBrainstorm(true)}>{BULB}Brainstorming</button>
+        <Tip label="Manage board" side="top">
+          <button className="tool-btn icon" aria-label="Manage board" onClick={() => setEditing(true)}>{SLIDERS}</button>
+        </Tip>
       </div>
       {error && <p className="error" style={{ marginBottom: 16 }}>{error}</p>}
       <div className="columns">

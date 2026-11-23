@@ -16,6 +16,7 @@ export default function CardItem({ card, onOpen, onDropOn }) {
       onClick={() => onOpen(card)}
     >
       <div className="kcard-title">{card.ident && <span className="ident">{card.ident}</span>}{card.title}{generating && <span className="spinner" title="Claude is generating" aria-label="Claude is generating" style={{ marginLeft: 6 }} />}</div>
+      {card.branch && <span className="branch-tag" title={'Worked on branch ' + card.branch}>⑂ {card.branch}</span>}
       {card.approved && <span className="approved-chip">Approved ✓</span>}
       {plain(card.description) && <div className="kcard-desc">{plain(card.description)}</div>}
       {card.deadline && (

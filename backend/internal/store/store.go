@@ -181,6 +181,9 @@ func Open(path string) (*Store, error) {
 		{"cards", "task_seq", "INTEGER NOT NULL DEFAULT 0"},             // last Agent Task number handed out
 		{"cards", "qa_seq", "INTEGER NOT NULL DEFAULT 0"},               // last QA Test Case number handed out
 		{"card_items", "ident", "TEXT NOT NULL DEFAULT ''"},             // e.g. MID-12-T3 / MID-12-QA1
+		{"card_branches", "via_dev", "INTEGER NOT NULL DEFAULT 1"},      // 1: via the -dev branch; 0: PR straight from the feature branch
+		{"discuss_messages", "ref", "INTEGER NOT NULL DEFAULT 0"},       // event rows: the card revision to Undo
+		{"discuss_state", "seen_version", "INTEGER NOT NULL DEFAULT 0"}, // ticket content version Claude last saw
 		{"card_branches", "mode", "TEXT NOT NULL DEFAULT 'merge'"},      // how the feature is integrated into the -dev branch: merge | cherry-pick
 		{"card_items", "superseded", "INTEGER NOT NULL DEFAULT 0"},      // 1 = struck through by a newer Generate; kept for history
 	} {

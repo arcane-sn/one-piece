@@ -32,9 +32,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
   // While a Claude Review turn runs, the ticket is Claude's to edit: the editors lock and reload after.
   const reviewing = useJobs().running('review_chat', 'card', current?.id)
   const [branchTick, setBranchTick] = useState(0) // bumps when a Discuss turn ends, so Branching reloads
-  const turnDone = useCallback(() => setBranchTick((n) => n + 1), [])
-  const closeDiscuss = useCallback(() => { setDiscussOpen(false); setFlowOpen(false); setBranchTick((n) => n + 1) }, [])
-  const titleRef = useRef(null)
+      const titleRef = useRef(null)
   const { review, refresh } = useReview(current?.id)
 
   const dirty =
@@ -131,6 +129,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
     onChanged(next)
   }, [onChanged])
   const reloadCard = useCallback(async () => {
+    setBranchTick((n) => n + 1)
     if (!current?.id) return
     try {
       const next = (await api(`/api/boards/${boardId}/cards`)).find((c) => c.id === current.id)
@@ -141,6 +140,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
     setFlowTick((n) => n + 1)
     refresh()
   }, [current?.id, boardId, applyCard, refresh])
+  const closeDiscuss = useCallback(() => { setDiscussOpen(false); setFlowOpen(false); reloadCard() }, [reloadCard])
   const closeReview = useCallback(() => { setReviewOpen(false); setFlowOpen(false); reloadCard() }, [reloadCard])
   // a review turn that ended while the chat was closed: pick up what Claude changed
   const wasReviewing = useRef(false)
@@ -163,10 +163,11 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
         <div className="ticket-head">
           <h2>{current ? 'Edit Ticket' : 'New Ticket'}{current?.ident && <span className="ident">{current.ident}</span>}</h2>
           {reviewing && <span className="review-badge running ticket-lock"><span className="spinner" /> Claude is editing…</span>}
-          {current && (
-            <button type="button" className="ai-btn discuss-btn" title="Git help for this ticket: branches, integration, stashes"
+          {current && ['draft', 'business', 'done'].includes(current.status) && (
+            <button type="button" className="ai-btn discuss-btn"
+              title={current.status === 'done' ? 'Guided close-out: integrate, push, open PRs' : 'Shape the description and Business Flow, and set up branches'}
               onClick={() => { setDiscussOpen(true); setFlowOpen(true) }}>
-              <span aria-hidden="true">✦</span> Discuss
+              <span aria-hidden="true">✦</span> {current.status === 'done' ? 'Close out' : 'Discuss'}
             </button>
           )}
           <button type="button" className="icon-btn" aria-label="Close" onClick={requestClose}>×</button>
@@ -226,7 +227,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
       </form>
     </div>
     {reviewOpen && <ReviewChatModal card={current} boardId={boardId} onTurnDone={reloadCard} onCardChanged={applyCard} onClose={closeReview} />}
-    {discussOpen && <DiscussModal card={current} boardId={boardId} onTurnDone={turnDone} onClose={closeDiscuss} />}
+    {discussOpen && <DiscussModal card={current} boardId={boardId} onTurnDone={reloadCard} onCardChanged={applyCard} onClose={closeDiscuss} />}
     {promptOpen && (
       <PromptModal
         boardId={boardId}

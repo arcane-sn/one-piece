@@ -23,7 +23,8 @@ type Policy struct {
 	Mode       string   // "merge" (default) or "cherry-pick"
 	Picked     []string // full SHAs already cherry-picked into Dev for this repo
 	Integrated bool     // this repo's row is merged_dev, pushed or pr_open
-	PushReady  bool     // EVERY repo of the ticket is integrated and none is blocked
+	PushReady  bool     // EVERY via-dev repo of the ticket is integrated and none is blocked
+	Direct     bool     // no -dev branch: the feature branch is pushed and the PR goes from it straight into Base
 }
 
 var (
@@ -458,7 +459,10 @@ func GitX(repo string, args []string, p Policy) (Result, error) {
 		}
 	case "push":
 		b := rest[len(rest)-1]
-		if (b == p.Dev && !p.PushReady) || (b == p.Feature && p.Integrated && !p.PushReady) {
+		if p.Direct && b == p.Dev {
+			return fail("this repo goes straight from its feature branch: there is no -dev branch to push")
+		}
+		if !p.Direct && ((b == p.Dev && !p.PushReady) || (b == p.Feature && p.Integrated && !p.PushReady)) {
 			return fail("nothing is pushed until every repo of this ticket has integrated cleanly (and none is blocked)")
 		}
 	}
@@ -502,13 +506,18 @@ func remoteKindOf(u string) string {
 	return "other"
 }
 
-// ValidateGH accepts only `pr create` (feature -dev branch into the PR base) and `pr view <dev branch>`.
+// ValidateGH accepts only `pr create` and `pr view <head>`: feature -dev branch into the PR base, or for a
+// Direct repo the feature branch into its own base branch.
 func ValidateGH(args []string, p Policy) error {
-	if len(args) >= 3 && args[0] == "pr" && args[1] == "view" && len(args) == 3 && args[2] == p.Dev {
+	base, head := p.PRBase, p.Dev
+	if p.Direct {
+		base, head = p.Base, p.Feature
+	}
+	if len(args) >= 3 && args[0] == "pr" && args[1] == "view" && len(args) == 3 && args[2] == head {
 		return nil
 	}
 	if len(args) == 10 && args[0] == "pr" && args[1] == "create" &&
-		args[2] == "--base" && args[3] == p.PRBase && args[4] == "--head" && args[5] == p.Dev &&
+		args[2] == "--base" && args[3] == base && args[4] == "--head" && args[5] == head &&
 		args[6] == "--title" && len(args[7]) <= 200 && args[8] == "--body" && len(args[9]) <= 10000 {
 		return nil
 	}
@@ -527,7 +536,7 @@ func GH(repo string, args []string, p Policy) (string, error) {
 	if k := RemoteKind(repo); k != "github" {
 		return "", fmt.Errorf("this repo's remote is not on GitHub (%s); skip gh and report the pushed branches instead", k)
 	}
-	if args[1] == "create" && !p.Integrated {
+	if args[1] == "create" && !p.Direct && !p.Integrated {
 		return "", errors.New("gh pr create needs the repo to be integrated (merged_dev) and pushed first")
 	}
 	path, err := exec.LookPath("gh")

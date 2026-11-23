@@ -32,18 +32,22 @@ type Branch struct {
 	Note          string `json:"note"`
 	Mode          string `json:"mode"`   // merge | cherry-pick
 	Picked        int    `json:"picked"` // feature commits already cherry-picked
+	ViaDev        bool   `json:"viaDev"` // true: feature -> -dev branch -> PR into the shared dev branch; false: PR straight from the feature branch into its base
 }
 
 // BranchPatch changes the given fields only.
 type BranchPatch struct {
 	BaseBranch, FeatureBranch, DevBranch, Status, PRURL, Note, Mode *string
+	ViaDev                                                          *bool
 }
 
-const branchCols = `id,card_id,repo,base_branch,feature_branch,dev_branch,status,pr_url,note,mode,(SELECT COUNT(*) FROM card_picks p WHERE p.card_id=card_branches.card_id AND p.repo=card_branches.repo)`
+const branchCols = `id,card_id,repo,base_branch,feature_branch,dev_branch,status,pr_url,note,mode,via_dev,(SELECT COUNT(*) FROM card_picks p WHERE p.card_id=card_branches.card_id AND p.repo=card_branches.repo)`
 
 func scanBranch(sc interface{ Scan(...any) error }) (Branch, error) {
 	var b Branch
-	err := sc.Scan(&b.ID, &b.CardID, &b.Repo, &b.BaseBranch, &b.FeatureBranch, &b.DevBranch, &b.Status, &b.PRURL, &b.Note, &b.Mode, &b.Picked)
+	var via int
+	err := sc.Scan(&b.ID, &b.CardID, &b.Repo, &b.BaseBranch, &b.FeatureBranch, &b.DevBranch, &b.Status, &b.PRURL, &b.Note, &b.Mode, &via, &b.Picked)
+	b.ViaDev = via != 0
 	if errors.Is(err, sql.ErrNoRows) {
 		return Branch{}, ErrNotFound
 	}
@@ -162,6 +166,12 @@ func (s *Store) UpdateBranch(cardID int64, repo string, f BranchPatch) (Branch, 
 		}
 		cur.Mode = *f.Mode
 	}
+	if f.ViaDev != nil && *f.ViaDev != cur.ViaDev {
+		if IntegratedStatus(cur.Status) {
+			return Branch{}, ConflictError{"This repo is already integrated or pushed; its target can no longer change."}
+		}
+		cur.ViaDev = *f.ViaDev
+	}
 	if f.PRURL != nil {
 		cur.PRURL = *f.PRURL
 	}
@@ -171,8 +181,12 @@ func (s *Store) UpdateBranch(cardID int64, repo string, f BranchPatch) (Branch, 
 	if len(cur.PRURL) > 500 || len(cur.Note) > 2000 {
 		return Branch{}, ValidationError{"pr url or note is too long"}
 	}
-	_, err = s.DB.Exec(`UPDATE card_branches SET base_branch=?,feature_branch=?,dev_branch=?,status=?,pr_url=?,note=?,mode=? WHERE id=?`,
-		cur.BaseBranch, cur.FeatureBranch, cur.DevBranch, cur.Status, cur.PRURL, cur.Note, cur.Mode, cur.ID)
+	via := 0
+	if cur.ViaDev {
+		via = 1
+	}
+	_, err = s.DB.Exec(`UPDATE card_branches SET base_branch=?,feature_branch=?,dev_branch=?,status=?,pr_url=?,note=?,mode=?,via_dev=? WHERE id=?`,
+		cur.BaseBranch, cur.FeatureBranch, cur.DevBranch, cur.Status, cur.PRURL, cur.Note, cur.Mode, via, cur.ID)
 	return cur, err
 }
 

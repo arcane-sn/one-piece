@@ -21,6 +21,7 @@ type Card struct {
 	ContentVersion int    `json:"contentVersion"`
 	Status         string `json:"status"`
 	Position       int    `json:"position"`
+	Branch         string `json:"branch,omitempty"` // feature branch, set by ListCards only
 }
 
 // Statuses are the kanban columns, in display order.
@@ -188,7 +189,26 @@ func (s *Store) ListCards(boardID int64) ([]Card, error) {
 		}
 		cards = append(cards, c)
 	}
-	return cards, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	br, err := s.DB.Query(`SELECT b.card_id, b.feature_branch FROM card_branches b JOIN cards c ON c.id=b.card_id WHERE c.board_id=? ORDER BY b.id DESC`, boardID)
+	if err != nil {
+		return nil, err
+	}
+	defer br.Close()
+	feat := map[int64]string{}
+	for br.Next() {
+		var id int64
+		var f string
+		if br.Scan(&id, &f) == nil {
+			feat[id] = f // oldest row wins (ORDER BY id DESC, last write)
+		}
+	}
+	for i := range cards {
+		cards[i].Branch = feat[cards[i].ID]
+	}
+	return cards, br.Err()
 }
 
 func (s *Store) UpdateCard(id int64, title, description, deadline string) (Card, error) {
