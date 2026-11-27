@@ -81,11 +81,15 @@ func TestGenerateItemsNeedsApprovalThenFillsLists(t *testing.T) {
 
 	// edit, status, technical flow
 	ip := "/api/items/" + strconv.FormatInt(out.Items[0].ID, 10)
-	resp, body := s.req(t, "PUT", ip, map[string]any{"title": "Add login API", "body": "x", "status": "doing"}, ck)
+	resp, body := s.req(t, "PUT", ip, map[string]any{"title": "Add login API", "body": "x", "status": "done"}, ck)
 	var it store.Item
 	json.Unmarshal(body, &it)
-	if resp.StatusCode != 200 || it.Title != "Add login API" || it.Status != "doing" {
+	if resp.StatusCode != 200 || it.Title != "Add login API" || it.Status != "done" {
 		t.Fatalf("update item: %d %s", resp.StatusCode, body)
+	}
+	// a stale form cannot mark an item In Progress when no run is working on it
+	if _, body = s.req(t, "PUT", ip, map[string]any{"title": "Add login API", "body": "x", "status": "doing"}, ck); !strings.Contains(string(body), `"status":"done"`) {
+		t.Fatalf("stale doing accepted: %s", body)
 	}
 	if resp, body = s.req(t, "POST", ip+"/flows", map[string]any{"title": "Check password", "source": "A -> B"}, ck); resp.StatusCode != 201 {
 		t.Fatalf("tech flow: %d %s", resp.StatusCode, body)

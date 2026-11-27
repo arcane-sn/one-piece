@@ -31,7 +31,12 @@ func LintSpec(src string) []string {
 		bad = append(bad, "dynamic import() is not allowed")
 	}
 	seen := map[string]bool{}
-	for _, m := range bannedRe.FindAllString(code, -1) {
+	for _, loc := range bannedRe.FindAllStringIndex(code, -1) {
+		m := code[loc[0]:loc[1]]
+		// a word inside a URL path ("/v1/binding/process/ok-1") is data, not code
+		if (loc[0] > 0 && code[loc[0]-1] == '/') || (loc[1] < len(code) && code[loc[1]] == '/') {
+			continue
+		}
 		if !seen[m] {
 			seen[m] = true
 			bad = append(bad, fmt.Sprintf("%q is not allowed in a QA spec", m))

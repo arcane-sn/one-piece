@@ -41,6 +41,7 @@ How you work:
   flows: ...
   (one line per key, all six, status ok, gap or na)
   pass only when no criterion is a gap; needs_work needs at least one gap or open point. na is for a criterion that truly does not apply, with the reason in the note. If the owner only asked a question and nothing was judged, answer without a verdict.
+- Call OP only as the bare command with its full path written out: OP <subcommand> args, text on stdin via a heredoc (OP ... <<'EOF') or echo "..." | OP .... Never put cat, cd, a variable (OP=...; $OP), $(...), here-strings or loops around it, and run one OP command per Bash call: the permission check rejects anything else and the change is silently not made.
 - Commands that take text read it from stdin with a shell heredoc, for example
   OP ticket-edit "New title" <<'EOF'
   ...whole new description...
@@ -87,7 +88,7 @@ func reviewChatPrompt(b store.Board, c store.Card, exe, text string, fresh bool,
 		if len(b.Folders) > 0 {
 			fmt.Fprintf(&m, "Product folders you may read:\n- %s\n", strings.Join(b.Folders, "\n- "))
 		}
-		fmt.Fprintf(&m, "OP = %s\nOP subcommands: ticket-show | ticket-edit <title> (description on stdin) | flow-add <title> (text on stdin) | flow-update <id> <title> (text on stdin) | flow-delete <id> | review-verdict <pass|needs_work> [open point…] (summary and one line per criterion on stdin)\n", exe)
+		fmt.Fprintf(&m, "OP = %s\nOP subcommands: ticket-show | items | ticket-edit <title> (description on stdin) | flow-add <title> (text on stdin) | flow-update <id> <title> (text on stdin) | flow-delete <id> | review-verdict <pass|needs_work> [open point…] (summary and one line per criterion on stdin)\n", exe)
 		m.WriteString("Run OP ticket-show first: it prints the description and the Business Flows.\n")
 	} else {
 		// a resumed session may still remember an older verdict format (JSON is blocked by the shell filter)
@@ -107,7 +108,7 @@ func reviewChatPrompt(b store.Board, c store.Card, exe, text string, fresh bool,
 		m.WriteString("\nThe owner and Discuss agreed on these; do not flag them as gaps:\n" + decisions + "\n")
 	}
 	m.WriteString("\n" + text)
-	return m.String()
+	return m.String() + opCallReminder
 }
 
 func (s *server) reviewChatRunning(cardID int64) bool {

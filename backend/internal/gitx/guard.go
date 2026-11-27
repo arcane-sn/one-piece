@@ -25,13 +25,15 @@ type Policy struct {
 	Integrated bool     // this repo's row is merged_dev, pushed or pr_open
 	PushReady  bool     // EVERY via-dev repo of the ticket is integrated and none is blocked
 	Direct     bool     // no -dev branch: the feature branch is pushed and the PR goes from it straight into Base
+	ReadOnly   bool     // a board folder that is not registered for the ticket: only status, fetch, branch, rev-parse, log, diff
 }
 
 var (
-	digitsRe   = regexp.MustCompile(`^[0-9]{1,4}$`)
-	patternRe  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/*-]*$`)
-	shaRe      = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
-	stashMsgRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 ._:/#-]{0,119}$`)
+	digitsRe    = regexp.MustCompile(`^[0-9]{1,4}$`)
+	patternRe   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/*-]*$`)
+	shaRe       = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+	remoteURLRe = regexp.MustCompile(`^(https://[A-Za-z0-9.-]+/[A-Za-z0-9._/-]+|git@[A-Za-z0-9.-]+:[A-Za-z0-9._/-]+)$`)
+	stashMsgRe  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 ._:/#-]{0,119}$`)
 )
 
 func reject(args []string) error {
@@ -87,9 +89,32 @@ func ValidateGit(args []string, p Policy) error {
 	}
 	rest := args[1:]
 	ok := false
+	if p.ReadOnly {
+		switch args[0] {
+		case "status", "fetch", "branch", "rev-parse", "log", "diff", "remote":
+			if args[0] == "remote" && !(len(rest) == 1 && rest[0] == "-v") {
+				return reject(args)
+			}
+		default:
+			return fmt.Errorf("git %s is not allowed on a repo that is not registered for this ticket (read-only: status, fetch, branch, log, diff)", args[0])
+		}
+	}
 	switch args[0] {
 	case "status":
 		ok = len(rest) == 0 || (len(rest) == 1 && (rest[0] == "-s" || rest[0] == "--short" || rest[0] == "--porcelain" || rest[0] == "-b"))
+	case "add":
+		ok = len(rest) == 1 && (rest[0] == "-A" || rest[0] == ".")
+	case "commit":
+		msg := ""
+		switch {
+		case len(rest) == 2 && rest[0] == "-m":
+			msg = rest[1]
+		case len(rest) == 3 && rest[0] == "--allow-empty" && rest[1] == "-m":
+			msg = rest[2]
+		}
+		ok = msg != "" && len(msg) <= 300 && hasToken(msg, p.Ident)
+	case "remote":
+		ok = (len(rest) == 1 && rest[0] == "-v") || (len(rest) == 3 && rest[0] == "add" && rest[1] == "origin" && remoteURLRe.MatchString(rest[2]))
 	case "fetch":
 		switch len(rest) {
 		case 0:
@@ -155,8 +180,9 @@ func ValidateGit(args []string, p Policy) error {
 		if len(rest) > 0 && rest[0] == "-u" {
 			rest = rest[1:]
 		}
-		ok = len(rest) == 2 && rest[0] == "origin" && ValidBranch(rest[1]) && (rest[1] == p.Feature || rest[1] == p.Dev) &&
-			!isProtected(rest[1], p)
+		// the base may be pushed only to bootstrap a remote that does not have it yet (GitX checks that)
+		ok = len(rest) == 2 && rest[0] == "origin" && ValidBranch(rest[1]) &&
+			((rest[1] == p.Feature || rest[1] == p.Dev) && !isProtected(rest[1], p) || (rest[1] == p.Base && p.Base != ""))
 	case "log":
 		ok = true
 		for i := 0; i < len(rest) && ok; i++ {
@@ -220,6 +246,18 @@ func refExists(repo, ref string) bool {
 func currentBranch(repo string) (string, error) {
 	cur, err := gitRun(repo, 30*time.Second, "rev-parse", "--abbrev-ref", "HEAD")
 	return cur, err
+}
+
+func sameCommit(repo, a, b string) bool {
+	x, err1 := gitRun(repo, 30*time.Second, "rev-parse", "--verify", "--quiet", a+"^{commit}")
+	y, err2 := gitRun(repo, 30*time.Second, "rev-parse", "--verify", "--quiet", b+"^{commit}")
+	return err1 == nil && err2 == nil && x == y
+}
+
+// headName is the checked-out branch, also in a repo with no commits yet (where rev-parse HEAD fails).
+func headName(repo string) string {
+	n, _ := gitRun(repo, 30*time.Second, "symbolic-ref", "--short", "-q", "HEAD")
+	return n
 }
 
 func cleanTree(repo string) error {
@@ -315,7 +353,9 @@ func GitX(repo string, args []string, p Policy) (Result, error) {
 	isAbort := (args[0] == "merge" || args[0] == "cherry-pick") && rest[0] == "--abort"
 	switch args[0] {
 	case "switch", "checkout", "pull", "merge", "cherry-pick":
-		if !isAbort {
+		// a new branch cut from the commit that is already checked out carries local changes along and loses nothing
+		newBranch := (args[0] == "switch" || args[0] == "checkout") && len(rest) == 3 && (rest[0] == "-c" || rest[0] == "-b") && sameCommit(repo, "HEAD", rest[2])
+		if !isAbort && !newBranch {
 			if err := cleanTree(repo); err != nil {
 				return res, err
 			}
@@ -328,6 +368,44 @@ func GitX(repo string, args []string, p Policy) (Result, error) {
 		}
 	}
 	switch args[0] {
+	case "add":
+		if _, err := gitRun(repo, timeout, "add", "-A"); err != nil {
+			return res, err
+		}
+		// secrets never get staged by this command, whatever the owner's .gitignore says
+		staged, err := gitRun(repo, timeout, "diff", "--cached", "--name-only")
+		if err != nil {
+			return res, err
+		}
+		var dropped []string
+		for _, f := range strings.Split(staged, "\n") {
+			if f != "" && isSecretFile(f) {
+				if _, err := gitRun(repo, timeout, "rm", "-r", "--cached", "-q", "--ignore-unmatch", "--", f); err != nil {
+					return res, err
+				}
+				dropped = append(dropped, f)
+			}
+		}
+		res.Out = "staged everything"
+		if len(dropped) > 0 {
+			res.Out += "; left out (secrets): " + strings.Join(dropped, ", ")
+		}
+		return res, nil
+	case "commit":
+		cur := headName(repo)
+		unborn := !refExists(repo, "HEAD")
+		switch {
+		case unborn && cur == p.Base:
+		case cur == p.Feature || cur == p.Dev:
+		default:
+			return fail("commit only runs on %s or %s (or on %s of a repo with no commits yet), but the current branch is %s", p.Feature, p.Dev, p.Base, cur)
+		}
+	case "remote":
+		if rest[0] == "add" {
+			if k := RemoteKind(repo); k != "none" {
+				return fail("this repo already has an origin remote")
+			}
+		}
 	case "switch":
 		if rest[0] == "-c" {
 			if refExists(repo, "refs/heads/"+rest[1]) {
@@ -459,6 +537,15 @@ func GitX(repo string, args []string, p Policy) (Result, error) {
 		}
 	case "push":
 		b := rest[len(rest)-1]
+		if b == p.Base {
+			if out, err := gitRun(repo, timeout, "ls-remote", "--heads", "origin", b); err != nil || out != "" {
+				return fail("%s already exists on the remote (or the remote is unreachable); the base branch is never pushed from here", b)
+			}
+			if headName(repo) != p.Base {
+				return fail("push %s only runs while %s is checked out", b, b)
+			}
+			break
+		}
 		if p.Direct && b == p.Dev {
 			return fail("this repo goes straight from its feature branch: there is no -dev branch to push")
 		}
@@ -530,6 +617,9 @@ func ValidateGH(args []string, p Policy) error {
 
 // GH validates args, then runs the GitHub CLI in repo.
 func GH(repo string, args []string, p Policy) (string, error) {
+	if p.ReadOnly {
+		return "", errors.New("gh needs the repo to be registered for this ticket (OP branch-plan)")
+	}
 	if err := ValidateGH(args, p); err != nil {
 		return "", err
 	}
@@ -553,4 +643,16 @@ func GH(repo string, args []string, p Policy) (string, error) {
 		return strings.TrimSpace(string(out)), fmt.Errorf("gh failed: %v\n%s", err, strings.TrimSpace(string(out)))
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// isSecretFile names files that must never be staged by the agent: dotenv files (except examples), keys, certificates.
+func isSecretFile(path string) bool {
+	b := path[strings.LastIndex(path, "/")+1:]
+	switch {
+	case b == ".env" || strings.HasPrefix(b, ".env.") && !strings.HasSuffix(b, ".example") && !strings.HasSuffix(b, ".sample") && !strings.HasSuffix(b, ".template"):
+		return true
+	case strings.HasSuffix(b, ".pem"), strings.HasSuffix(b, ".key"), strings.HasSuffix(b, ".p12"), strings.HasPrefix(b, "id_rsa"), strings.HasPrefix(b, "id_ed25519"), b == "credentials.json":
+		return true
+	}
+	return false
 }

@@ -35,7 +35,7 @@ How a session goes. Move to the next phase only when the owner has answered the 
 Always: keep replies short, reply in the language the owner writes in, and be frugal with steps (Grep before Read, read only what you need).
 Where things live (the first message of a session gives the exact paths):
 - Tickets: the command given there lists them ("tickets") and shows one ("ticket <id>"). Read a ticket only when you need its details.
-- Draft tickets: "draft-add '<title>'" and "draft-update <id> '<title>'" create and change Draft tickets; put the description on stdin with a shell heredoc. A Draft is a rough ticket: what and why in 2-6 lines, it may be incomplete. You cannot change any other ticket.
+- Draft tickets: "draft-add '<title>'" and "draft-update <id> '<title>'" create and change Draft tickets; put the description on stdin with a shell heredoc. Run ONE command per Bash call, written exactly as "<command path> draft-add '<title>' <<'EOF'" + description + "EOF"; for 14 tickets that is 14 calls (they can go in parallel). Never use cd, for/while loops, variables, $(...), here-strings (<<<) or any wrapper around it: the permission check rejects anything but the bare command, and then the Draft is not created. A Draft is a rough ticket: what and why in 2-6 lines, it may be incomplete. You cannot change any other ticket.
 - The plan: one Markdown document at the plan path from the first message. Keep it current with Edit or Write, always with these sections in this order: Overview; Goals; Non-goals; Users and key flows; Chosen approach (with the alternatives you rejected and why); Tickets (title, one-line summary, card id); Open questions. Leave a section out only when it does not apply, and keep it short. You may write no other file.
 - Product folders (read-only) can be searched with Read, Grep and Glob. Secret files (.env, .env.local, ...) are blocked on purpose; .env.example may be read.`
 
@@ -105,10 +105,9 @@ func runSession(ctx context.Context, spec sessionSpec, onText func(string)) (str
 	for _, d := range spec.Dirs {
 		args = append(args, "--add-dir", d)
 	}
-	if len(spec.AllowedTools) > 0 {
-		args = append(args, "--allowedTools")
-		args = append(args, spec.AllowedTools...)
-	}
+	args = append(args, "--allowedTools")
+	args = append(args, spec.AllowedTools...)
+	args = append(args, mcpAllow...)
 	args = append(args, denyArgs(spec.Dirs)...) // .env files stay unreadable
 
 	cmd := exec.CommandContext(ctx, "claude", args...)
@@ -130,8 +129,12 @@ func runSession(ctx context.Context, spec sessionSpec, onText func(string)) (str
 	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	for sc.Scan() {
 		var ev struct {
-			Type      string `json:"type"`
-			Subtype   string `json:"subtype"`
+			Type    string `json:"type"`
+			Subtype string `json:"subtype"`
+			Denials []struct {
+				Tool  string          `json:"tool_name"`
+				Input json.RawMessage `json:"tool_input"`
+			} `json:"permission_denials"`
 			IsError   bool   `json:"is_error"`
 			Result    string `json:"result"`
 			SessionID string `json:"session_id"`
@@ -159,6 +162,9 @@ func runSession(ctx context.Context, spec sessionSpec, onText func(string)) (str
 			}
 		case "result":
 			final, isErr, sessionID = ev.Result, ev.IsError, ev.SessionID
+			for _, d := range ev.Denials { // so "it was denied" can be traced to the exact command
+				log.Printf("claude denied %s: %s", d.Tool, shorten(string(d.Input), 400))
+			}
 			outOfSteps = ev.Subtype == "error_max_turns"
 		}
 	}
@@ -253,7 +259,7 @@ func brainstormPrompt(b store.Board, exe, planPath, index string, st store.Brain
 		m.WriteString(ch + "\n\n")
 	}
 	m.WriteString(text)
-	return m.String()
+	return m.String() + opCallReminder
 }
 
 func (s *server) turnRunning(boardID int64) bool {
@@ -563,3 +569,11 @@ func (s *server) restorePlan(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, nv)
 }
+
+// opCallReminder ends every user message: a resumed session copies the command shape it used before, and the
+// Bash permission check rejects `cat <<EOF | OP ...`, `OP=...; $OP`, cd, loops and $(...) (the change is then lost).
+const opCallReminder = "\n\n[Command shape: write the OP command itself first, with its full path, and the text as its own heredoc: OP ticket-edit \"<title>\" <<'EOF' ... EOF. Never start with cat, never pipe from cat, never use a variable, cd, a loop or $(...). One OP command per Bash call.]"
+
+// mcpAllow lists MCP servers every session may call in full (the user's own servers, loaded from their Claude
+// config). A bare "mcp__<server>" rule allows all of that server's tools. Edit here to add another server.
+var mcpAllow = []string{"mcp__proteus"}

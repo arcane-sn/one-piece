@@ -30,7 +30,13 @@ type Config struct {
 	AllowedHosts    []string  `json:"allowedHosts"`
 	Headed          bool      `json:"headed"`
 	Services        []Service `json:"services"`
+	NoLogin         bool      `json:"-"` // set per run for a case that needs no login: no saved login is loaded
 }
+
+var noLoginRe = regexp.MustCompile(`(?im)^\s*(?:[-*+]\s*)?\**login\**\s*:\s*\**\s*(?:no login|none|not needed|not required|n/a|tidak perlu(?: login)?)\b`)
+
+// NoLoginCase reports whether a QA case's Prerequisites say it needs no login ("Login: no login").
+func NoLoginCase(body string) bool { return noLoginRe.MatchString(body) }
 
 // Configured reports whether the board has a QA stack (a base URL and at least one service).
 func (c Config) Configured() bool { return c.BaseURL != "" && len(c.Services) > 0 }

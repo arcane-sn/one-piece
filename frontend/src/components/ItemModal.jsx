@@ -129,11 +129,12 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
               <span>Description</span>
               <RichEditor value={body} placeholder={k === 'agent' ? 'Technical approach and what “done” looks like.' : 'Steps and the expected result.'} onChange={setBody} />
             </div>
+            {current && k === 'qa' && <QARunPanel itemId={current.id} refreshKey={current.status + (current.log?.length ?? 0)} />}
             {k === 'agent' && (
               <FlowsSection parent={current ? `/api/items/${current.id}` : null} label="Technical Flow"
                 emptyHint="No technical flow yet." onChanged={() => {}} onModal={setFlowOpen} />
             )}
-            {current && k === 'agent' && <ChangesPanel itemId={current.id} refreshKey={current.status + (current.log?.length ?? 0)} />}
+            {current && k === 'agent' && <ChangesPanel done={current.status === 'done'} itemId={current.id} refreshKey={current.status + (current.log?.length ?? 0)} />}
           </div>
           <aside className="ticket-side">
             <div className="field">
@@ -172,7 +173,6 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
                 )}
               </div>
             )}
-            {current && k === 'qa' && <QARunPanel itemId={current.id} refreshKey={current.status + (current.log?.length ?? 0)} />}
             <div className="field review-side">
               <span>Claude Log</span>
               {current?.log?.length > 0

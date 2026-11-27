@@ -276,3 +276,77 @@ func TestRemoteKindOf(t *testing.T) {
 		}
 	}
 }
+
+func TestReadOnlyPolicy(t *testing.T) {
+	p := Policy{ReadOnly: true}
+	for _, ok := range [][]string{{"status"}, {"log", "--oneline", "-n", "5"}, {"branch", "--list"}, {"fetch", "--prune"}} {
+		if err := ValidateGit(ok, p); err != nil {
+			t.Errorf("%v should be allowed: %v", ok, err)
+		}
+	}
+	for _, bad := range [][]string{{"checkout", "main"}, {"push", "-u", "origin", "x"}, {"merge", "--abort"}, {"stash", "pop"}, {"pull", "--ff-only"}} {
+		if err := ValidateGit(bad, p); err == nil {
+			t.Errorf("%v must be refused on a read-only repo", bad)
+		}
+	}
+	if _, err := GH(".", []string{"pr", "view", "x"}, p); err == nil {
+		t.Error("gh must be refused on a read-only repo")
+	}
+}
+
+// A brand-new repo: commit, bootstrap the remote's base, branch, stage (secrets stay out), commit, push.
+func TestBootstrapCommitFlow(t *testing.T) {
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	run(t, dir, "init", "-q", "-b", "main")
+	run(t, dir, "config", "user.name", "t")
+	run(t, dir, "config", "user.email", "t@example.com")
+	bare := withOrigin(t, dir)
+	p := Policy{Feature: "feature/X-1", Base: "main", PRBase: "dev", Ident: "X-1", Direct: true}
+	do := func(args ...string) (Result, error) { return GitX(dir, args, p) }
+
+	os.WriteFile(filepath.Join(dir, "app.go"), []byte("package main"), 0o644)
+	os.WriteFile(filepath.Join(dir, ".env"), []byte("SECRET=1"), 0o644)
+	os.WriteFile(filepath.Join(dir, ".env.example"), []byte("SECRET="), 0o644)
+
+	if _, err := do("commit", "--allow-empty", "-m", "no ticket id"); err == nil {
+		t.Fatal("a message without the ticket id must be refused")
+	}
+	if _, err := do("commit", "--allow-empty", "-m", "X-1: initial commit"); err != nil {
+		t.Fatalf("initial commit on the base of an empty repo: %v", err)
+	}
+	if _, err := do("push", "-u", "origin", "main"); err != nil {
+		t.Fatalf("bootstrap push of the base: %v", err)
+	}
+	if _, err := do("push", "-u", "origin", "main"); err == nil {
+		t.Fatal("the base must not be pushed once the remote has it")
+	}
+	if _, err := do("commit", "--allow-empty", "-m", "X-1: more"); err == nil {
+		t.Fatal("commit on the base is only for an empty repo")
+	}
+	if _, err := do("checkout", "-b", "feature/X-1", "main"); err != nil {
+		t.Fatal(err)
+	}
+	res, err := do("add", "-A")
+	if err != nil || !strings.Contains(res.Out, ".env") {
+		t.Fatalf("add: %v %q", err, res.Out)
+	}
+	if _, err := do("commit", "-m", "X-1: scaffold"); err != nil {
+		t.Fatal(err)
+	}
+	files := run(t, dir, "ls-tree", "-r", "--name-only", "HEAD")
+	if strings.Contains(files, "\n.env\n") || strings.HasPrefix(files, ".env\n") || !strings.Contains(files, ".env.example") || !strings.Contains(files, "app.go") {
+		t.Fatalf("committed files:\n%s", files)
+	}
+	if _, err := do("push", "-u", "origin", "feature/X-1"); err != nil {
+		t.Fatal(err)
+	}
+	if run(t, bare, "branch", "--list", "feature/X-1") == "" {
+		t.Fatal("feature not pushed")
+	}
+	if _, err := do("remote", "add", "origin", "https://github.com/a/b"); err == nil {
+		t.Fatal("origin already exists")
+	}
+	if err := ValidateGit([]string{"remote", "add", "origin", "https://github.com/a/b;rm -rf"}, p); err == nil {
+		t.Fatal("bad remote url accepted")
+	}
+}

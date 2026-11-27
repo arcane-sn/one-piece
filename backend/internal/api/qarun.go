@@ -206,7 +206,8 @@ func (s *server) executeQA(ctx context.Context, it store.Item, c store.Card, b s
 	before := s.snapshots(roots)
 	s.st.SetQARunRepos(runID, before)
 
-	if raw, err := os.ReadFile(p.Auth(b.ID)); err != nil || qa.StateExpired(raw, time.Now().Unix()) {
+	noLogin := qa.NoLoginCase(it.Body) // "Login: no login" in the Prerequisites: public page, no saved login needed
+	if raw, err := os.ReadFile(p.Auth(b.ID)); !noLogin && (err != nil || qa.StateExpired(raw, time.Now().Unix())) {
 		return block("Login needed. Open Edit Board and use Log in for QA.")
 	}
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
@@ -235,11 +236,13 @@ func (s *server) executeQA(ctx context.Context, it store.Item, c store.Card, b s
 		}
 	}
 	defer stopStack()
-	if ok, why := qaLiveCheck(ctx, p, b.ID, cfg); !ok {
-		if ctx.Err() != nil {
-			return stopped()
+	if !noLogin {
+		if ok, why := qaLiveCheck(ctx, p, b.ID, cfg); !ok {
+			if ctx.Err() != nil {
+				return stopped()
+			}
+			return block(why + ". Open Edit Board and use Log in for QA.")
 		}
-		return block(why + ". Open Edit Board and use Log in for QA.")
 	}
 
 	exe, err := agentExe()
@@ -263,7 +266,11 @@ func (s *server) executeQA(ctx context.Context, it store.Item, c store.Card, b s
 		msg.WriteString("\n" + blk)
 	}
 	fmt.Fprintf(&msg, "\nYour QA Test Case: %s %s\n%s\n", it.Ident, it.Title, it.Body)
-	fmt.Fprintf(&msg, "\nBase URL (the QA stack is already running and logged in): %s\n", cfg.BaseURL)
+	if noLogin {
+		fmt.Fprintf(&msg, "\nBase URL (the QA stack is already running; this case needs no login, so the browser starts NOT logged in): %s\n", cfg.BaseURL)
+	} else {
+		fmt.Fprintf(&msg, "\nBase URL (the QA stack is already running and logged in): %s\n", cfg.BaseURL)
+	}
 	fmt.Fprintf(&msg, "The one spec file you may write: %s\nHelpers (read first): %s\n", p.SpecPath(b.ID, it.Ident), filepath.Join(p.Specs(b.ID), "helpers.ts"))
 	fmt.Fprintf(&msg, "Commands: %s qa-run (no arguments) | %s qa-blocked <reason>\nEvidence of this run lives under: %s\n", exe, exe, runDir)
 	msg.WriteString("\nRepos under test (the code that is running):\n")

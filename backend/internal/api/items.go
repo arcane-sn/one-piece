@@ -116,6 +116,18 @@ func (s *server) updateItem(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if in.Status == "doing" {
+		s.mu.Lock()
+		_, live := s.runs[id]
+		s.mu.Unlock()
+		if !live { // "In Progress" is only true while Claude is on it; a stale form must not set it
+			if old.Status == "doing" {
+				in.Status = "todo"
+			} else {
+				in.Status = old.Status
+			}
+		}
+	}
 	var lines []string
 	if in.Status != "" && in.Status != old.Status {
 		lines = append(lines, "Status: "+in.Status)
