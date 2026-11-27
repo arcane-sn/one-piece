@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -20,11 +21,11 @@ var agentCommands = map[string]bool{"tickets": true, "ticket": true, "draft-add"
 	"branches": true, "branch-plan": true, "branch-status": true, "branch-pr": true, "git": true, "gh": true,
 	"ticket-show": true, "ticket-edit": true, "flow-add": true, "flow-update": true, "flow-delete": true, "review-verdict": true,
 	"branch-mode": true, "branch-target": true, "pending-picks": true, "remote-kind": true, "decision": true, "decisions": true,
-	"qa-run": true, "qa-blocked": true}
+	"qa-run": true, "qa-blocked": true, "items": true}
 
 // reviewCommands only work in a Claude Review session (ONE_PIECE_MODE=review, ONE_PIECE_CARD set):
 // they read and edit THAT ticket and its Business Flows, and record the verdict.
-var reviewCommands = map[string]bool{"ticket-show": true, "ticket-edit": true, "flow-add": true, "flow-update": true, "flow-delete": true, "review-verdict": true}
+var reviewCommands = map[string]bool{"ticket-show": true, "items": true, "ticket-edit": true, "flow-add": true, "flow-update": true, "flow-delete": true, "review-verdict": true}
 
 // branchCommands need ONE_PIECE_CARD: the ticket a Discuss session is about.
 var branchCommands = map[string]bool{"branches": true, "branch-plan": true, "branch-status": true, "branch-pr": true, "git": true, "gh": true,
@@ -162,6 +163,60 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 		for _, f := range fl {
 			fmt.Fprintf(out, "\nBusiness Flow %d | %s\n%s\n", f.ID, f.Title, f.Source)
 		}
+		// the rest of the contract the owner approves: tasks, QA cases and the branch plan
+		its, err := st.ListItems(card.ID)
+		if err != nil {
+			return err
+		}
+		n := 0
+		for _, it := range its {
+			if it.Superseded || it.FixFor != 0 {
+				continue
+			}
+			n++
+			fmt.Fprintf(out, "\n%s %s | %s\n%s\n", map[string]string{"agent": "Agent Task", "qa": "QA Case"}[it.Kind], it.Ident, it.Title, it.Body)
+		}
+		if n == 0 {
+			fmt.Fprintln(out, "\nAgent Tasks and QA Cases: none")
+		}
+		brs, err := st.ListBranches(card.ID)
+		if err != nil {
+			return err
+		}
+		if len(brs) == 0 {
+			fmt.Fprintln(out, "\nBranch plan: none")
+		}
+		for _, r := range brs {
+			fmt.Fprintf(out, "\nBranch plan | %s | %s → %s\n", r.Repo, r.BaseBranch, r.FeatureBranch)
+		}
+	case "items":
+		// the ticket's Agent Tasks and QA Test Cases with their state (read-only), so a closeout can check "everything is done"
+		its, err := st.ListItems(card.ID)
+		if err != nil {
+			return err
+		}
+		n := 0
+		for _, it := range its {
+			if it.Superseded {
+				continue
+			}
+			n++
+			extra := ""
+			if it.Kind == "qa" {
+				if it.Failure != "" {
+					extra = " | last run failed: " + it.Failure
+				}
+				if e := it.Evidence; e != nil {
+					extra += fmt.Sprintf(" | browser run %s, %d/%d steps passed", e.State, e.StepsPassed, e.Steps)
+				}
+			} else if it.Changes != nil {
+				extra = fmt.Sprintf(" | %d file(s) +%d -%d", it.Changes.Files, it.Changes.Additions, it.Changes.Deletions)
+			}
+			fmt.Fprintf(out, "%s | %s | %s | %s%s\n", it.Ident, map[string]string{"agent": "Agent Task", "qa": "QA Case"}[it.Kind], it.Status, it.Title, extra)
+		}
+		if n == 0 {
+			fmt.Fprintln(out, "none")
+		}
 	case "ticket-edit":
 		if len(args) != 2 {
 			return errors.New("usage: ticket-edit <title>  (the whole new description on stdin)")
@@ -245,7 +300,7 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 		if sum, checks, ok := parseChecklist(raw); ok {
 			r, err = st.RecordChecklistVerdict(card.ID, args[1], sum, args[2:], checks)
 		} else if args[1] == "pass" {
-			return errors.New("a pass needs the checklist: one line per criterion, e.g. \"dod: ok | each action has a checkable outcome\"")
+			return errors.New("a pass needs the checklist: one line per criterion, e.g. \"tasks: ok | every requirement has a task\"")
 		} else {
 			r, err = st.RecordVerdict(card.ID, args[1], raw, args[2:])
 		}
@@ -407,13 +462,21 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 		if len(args) < 3 {
 			return fmt.Errorf("usage: %s <repo> <args…>", args[0])
 		}
+		readOnly := false
 		r, err := registered(args[1])
 		if err != nil {
-			return err
+			// an unregistered folder of this board can still be inspected (log, diff, status, branch), never changed
+			board, berr := st.GetBoard(boardID)
+			if berr != nil || args[0] == "gh" || !filepath.IsAbs(args[1]) || !slices.Contains(board.Folders, filepath.Clean(args[1])) {
+				return err
+			}
+			r, readOnly = store.Branch{Repo: filepath.Clean(args[1])}, true
 		}
-		pol, err := policy(r)
-		if err != nil {
-			return err
+		pol := gitx.Policy{ReadOnly: true}
+		if !readOnly {
+			if pol, err = policy(r); err != nil {
+				return err
+			}
 		}
 		if args[0] == "gh" {
 			res, err := gitx.GH(r.Repo, args[2:], pol)

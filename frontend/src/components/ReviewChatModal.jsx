@@ -94,7 +94,7 @@ export default function ReviewChatModal({ card, boardId, onTurnDone, onCardChang
 
   return createPortal(
     <div className="modal-backdrop item-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal brainstorm" role="dialog" aria-modal="true" aria-label="Claude Review">
+      <div className="modal brainstorm review-split" role="dialog" aria-modal="true" aria-label="Claude Review">
         <div className="ticket-head">
           <h2>Claude Review{card.ident && <span className="ident">{card.ident}</span>}</h2>
           <div className="head-actions">
@@ -102,17 +102,20 @@ export default function ReviewChatModal({ card, boardId, onTurnDone, onCardChang
             <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
           </div>
         </div>
+        {card.title && <p className="chat-ticket-title" title={card.title}>{card.title}</p>}
+        <div className="review-cols">
         <div className="discuss-stage review-strip">
           {!available && view ? 'Claude Review is available while the ticket is in Business.' : (
             verdict
               ? <><span className={'review-badge ' + verdict[0]}>{verdict[1]}</span> {current.summary}</>
-              : <>Not reviewed yet. Claude checks six things: description, cases, Definition of Done, edge cases, scope and the Business Flow.</>
+              : <>Not reviewed yet. Claude checks the whole contract: description, cases, Agent Tasks, QA cases, edge cases, scope, the Business Flow and open questions.</>
           )}
           {current && <ReviewChecklist checks={current.checks} />}
           {current?.verdict === 'needs_work' && current.missing.length > 0 && (
             <ul className="review-open">{current.missing.map((m, i) => <li key={i}>{m}</li>)}</ul>
           )}
         </div>
+        <div className="review-chat">
         <div className="bs-list" ref={listRef}>
           {view === null && <p className="muted">Loading…</p>}
           {view?.messages.length === 0 && (
@@ -146,6 +149,8 @@ export default function ReviewChatModal({ card, boardId, onTurnDone, onCardChang
           running={running}
           disabled={!available}
         />
+        </div>
+        </div>
       </div>
     </div>,
     document.body,

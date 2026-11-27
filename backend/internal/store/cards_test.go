@@ -64,6 +64,7 @@ func TestCardTitleRejectsBlankAndTooLong(t *testing.T) {
 
 func TestMoveAcrossColumnsKeepsPositionsContiguous(t *testing.T) {
 	s, bid, cs := threeCards(t)
+	approveRaw(t, s, cs[1].ID)
 	if _, err := s.MoveCard(cs[1].ID, "agent", 0); err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +88,8 @@ func TestMoveWithinColumnReorders(t *testing.T) {
 
 func TestMovePositionClamped(t *testing.T) {
 	s, bid, cs := threeCards(t)
+	approveRaw(t, s, cs[2].ID)
+	approveRaw(t, s, cs[0].ID)
 	s.MoveCard(cs[2].ID, "agent", -5)
 	s.MoveCard(cs[0].ID, "agent", 999)
 	if got := col(t, s, bid, "agent"); !reflect.DeepEqual(got, []string{"c:0", "a:1"}) {
@@ -108,5 +111,54 @@ func TestCreateCardOnMissingBoardIsNotFound(t *testing.T) {
 	s := openTemp(t)
 	if _, err := s.CreateCard(42, "x", "", ""); err != ErrNotFound {
 		t.Errorf("got %v, want ErrNotFound", err)
+	}
+}
+
+func approveRaw(t *testing.T, s *Store, id int64) {
+	t.Helper()
+	if _, err := s.DB.Exec(`UPDATE cards SET approved=1 WHERE id=?`, id); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMoveToAgentNeedsApproval(t *testing.T) {
+	s, _, cs := threeCards(t)
+	if _, err := s.MoveCard(cs[0].ID, "agent", 0); !isConflict(err) {
+		t.Fatalf("unapproved business -> agent: want ConflictError, got %v", err)
+	}
+	approveRaw(t, s, cs[0].ID)
+	if c, err := s.MoveCard(cs[0].ID, "agent", 0); err != nil || c.Status != "agent" {
+		t.Fatalf("approved business -> agent = %+v, %v", c, err)
+	}
+}
+
+func TestDoneOnlyFromAgent(t *testing.T) {
+	s, _, cs := threeCards(t)
+	if _, err := s.MoveCard(cs[0].ID, "done", 0); !isConflict(err) {
+		t.Fatalf("business -> done: want ConflictError, got %v", err)
+	}
+	approveRaw(t, s, cs[0].ID)
+	s.MoveCard(cs[0].ID, "agent", 0)
+	c, err := s.MoveCard(cs[0].ID, "done", 0)
+	if err != nil || c.Status != "done" || !c.Approved {
+		t.Fatalf("agent -> done = %+v, %v", c, err)
+	}
+}
+
+func TestBackToBusinessRevokesApproval(t *testing.T) {
+	s, _, cs := threeCards(t)
+	approveRaw(t, s, cs[0].ID)
+	s.MoveCard(cs[0].ID, "agent", 0)
+	before, _ := s.GetCard(cs[0].ID)
+	c, err := s.MoveCard(cs[0].ID, "business", 0)
+	if err != nil || c.Approved || c.ContentVersion != before.ContentVersion+1 {
+		t.Fatalf("agent -> business = %+v (before v%d), %v", c, before.ContentVersion, err)
+	}
+}
+
+func TestQAStatusIsGone(t *testing.T) {
+	s, _, cs := threeCards(t)
+	if _, err := s.MoveCard(cs[0].ID, "qa", 0); err == nil || isConflict(err) {
+		t.Fatalf("qa: want ValidationError, got %v", err)
 	}
 }

@@ -140,6 +140,7 @@ func TestReviewChatOnlyInBusinessAndOneTurnAtATime(t *testing.T) {
 	}
 	close(release)
 
+	s.St.DB.Exec(`UPDATE cards SET approved=1 WHERE id=?`, card.ID)
 	s.req(t, "POST", cp+"/move", map[string]any{"status": "agent", "position": 0}, ck)
 	if code, body := rcSend(t, s, cp, ck, "x"); code != 409 || !strings.Contains(body, "Business") {
 		t.Fatalf("agent column: %d %s", code, body)

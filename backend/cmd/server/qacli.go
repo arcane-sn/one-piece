@@ -112,6 +112,7 @@ func runQACLI(args []string, getenv func(string) string, st *store.Store, boardI
 	os.MkdirAll(cfgDir, 0o755)
 	cfgFile := filepath.Join(cfgDir, fmt.Sprintf("run-%d-%d.config.ts", runID, n))
 	defer os.Remove(cfgFile)
+	cfg.NoLogin = qa.NoLoginCase(it.Body)
 	if err := os.WriteFile(cfgFile, []byte(paths.PlaywrightConfig(boardID, it.Ident, attemptDir, proxy.Addr(), cfg)), 0o600); err != nil {
 		return err
 	}

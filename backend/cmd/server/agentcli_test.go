@@ -331,7 +331,7 @@ func TestReviewChecklistVerdictAndImageGuard(t *testing.T) {
 	if _, err := runCLI(renv, all("gap"), "review-verdict", "pass"); err == nil {
 		t.Fatal("a gap cannot pass")
 	}
-	if _, err := runCLI(renv, "summary: x\ndod: ok | fine", "review-verdict", "pass"); err == nil {
+	if _, err := runCLI(renv, "summary: x\ntasks: ok | fine", "review-verdict", "pass"); err == nil {
 		t.Fatal("an incomplete checklist is refused")
 	}
 	if _, err := runCLI(renv, all("ok"), "review-verdict", "pass"); err != nil {
@@ -352,5 +352,26 @@ func TestReviewChecklistVerdictAndImageGuard(t *testing.T) {
 	}
 	if _, err := runCLI(renv, "rewritten, picture kept "+img, "ticket-edit", "T"); err != nil {
 		t.Fatalf("keeping it is fine: %v", err)
+	}
+}
+
+func TestTicketShowPrintsTheWholeContract(t *testing.T) {
+	st, env, _, _, biz, _ := cliFixture(t)
+	st.CreateItem(biz, "agent", "Add login route", "body")
+	st.CreateItem(biz, "qa", "Wrong password shows an error", "steps")
+	gone, _ := st.CreateItem(biz, "qa", "Old case", "")
+	st.SetSuperseded(gone.ID, true)
+	st.DB.Exec(`INSERT INTO card_branches(card_id,repo,base_branch,feature_branch,dev_branch) VALUES(?,?,?,?,?)`, biz, "/repo/svc", "main", "feature/BRD-1", "feature/BRD-1-dev")
+	out, err := runCLI(reviewEnv(env, biz), "", "ticket-show")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Add login route", "Wrong password shows an error", "/repo/svc"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("ticket-show lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "Old case") {
+		t.Errorf("superseded items must not show:\n%s", out)
 	}
 }

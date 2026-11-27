@@ -92,6 +92,7 @@ export default function DiscussModal({ card, boardId, onTurnDone, onCardChanged,
             <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
           </div>
         </div>
+        {card.title && <p className="chat-ticket-title" title={card.title}>{card.title}</p>}
         <p className="discuss-stage">{stage ? STAGE[stage] : 'Loading…'}</p>
         {view?.branches?.length > 0 && (
           <div className="branch-strip" aria-label="Branches of this ticket">

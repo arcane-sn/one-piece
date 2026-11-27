@@ -33,7 +33,7 @@ Use "pass" only when the code clearly satisfies the expected result; otherwise "
 var agentRun = func(ctx context.Context, cwd string, dirs []string, system, user string, onLog func(string)) (string, error) {
 	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
 		"--setting-sources", "project", "--permission-mode", "acceptEdits",
-		"--allowedTools", "Read,Grep,Glob,Edit,Write", "--system-prompt", system}
+		"--allowedTools", "Read,Grep,Glob,Edit,Write," + strings.Join(mcpAllow, ","), "--system-prompt", system}
 	for _, d := range dirs {
 		args = append(args, "--add-dir", d)
 	}
@@ -203,28 +203,38 @@ func (s *server) runAll(w http.ResponseWriter, r *http.Request) {
 			s.mu.Unlock()
 			cancel()
 		}()
-		for _, it := range todo {
-			if ctx.Err() != nil {
-				return
+		// runList runs items one by one; false = the chain must stop (blocked, stopped, or an Agent Task failed)
+		runList := func(list []store.Item) bool {
+			for _, it := range list {
+				if ctx.Err() != nil {
+					return false
+				}
+				c, b, err := s.runnable(it, false)
+				if err != nil {
+					s.st.AppendItemLog(it.ID, "Blocked: "+err.Error())
+					return false
+				}
+				rctx, it, err := s.claimItem(ctx, it, "Run started (Run All)")
+				if err != nil {
+					s.st.AppendItemLog(it.ID, "Blocked: "+err.Error())
+					return false
+				}
+				// a failed QA verdict is a finding, so the other test cases still run;
+				// anything else that fails is a block and stops the chain
+				if o := s.executeItem(rctx, it, c, b); o == runBlocked || (o == runFailed && it.Kind != "qa") {
+					return false
+				}
 			}
-			c, b, err := s.runnable(it, false)
-			if err != nil {
-				s.st.AppendItemLog(it.ID, "Blocked: "+err.Error())
-				return
-			}
-			rctx, it, err := s.claimItem(ctx, it, "Run started (Run All)")
-			if err != nil {
-				s.st.AppendItemLog(it.ID, "Blocked: "+err.Error())
-				return
-			}
-			// a failed QA verdict is a finding, so the other test cases still run;
-			// anything else that fails is a block and stops the chain
-			if o := s.executeItem(rctx, it, c, b); o == runBlocked || (o == runFailed && it.Kind != "qa") {
-				return
-			}
+			return true
+		}
+		if !runList(todo) {
+			return
 		}
 		if in.Kind == "agent" && ctx.Err() == nil {
-			s.advanceToQA(id)
+			s.continueToQA(ctx, id, runList)
+		}
+		if in.Kind == "qa" && ctx.Err() == nil {
+			s.qaAutopilot(ctx, id, runList)
 		}
 	}()
 	writeJSON(w, http.StatusAccepted, map[string]int{"queued": len(todo)})
@@ -242,6 +252,7 @@ func (s *server) stopAll(w http.ResponseWriter, r *http.Request) {
 		cancel()
 	}
 	s.mu.Unlock()
+	s.resetOrphans(id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -445,8 +456,10 @@ func (s *server) stopItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, it)
 }
 
-// advanceToQA moves a ticket from Agent to QA once every Agent Task of it is Done (Run All finished cleanly).
-func (s *server) advanceToQA(cardID int64) {
+// continueToQA runs inside the Run All chain once the Agent Tasks ran: when every task is Done it runs the QA cases
+// of the contract (the Definition of Done) and lets the autopilot fix and retest. The ticket reaches Done only when
+// every case passed; otherwise it stays in Agent for the owner.
+func (s *server) continueToQA(ctx context.Context, cardID int64, runList func([]store.Item) bool) {
 	c, err := s.st.GetCard(cardID)
 	if err != nil || c.Status != "agent" {
 		return
@@ -455,27 +468,43 @@ func (s *server) advanceToQA(cardID int64) {
 	if err != nil {
 		return
 	}
-	n := 0
+	var todo []store.Item
+	cases := 0
 	for _, it := range items {
-		if it.Kind != "agent" || it.Superseded {
+		switch {
+		case it.Superseded:
+		case it.Kind == "agent" && it.Status != "done":
+			return // a task is still open: failed, blocked or stopped
+		case it.Kind == "qa":
+			cases++
+			if it.Status == "todo" {
+				todo = append(todo, it)
+			}
+		}
+	}
+	if cases == 0 {
+		s.logCard(cardID, "No QA cases: the ticket stays in Agent for you.")
+		return
+	}
+	if len(todo) > 0 && !runList(todo) {
+		return
+	}
+	s.qaAutopilot(ctx, cardID, runList)
+}
+
+// resetOrphans puts back to To Do every "In Progress" item of the card that no run is working on (left behind
+// by a crash, a restart or a stale save), so Stop always ends in a clean state.
+func (s *server) resetOrphans(cardID int64) {
+	items, _ := s.st.ListItems(cardID)
+	for _, it := range items {
+		if it.Status != "doing" {
 			continue
 		}
-		if it.Status != "done" {
-			return
-		}
-		n++
-	}
-	if n == 0 {
-		return
-	}
-	if _, err := s.st.MoveCard(cardID, "qa", 1<<30); err != nil {
-		log.Printf("run all: moving card %d to QA: %v", cardID, err)
-		return
-	}
-	for i := len(items) - 1; i >= 0; i-- { // note it on the last task's log
-		if items[i].Kind == "agent" && !items[i].Superseded {
-			s.st.AppendItemLog(items[i].ID, "All Agent Tasks done: ticket moved to QA")
-			break
+		s.mu.Lock()
+		_, live := s.runs[it.ID]
+		s.mu.Unlock()
+		if !live {
+			s.st.SetItemStatus(it.ID, "todo")
 		}
 	}
 }

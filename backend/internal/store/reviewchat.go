@@ -162,10 +162,12 @@ type Check struct {
 var ReviewCriteria = []struct{ Key, Label string }{
 	{"description", "Clear description, no contradictions"},
 	{"cases", "Every case (A, B, C…) has defined behaviour"},
-	{"dod", "Definition of Done is concrete and testable"},
+	{"tasks", "Every requirement is covered by an Agent Task"},
+	{"qa", "Every QA case traces to a requirement, and every requirement has one"},
 	{"edge", "Error and edge cases are covered"},
 	{"scope", "One focused change, small enough"},
 	{"flows", "Business Flow matches the description"},
+	{"open", "No open questions or TBD anywhere"},
 }
 
 // RecordChecklistVerdict records a verdict backed by the full checklist. Pass needs every criterion ok or na

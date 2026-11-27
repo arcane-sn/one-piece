@@ -92,6 +92,7 @@ func New(st *store.Store, staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/cards/{id}/branches", s.planBranch)
 	mux.HandleFunc("PUT /api/cards/{id}/branches", s.updateBranch)
 	mux.HandleFunc("DELETE /api/cards/{id}/branches", s.deleteBranch)
+	mux.HandleFunc("POST /api/cards/{id}/ship", s.shipCard)
 	mux.HandleFunc("GET /api/cards/{id}/decisions", s.listDecisions)
 	mux.HandleFunc("POST /api/cards/{id}/decisions", s.addDecision)
 	mux.HandleFunc("DELETE /api/cards/{id}/decisions/{did}", s.deleteDecision)

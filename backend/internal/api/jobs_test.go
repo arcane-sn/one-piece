@@ -47,9 +47,6 @@ func TestGenerateSurvivesTheRequestAndRejectsDoubleStart(t *testing.T) {
 	var card store.Card
 	json.Unmarshal(body, &card)
 	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
-	reviewWaiter(t, s, cp, ck)("done")
-	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
-
 	release := make(chan struct{})
 	defer func(f func(context.Context, string, string) (string, error)) { runClaude = f }(runClaude)
 	runClaude = func(context.Context, string, string) (string, error) {
@@ -101,8 +98,6 @@ func TestRegenerateStrikesToDoAndSkipsThemInRuns(t *testing.T) {
 	var card store.Card
 	json.Unmarshal(body, &card)
 	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
-	reviewWaiter(t, s, cp, ck)("done")
-	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
 	old, _ := s.St.CreateItem(card.ID, "agent", "old todo", "")
 	kept, _ := s.St.CreateItem(card.ID, "agent", "already done", "")
 	s.St.SetItemStatus(kept.ID, "done")

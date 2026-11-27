@@ -13,7 +13,7 @@ import (
 
 const itemsReply = `{"split":false,"reason":"","agent_tasks":[{"title":"Add login endpoint","body":"POST /api/login"},{"title":"Build login form","body":"Form"}],"qa_cases":[{"title":"Wrong password is rejected","body":"Expect an error"}]}`
 
-func TestGenerateItemsNeedsApprovalThenFillsLists(t *testing.T) {
+func TestGenerateItemsInBusinessThenLocked(t *testing.T) {
 	useStub(t, passing, nil)
 	s := newTestServer(t)
 	ck := s.login(t)
@@ -32,12 +32,7 @@ func TestGenerateItemsNeedsApprovalThenFillsLists(t *testing.T) {
 		return "```json\n" + itemsReply + "\n```", nil
 	}
 
-	if resp, _ := s.req(t, "POST", cp+"/generate-items", map[string]any{}, ck); resp.StatusCode != 409 {
-		t.Fatalf("generate before approval: %d, want 409", resp.StatusCode)
-	}
-	if resp, _ := s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck); resp.StatusCode != 200 {
-		t.Fatalf("approve: %d", resp.StatusCode)
-	}
+	// the plan is generated in Business, before any approval
 	code, job := s.gen(t, cp+"/generate-items", map[string]any{}, ck)
 	var out struct {
 		Split bool         `json:"split"`
@@ -54,13 +49,7 @@ func TestGenerateItemsNeedsApprovalThenFillsLists(t *testing.T) {
 		t.Fatalf("items = %+v", out.Items)
 	}
 
-	// QA Test Cases are generated only once the ticket is in the QA column, and keep the Agent Tasks
-	if resp, _ := s.req(t, "POST", cp+"/generate-items", map[string]any{"kind": "qa"}, ck); resp.StatusCode != 409 {
-		t.Fatalf("generate qa before the QA column: %d, want 409", resp.StatusCode)
-	}
-	if resp, body := s.req(t, "POST", cp+"/move", map[string]any{"status": "qa", "position": 0}, ck); resp.StatusCode != 200 {
-		t.Fatalf("move to qa: %d %s", resp.StatusCode, body)
-	}
+	// QA Test Cases are generated in Business too, and keep the Agent Tasks
 	code, job = s.gen(t, cp+"/generate-items", map[string]any{"kind": "qa"}, ck)
 	allNow, _ := s.St.ListItems(card.ID)
 	qaCount := 0
@@ -79,13 +68,22 @@ func TestGenerateItemsNeedsApprovalThenFillsLists(t *testing.T) {
 		t.Fatalf("generating QA must keep the Agent Tasks: %+v", all)
 	}
 
+	// approval covers the plan as it is now; regenerating or editing it revokes the approval
+	s.reapprove(t, cp, ck, card.ID)
+	if c, _ := s.St.GetCard(card.ID); !c.Approved {
+		t.Fatal("approve with a plan")
+	}
 	// edit, status, technical flow
 	ip := "/api/items/" + strconv.FormatInt(out.Items[0].ID, 10)
-	resp, body := s.req(t, "PUT", ip, map[string]any{"title": "Add login API", "body": "x", "status": "doing"}, ck)
+	resp, body := s.req(t, "PUT", ip, map[string]any{"title": "Add login API", "body": "x", "status": "done"}, ck)
 	var it store.Item
 	json.Unmarshal(body, &it)
-	if resp.StatusCode != 200 || it.Title != "Add login API" || it.Status != "doing" {
+	if resp.StatusCode != 200 || it.Title != "Add login API" || it.Status != "done" {
 		t.Fatalf("update item: %d %s", resp.StatusCode, body)
+	}
+	// a stale form cannot mark an item In Progress when no run is working on it
+	if _, body = s.req(t, "PUT", ip, map[string]any{"title": "Add login API", "body": "x", "status": "doing"}, ck); !strings.Contains(string(body), `"status":"done"`) {
+		t.Fatalf("stale doing accepted: %s", body)
 	}
 	if resp, body = s.req(t, "POST", ip+"/flows", map[string]any{"title": "Check password", "source": "A -> B"}, ck); resp.StatusCode != 201 {
 		t.Fatalf("tech flow: %d %s", resp.StatusCode, body)
@@ -99,8 +97,8 @@ func TestGenerateItemsNeedsApprovalThenFillsLists(t *testing.T) {
 	if len(fs) != 1 || fs[0].Title != "Check" {
 		t.Fatalf("technical flows = %s", body)
 	}
-	if c, _ := s.St.GetCard(card.ID); !c.Approved {
-		t.Fatal("editing tasks and technical flows must not revoke the ticket approval")
+	if c, _ := s.St.GetCard(card.ID); c.Approved {
+		t.Fatal("editing the text of a task must revoke the ticket approval")
 	}
 	if resp, _ = s.req(t, "DELETE", ip, nil, ck); resp.StatusCode != 204 {
 		t.Fatalf("delete item: %d", resp.StatusCode)
@@ -110,6 +108,17 @@ func TestGenerateItemsNeedsApprovalThenFillsLists(t *testing.T) {
 	json.Unmarshal(body, &items)
 	if len(items) != 2 {
 		t.Fatalf("items after delete = %s", body)
+	}
+
+	// once the ticket is in Agent the plan is locked: no generating either
+	s.reapprove(t, cp, ck, card.ID)
+	if resp, body := s.req(t, "POST", cp+"/move", map[string]any{"status": "agent", "position": 0}, ck); resp.StatusCode != 200 {
+		t.Fatalf("move to agent: %d %s", resp.StatusCode, body)
+	}
+	for _, kind := range []string{"agent", "qa"} {
+		if resp, _ := s.req(t, "POST", cp+"/generate-items", map[string]any{"kind": kind}, ck); resp.StatusCode != 409 {
+			t.Errorf("generate %s in Agent: %d, want 409", kind, resp.StatusCode)
+		}
 	}
 }
 
@@ -123,7 +132,6 @@ func TestGenerateItemsSplitAndFailure(t *testing.T) {
 	json.Unmarshal(body, &card)
 	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
 	reviewWaiter(t, s, cp, ck)("done")
-	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
 	s.St.CreateItem(card.ID, "agent", "existing", "")
 
 	defer func(f func(context.Context, string, string) (string, error)) { runClaude = f }(runClaude)
@@ -158,7 +166,6 @@ func TestGeneratedItemsRememberTicketVersion(t *testing.T) {
 	json.Unmarshal(body, &card)
 	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
 	reviewWaiter(t, s, cp, ck)("done")
-	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
 	defer func(f func(context.Context, string, string) (string, error)) { runClaude = f }(runClaude)
 	runClaude = func(context.Context, string, string) (string, error) { return itemsReply, nil }
 	s.gen(t, cp+"/generate-items", map[string]any{}, ck)
@@ -192,7 +199,6 @@ func TestGenerateTasksAlsoDrawsTechnicalFlows(t *testing.T) {
 		}
 		return `{"title":"Log activity","source":"title: Log activity\nautonumber\nHook -> Api: POST /logs"}`, nil
 	}
-	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
 	if code, job := s.gen(t, cp+"/generate-items", map[string]any{}, ck); code != 202 || job.Status != "done" {
 		t.Fatalf("generate: %d %+v", code, job)
 	}
@@ -224,8 +230,6 @@ func TestGenerateQAReadsTheCodeAndAsksForPrerequisites(t *testing.T) {
 	json.Unmarshal(body, &card)
 	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
 	reviewWaiter(t, s, cp, ck)("done")
-	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
-	s.St.DB.Exec(`UPDATE cards SET status='qa' WHERE id=?`, card.ID)
 	defer func(f func(context.Context, string, string, []string, func(string)) (string, error)) {
 		streamClaude = f
 	}(streamClaude)
@@ -240,6 +244,11 @@ func TestGenerateQAReadsTheCodeAndAsksForPrerequisites(t *testing.T) {
 	}
 	if !strings.Contains(gotSystem, "## Prerequisites") || !strings.Contains(gotSystem, "Read, Grep, Glob") {
 		t.Errorf("the prompt must ask for Prerequisites and allow reading code:\n%s", gotSystem)
+	}
+	for _, want := range []string{"BEFORE the Agent Tasks run", "can observe", "never invent", "requirement"} {
+		if !strings.Contains(gotSystem, want) {
+			t.Errorf("the QA prompt must say %q:\n%s", want, gotSystem)
+		}
 	}
 	if len(gotDirs) == 0 {
 		t.Error("Claude must be given the board folders to read")

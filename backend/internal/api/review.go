@@ -25,7 +25,7 @@ var streamClaude = func(ctx context.Context, system, user string, dirs []string,
 	}
 	defer os.RemoveAll(tmp)
 	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
-		"--setting-sources", "project", "--allowedTools", "Read,Grep,Glob", "--system-prompt", system}
+		"--setting-sources", "project", "--allowedTools", "Read,Grep,Glob," + strings.Join(mcpAllow, ","), "--system-prompt", system}
 	for _, d := range dirs {
 		args = append(args, "--add-dir", d)
 	}

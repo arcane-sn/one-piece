@@ -14,7 +14,7 @@ import RichEditor from './RichEditor'
 import ReviewChatModal from './ReviewChatModal'
 import { ReviewSide, useReview } from './ReviewPanel'
 
-const STATUS_LABEL = { draft: 'Draft', business: 'Business', agent: 'Agent', qa: 'QA', done: 'Done' }
+const STATUS_LABEL = { draft: 'Draft', business: 'Business', agent: 'Agent', done: 'Done' }
 
 // Jira-style ticket modal: create (no `card`) or edit. Title/description on the
 // left, a details panel (status, deadline, approval) on the right.
@@ -194,9 +194,9 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
                 readOnly={reviewing} onChange={(v) => { setDescription(v); setSaved(false) }} />
             </div>
             {!isDraft && <FlowsSection parent={current ? `/api/cards/${current.id}` : null} locked={reviewing} reloadKey={flowTick} emptyHint="No flow yet. Claude asks for at least one before approval." onChanged={flowsChanged} onModal={setFlowOpen} />}
-            {!isDraft && current && <BranchingSection cardId={current.id} reloadKey={branchTick} onModal={setFlowOpen} />}
+            {!isDraft && current && <BranchingSection cardId={current.id} reloadKey={branchTick} onModal={setFlowOpen} ticketDone={current.status === 'done'} planOpen={current.status === 'business'} onChanged={reloadCard} />}
             {current && <DecisionLog cardId={current.id} reloadKey={branchTick} />}
-            {!isDraft && <ItemsSection card={current} onModal={setFlowOpen} />}
+            {!isDraft && <ItemsSection card={current} onModal={setFlowOpen} onChanged={reloadCard} />}
           </div>
 
           <aside className="ticket-side">

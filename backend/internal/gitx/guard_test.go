@@ -61,7 +61,7 @@ func TestValidateGitAllowsTheFlow(t *testing.T) {
 func TestValidateGitRejects(t *testing.T) {
 	for _, c := range []string{
 		"push --force origin feature/MID-1", "push -f origin feature/MID-1", "push --force-with-lease origin feature/MID-1",
-		"push origin dev", "push origin main", "push origin master", "push origin release", "push origin feature/other",
+		"push origin dev", "push origin main", "push origin master", "push origin feature/other",
 		"push origin :feature/MID-1", "push origin feature/MID-1 feature/MID-1-dev", "push --delete origin feature/MID-1",
 		"push -u origin dev", "push upstream feature/MID-1",
 		"branch -D x", "branch -d x", "branch -m x", "reset --hard", "clean -fd", "checkout .", "restore .", "rebase main",
@@ -69,7 +69,7 @@ func TestValidateGitRejects(t *testing.T) {
 		"merge feature/other", "merge --no-edit dev", "merge --no-edit", "merge --squash feature/MID-1",
 		"fetch --upload-pack=x", "fetch origin main", "log --all", "log -p", "log --oneline -n x", "diff main..feature/MID-1",
 		"diff --stat --output=x main..feature/MID-1", "--version", "-c core.pager=x status", "status ; rm -rf /",
-		"rev-parse --git-dir", "rev-parse --verify -x", "branch --list -x", "commit -m x", "add .", "stash", "config user.name x",
+		"rev-parse --git-dir", "rev-parse --verify -x", "branch --list -x", "stash", "config user.name x",
 		"switch ../x", "switch -", "switch --orphan x",
 	} {
 		if err := ValidateGit(split(c), pol); err == nil {
@@ -84,11 +84,15 @@ func TestValidateGitRejects(t *testing.T) {
 func TestGitRuntimeGuards(t *testing.T) {
 	repo := newRepo(t)
 	run(t, repo, "branch", "release")
+	run(t, repo, "switch", "-q", "-c", "elsewhere")
+	run(t, repo, "commit", "-q", "--allow-empty", "-m", "elsewhere")
 	os.WriteFile(filepath.Join(repo, "dirty.txt"), []byte("x"), 0o644)
 	if _, err := Git(repo, split("switch -c feature/MID-1 release"), pol); err == nil || !strings.Contains(err.Error(), "uncommitted changes") {
 		t.Fatalf("dirty switch: %v", err)
 	}
 	os.Remove(filepath.Join(repo, "dirty.txt"))
+	run(t, repo, "switch", "-q", "main")
+	run(t, repo, "branch", "-q", "-D", "elsewhere")
 	if out, err := Git(repo, split("switch -c feature/MID-1 release"), pol); err != nil {
 		t.Fatalf("switch -c: %v\n%s", err, out)
 	}

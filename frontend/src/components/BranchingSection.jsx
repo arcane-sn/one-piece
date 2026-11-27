@@ -9,10 +9,11 @@ const MODES = [['merge', 'Merge'], ['cherry-pick', 'Cherry-pick']]
 const label = (s) => STATUS.find((x) => x[0] === s)?.[1] ?? s
 
 // Per-repo branching of one ticket: base branch, feature branch, -dev branch, status and PR link.
-export default function BranchingSection({ cardId, reloadKey = 0, onModal }) {
+export default function BranchingSection({ cardId, reloadKey = 0, onModal, ticketDone = false, planOpen = true, onChanged }) {
   const [rows, setRows] = useState([])
   const [editing, setEditing] = useState(null) // null | 'new' | row
   const [stashes, setStashes] = useState([])
+  const [shipping, setShipping] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -22,15 +23,31 @@ export default function BranchingSection({ cardId, reloadKey = 0, onModal }) {
   }, [cardId])
   useEffect(() => { load() }, [load, reloadKey])
 
+  async function ship() {
+    const names = rows.filter((r) => r.status !== 'pr_open').map((r) => baseName(r.repo)).join(', ')
+    if (!names) return toast('Every repo already has a PR', 'ok')
+    if (!(await confirmDialog(`Push the branches of ${names} and open the pull requests?`, { okLabel: 'Push & open PR' }))) return
+    setShipping(true)
+    try {
+      const res = await api(`/api/cards/${cardId}/ship`, { method: 'POST' })
+      for (const r of res) toast(`${baseName(r.repo)}: ${r.note}`, r.status === 'failed' ? undefined : 'ok')
+    } catch (err) { toast(err.message) }
+    setShipping(false)
+    load()
+  }
+
   const open = (v) => { setEditing(v); onModal?.(!!v) }
-  const done = () => { open(null); load() }
+  const done = () => { open(null); load(); onChanged?.() }
 
   return (
     <div className="field">
       <div className="field-row">
         <span>Branching</span>
         <span className="items-actions">
-          <button type="button" className="ai-btn" onClick={() => open('new')}>+ Add Repo</button>
+          {ticketDone && rows.length > 0 && rows.some((r) => r.status !== 'pr_open') && (
+            <button type="button" className="ai-btn" disabled={shipping} title="Push the branches and open the PRs (the ticket is Done)" onClick={ship}>{shipping ? 'Pushing…' : 'Push & PR'}</button>
+          )}
+          {planOpen && <button type="button" className="ai-btn" onClick={() => open('new')}>+ Add Repo</button>}
         </span>
       </div>
       {rows.length === 0 ? (

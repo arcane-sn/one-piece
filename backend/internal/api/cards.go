@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+
+	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
 
 type cardIn struct {
@@ -76,10 +78,18 @@ func (s *server) moveCard(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if in.Status == "business" && s.cardRunning(id) {
+		writeErr(w, store.ConflictError{Msg: "Stop the run first."})
+		return
+	}
+	prev, _ := s.st.GetCard(id) // an unknown card is reported by MoveCard
 	c, err := s.st.MoveCard(id, in.Status, in.Position)
 	if err != nil {
 		writeErr(w, err)
 		return
+	}
+	if prev.Status == "draft" && c.Status == "business" {
+		go s.autoGenerateContract(id) // the plan is part of what the owner reviews and approves
 	}
 	writeJSON(w, http.StatusOK, c)
 }

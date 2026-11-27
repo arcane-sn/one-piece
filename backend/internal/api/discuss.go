@@ -20,14 +20,16 @@ const discussTurnTimeout = 10 * time.Minute // pushes and PRs can be slow
 const discussMaxTurns = 25
 
 // discussStage maps a ticket column to its Discuss stage: shape (Draft: description and Business Flow),
-// setup (Business: the same plus the branches) and closeout (Done: integrate, push, open PRs). Agent and
-// QA have none: ok is false there.
+// setup (Business: the same plus the branches), agent (Agent: read-only, the contract is locked) and closeout
+// (Done: integrate, push, open PRs).
 func discussStage(status string) (string, bool) {
 	switch status {
 	case "draft":
 		return "shape", true
 	case "business":
 		return "setup", true
+	case "agent":
+		return "agent", true
 	case "done":
 		return "closeout", true
 	}
@@ -41,17 +43,19 @@ const discussFlowPart = `
 You shape the ticket itself with the owner: its description and its Business Flows (swimlane text), until a developer could build from it. The flow is born here.
 - Ask ONE focused question per turn about what only the owner can decide: scope, business rules, the cases (A, B, C), edge cases, what "done" means. Never guess an answer by editing the ticket.
 - Write what is settled yourself: OP ticket-edit "<title>" (the WHOLE new description in Markdown on stdin; start from OP ticket-show) and OP flow-add "<title>" / OP flow-update <id> "<title>" / OP flow-delete <id> (swimlane text on stdin, written with a shell heredoc). They apply at once: keep the owner's intent and facts, never invent product facts. If a flow is refused, read the reason and fix the text.
-- Search code with Grep, Glob and Read, never with OP git (it only runs the git subcommands for registered repos). Never narrate tool mechanics ("one command per call" and the like): your visible text is only what the owner should read.
+- Call OP only as the bare command with its full path written out: OP <subcommand> args, text on stdin via a heredoc (OP ... <<'EOF') or echo "..." | OP .... Never put cat, cd, a variable (OP=...; $OP), $(...), here-strings or loops around it, and run one OP command per Bash call: the permission check rejects anything else and the change is silently not made.
+- Search code with Grep, Glob and Read, never with OP git (it runs the git subcommands for registered repos; an unregistered product folder allows only status, fetch, branch, log and diff, read-only). Never narrate tool mechanics ("one command per call" and the like): your visible text is only what the owner should read.
 - Run OP ticket-show only when the message says the ticket changed, or before you edit something you have not seen. Use Read, Grep and Glob on the product folders to ground the flow in how the product works today, a handful of calls.
 - When the owner settles something that should outlive this chat (a business rule, a case that is out of scope), save it: echo "<one self-contained sentence>" | OP decision.
 ` + swimlaneRules
 
 const discussGitRules = `
 Git rules:
-- You may only run the subcommands of OP that the first message lists. Everything else (raw git, raw gh, any other shell command, editing files) is not permitted, so do not try it. If you need something that is not available, say what and ask the owner to do it.
+- You may only run the subcommands of OP that the first message lists. Everything else (raw git, raw gh, any other shell command, editing files) is not permitted, so do not try it. The one exception is the Proteus MCP tools (mcp__proteus__*, for mock servers): call them directly when a mock is needed. If you need something that is not available, say what and ask the owner to do it.
 - The owner decides every branch name and base branch. Never assume a base branch: ask for it, one repo at a time. The base is the latest release BRANCH, never a tag. The feature (and dev) branch can have ANY valid name the owner wants (for example the Jira key): pass it as OP branch-plan <repo> <base> <feature> [dev]; the board's prefix and the ticket id are only the default when the owner does not care.
 - Each repo goes via its -dev branch (the default) or direct: the owner decides per repo and you record it with OP branch-target <repo> via-dev|direct. A direct repo has no -dev branch: its feature branch is pushed and its PR goes from the feature branch into the repo's base branch.
 - Ask ONE question per turn. Keep replies short. Reply in the language the owner writes in.
+- Committing is allowed when the owner asks for it (work they wrote themselves, or a repo that has no commits yet): OP git <repo> add -A (stages everything except secrets such as .env, keys and certificates; it tells you what it left out), then OP git <repo> commit -m "<ticket id>: <message>" (the message must contain the ticket id) on the feature or -dev branch. A repo with no commits yet: OP git <repo> commit --allow-empty -m "<ticket id>: initial commit" on the base branch, OP git <repo> push -u origin <base> (only works while the remote does not have the base), then branch off with OP git <repo> checkout -b <feature> <base>, add and commit there. OP git <repo> remote -v shows the remote; when there is none, OP git <repo> remote add origin <https or ssh url> adds it. Never commit on a base or shared dev branch otherwise.
 - Never resolve a conflict. On any conflict run OP git <repo> merge --abort (or cherry-pick --abort), report the conflicting files and git's message, record OP branch-status <repo> blocked <reason>, and wait for the owner.
 - Stop and ask before anything unusual: an existing branch, a failed push, a refusal. Never work around a refusal; report it plainly.
 - Before a step that needs a clean tree, check OP git <repo> status. If the tree is dirty, offer OP git <repo> stash push -u -m "<ticket id> <reason>" and wait for a yes. A stash is restored only with OP git <repo> stash pop, on the branch it was made on.
@@ -68,7 +72,7 @@ Branch setup (when the owner asks for it, or once the flow is settled):
 3. Summarize which repos are ready and which are left.`
 
 const discussCloseoutPrompt = `You are a git assistant for one product owner. You finish the branches of ONE ticket across its repositories. You do not write code.` + discussGitRules + `
-Stage: closeout (the ticket is Done; the feature branches hold the finished work). First run OP branches: it shows each repo's status, target (via -dev or direct), integration mode, remote kind and how many feature commits are not yet picked.
+Stage: closeout (the ticket is Done; the feature branches hold the finished work). First run OP items (every Agent Task and QA Case with its status: if any is not done, say so before touching git) and OP branches: it shows each repo's status, target (via -dev or direct), integration mode, remote kind and how many feature commits are not yet picked.
 Phase 1, via -dev repos only: integrate EVERY such repo and push NOTHING. For each one whose status is not yet merged_dev, pushed or pr_open (a repo that went back to branched has new commits and is integrated again):
 1. OP git <repo> fetch --prune origin, then check the tree is clean.
 2. Get the -dev branch: if it does not exist, OP git <repo> checkout -b <dev branch> origin/<PR base>; if it exists, OP git <repo> checkout <dev branch> and OP git <repo> merge --no-edit origin/<PR base> to refresh it.
@@ -78,27 +82,28 @@ Phase 2: only when every via -dev repo is merged_dev (or further). For each via 
 Direct repos skip phase 1 (there is no -dev branch). For each direct repo, once it is clean and not blocked: OP git <repo> push -u origin <feature branch>; then, if OP remote-kind <repo> says github and there is no PR yet: OP gh <repo> pr create --base <base branch> --head <feature branch> --title "<ticket id>: <title>" --body "<short summary>", then OP branch-pr <repo> <pr url>; otherwise OP branch-status <repo> pushed and report the pushed branch.
 A via -dev PR goes from the -dev branch into the shared dev branch; never push or merge into the shared dev branch directly. Report each repo's result at the end.`
 
+// discussAgentPrompt: the ticket is approved and agents are working; the contract is locked, so this stage only
+// answers questions and helps with git. Changing the plan means moving the ticket back to Business.
+const discussAgentPrompt = `You help the product owner follow ONE ticket while the agents work on it. The ticket is approved and its contract (description, Agent Tasks, QA cases, branch plan) is locked. You do not write product code and you never change the contract: do not use ticket-edit, flow-add, flow-update, flow-delete or branch-plan. If the owner wants to change the plan, tell them to move the ticket back to Business, where it is reviewed and approved again.
+What you do: explain progress (OP items, OP branches, OP ticket-show), look at the code with Read, Grep and Glob, and help with git on the registered repos when asked (read-only commands first, OP git <repo> status). Keep replies short and reply in the language the owner writes in.` + discussGitRules
+
 func discussSystemPrompt(stage string) string {
 	switch stage {
 	case "closeout":
 		return discussCloseoutPrompt
 	case "shape":
 		return discussShapePrompt
+	case "agent":
+		return discussAgentPrompt
 	}
 	return discussSetupPrompt
 }
 
 // discussCommands lists the OP subcommands a stage may use; the first message names them and --allowedTools enforces them.
 func discussCommands(stage string) []string {
-	flow := []string{"ticket-show", "ticket-edit", "flow-add", "flow-update", "flow-delete", "decision", "decisions"}
-	git := []string{"git", "gh", "branches", "branch-plan", "branch-status", "branch-pr", "branch-mode", "branch-target", "pending-picks", "remote-kind", "decision", "decisions"}
-	switch stage {
-	case "shape":
-		return flow
-	case "closeout":
-		return git
-	}
-	return append(append([]string{}, flow...), "git", "gh", "branches", "branch-plan", "branch-status", "branch-pr", "branch-mode", "branch-target", "pending-picks", "remote-kind")
+	// every stage may use every command: the owner decides what to ask for, the guards decide what runs
+	return []string{"ticket-show", "items", "ticket-edit", "flow-add", "flow-update", "flow-delete", "decision", "decisions",
+		"git", "gh", "branches", "branch-plan", "branch-status", "branch-pr", "branch-mode", "branch-target", "pending-picks", "remote-kind"}
 }
 
 // discussRun is everything one Discuss turn needs.
@@ -141,7 +146,7 @@ func branchLine(r store.Branch) string {
 }
 
 var discussOPHelp = map[string]string{
-	"ticket-show": "ticket-show", "ticket-edit": "ticket-edit <title> (description on stdin)",
+	"ticket-show": "ticket-show", "items": "items (Agent Tasks and QA Cases with status, read-only)", "ticket-edit": "ticket-edit <title> (description on stdin)",
 	"flow-add": "flow-add <title> (swimlane text on stdin)", "flow-update": "flow-update <id> <title> (stdin)", "flow-delete": "flow-delete <id>",
 	"decision": "decision (text on stdin)", "decisions": "decisions",
 	"git": "git <repo> <git args>", "gh": "gh <repo> <gh args>", "branches": "branches", "branch-plan": "branch-plan <repo> <base> [feature [dev]]",
@@ -155,6 +160,13 @@ func discussPrompt(b store.Board, c store.Card, branches []store.Branch, decisio
 	var m strings.Builder
 	fmt.Fprintf(&m, "Ticket: %s — %s\nStage: %s\n", c.Ident, c.Title, stage)
 	git := stage != "shape"
+	if !fresh { // a resumed session may remember an older, shorter command list
+		var cmds []string
+		for _, n := range discussCommands(stage) {
+			cmds = append(cmds, discussOPHelp[n])
+		}
+		fmt.Fprintf(&m, "OP = %s\nOP subcommands now: %s\n", exe, strings.Join(cmds, " | "))
+	}
 	if fresh {
 		fmt.Fprintf(&m, "Board: %s\n", b.Name)
 		if b.Description != "" {
@@ -215,7 +227,7 @@ func discussPrompt(b store.Board, c store.Card, branches []store.Branch, decisio
 		m.WriteString("\nThe owner referenced these paths with @ (open them before you answer, a handful of calls at most):\n" + mentionContext(paths))
 	}
 	m.WriteString("\n" + text)
-	return m.String()
+	return m.String() + opCallReminder
 }
 
 // decisionBlock is the ticket's decision log formatted for a first message ("" when empty).
@@ -373,7 +385,7 @@ func (s *server) postDiscussMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	stage, ok := discussStage(c.Status)
 	if !ok {
-		writeErr(w, store.ConflictError{Msg: "Discuss is available while the ticket is in Draft or Business (and Close out in Done)."})
+		writeErr(w, store.ConflictError{Msg: "Discuss is not available for this ticket."})
 		return
 	}
 	if s.ticketBusyWithRun(c.ID) {

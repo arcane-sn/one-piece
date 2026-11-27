@@ -212,3 +212,33 @@ func TestConfigValidate(t *testing.T) {
 		}
 	}
 }
+
+func TestNoLoginCase(t *testing.T) {
+	for _, b := range []string{"## Prerequisites\n- Login: no login\n- Data: x", "- **Login:** no login", "* login: None", "Login: tidak perlu login"} {
+		if !NoLoginCase(b) {
+			t.Errorf("%q should be no-login", b)
+		}
+	}
+	for _, b := range []string{"- Login: admin", "- Login: a user without a PIN", "Steps: no login page is shown", ""} {
+		if NoLoginCase(b) {
+			t.Errorf("%q needs login", b)
+		}
+	}
+	p := Paths{Data: "/d"}
+	if strings.Contains(p.PlaywrightConfig(1, "X-1", "/a", "p:1", Config{BaseURL: "http://x", NoLogin: true}), "storageState") {
+		t.Error("no-login config must not load a saved login")
+	}
+	if !strings.Contains(p.PlaywrightConfig(1, "X-1", "/a", "p:1", Config{BaseURL: "http://x"}), "storageState") {
+		t.Error("normal config loads the saved login")
+	}
+}
+
+func TestLintAllowsBannedWordInUrlPath(t *testing.T) {
+	ok := "import { test, expect, qaStep } from './helpers'\ntest('x', async ({ page }) => { await qaStep(page, 's', async () => { await page.goto('/v1/cimb/binding/process/ok-123'); expect(1).toBe(1) }) })"
+	if bad := LintSpec(ok); len(bad) > 0 {
+		t.Fatalf("url path rejected: %v", bad)
+	}
+	if bad := LintSpec(strings.Replace(ok, "expect(1)", "process.env; expect(1)", 1)); len(bad) == 0 {
+		t.Fatal("process.env must still be rejected")
+	}
+}

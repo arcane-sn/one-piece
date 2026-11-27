@@ -88,11 +88,20 @@ func (s *server) restoreItem(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	old, err := s.st.GetItem(id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if !s.editContract(w, old.CardID) {
+		return
+	}
 	it, err := s.st.SetSuperseded(id, false)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
+	s.contractChanged(old.CardID)
 	s.st.AppendItemLog(id, "Restored by you")
 	it, _ = s.st.GetItem(it.ID)
 	writeJSON(w, http.StatusOK, it)

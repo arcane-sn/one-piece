@@ -156,6 +156,10 @@ func loginDiffers(c Config) bool {
 // Claude cannot change any of it.
 func (p Paths) PlaywrightConfig(boardID int64, ident, attemptDir, proxyAddr string, cfg Config) string {
 	q := func(s string) string { b, _ := json.Marshal(s); return string(b) }
+	storage := "    storageState: " + q(p.Auth(boardID)) + ",\n"
+	if cfg.NoLogin {
+		storage = ""
+	}
 	return fmt.Sprintf(`import { defineConfig } from '@playwright/test'
 export default defineConfig({
   testDir: %s,
@@ -167,8 +171,7 @@ export default defineConfig({
   reporter: [['json', { outputFile: %s }]],
   use: {
     baseURL: %s,
-    storageState: %s,
-    proxy: { server: %s },
+%s    proxy: { server: %s },
     trace: 'on',
     video: 'on',
     serviceWorkers: 'block',
@@ -177,7 +180,7 @@ export default defineConfig({
   },
 })
 `, q(p.Specs(boardID)), q(ident+".spec.ts"), q(filepath.Join(attemptDir, "pw-output")), q(filepath.Join(attemptDir, "result.json")),
-		q(cfg.BaseURL), q(p.Auth(boardID)), q("http://"+proxyAddr), !cfg.Headed)
+		q(cfg.BaseURL), storage, q("http://"+proxyAddr), !cfg.Headed)
 }
 
 // SandboxProfile denies every file write except the attempt's folder and the temp folders, and denies all

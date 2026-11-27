@@ -52,9 +52,6 @@ func TestPromptsCarryIdentifiers(t *testing.T) {
 	var card store.Card
 	json.Unmarshal(body, &card)
 	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
-	reviewWaiter(t, s, cp, ck)("done")
-	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
-
 	var itemsUser string
 	defer func(f func(context.Context, string, string) (string, error)) { runClaude = f }(runClaude)
 	runClaude = func(_ context.Context, _, user string) (string, error) {
@@ -75,6 +72,7 @@ func TestPromptsCarryIdentifiers(t *testing.T) {
 	_, body = s.req(t, "POST", cp+"/items", map[string]any{"kind": "qa", "title": "Q", "body": "steps"}, ck)
 	var qa store.Item
 	json.Unmarshal(body, &qa)
+	s.reapprove(t, cp, ck, card.ID) // adding the case revoked the approval
 
 	var runUser string
 	defer func(f func(context.Context, string, []string, string, string, func(string)) (string, error)) {

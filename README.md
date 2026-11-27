@@ -39,6 +39,17 @@ Login, dashboard, kanban, review tiket oleh Claude (live log + approval gate), B
 - **Decision log**: yang kamu sepakati dengan Claude di Discuss disimpan Claude (`decision`) sebagai catatan bertanggal di tiket (bisa kamu tambah/hapus), dan dikirim di pesan pertama Discuss baru, Run, dan QA untuk tiket itu. Perubahan setelah integrasi (commit Run baru di repo yang sudah `merged_dev`/`pushed`/`pr_open`) mengembalikan repo ke `branched`, sehingga harus diintegrasikan lagi sebelum push.
 - **Run sadar-git**: bila tiket punya repo berstatus `branched`, Run menolak (409) jika repo tidak sedang di branch feature-nya, Claude hanya boleh menulis di repo terdaftar, dan tiap tugas Agent yang berhasil di-commit sendiri sebagai `{ident tugas}: {judul}`. Commit gagal (mis. hook) membuat tugas kembali ke To Do dan Run All berhenti. Perubahan yang belum di-commit di repo itu sebelum Run ikut masuk commit tugas pertama, jadi bersihkan dulu.
 
+## Alur tiket: kontrak dulu, baru agent kerja
+
+Kolom: **Draft → Business → Agent → Done** (tidak ada kolom QA).
+
+- **Business** = tempat kontrak disusun. Tiket berisi deskripsi singkat (fitur apa + requirement), **Agent Tasks**, **QA Test Cases** (Definition of Done) dan rencana branching. Saat tiket pindah dari Draft ke Business, Claude men-generate Agent Tasks lalu QA cases (bisa di-generate ulang dengan tombol Generate). QA cases ditulis level requirement: perilaku yang bisa dilihat user; langkah detail ditentukan saat QA dijalankan.
+- **Review Claude** memeriksa seluruh kontrak (8 kriteria): deskripsi, kasus, tugas, QA, edge case, scope, flow, dan tidak ada pertanyaan terbuka. **Approved** butuh review lolos untuk versi kontrak sekarang, minimal 1 Agent Task dan 1 QA case. Mengubah apa pun di kontrak (item, branch plan, deskripsi, flow) menaikkan versi dan mencabut approval.
+- **Agent**: hanya tiket Approved yang bisa masuk. Kontrak terkunci (item dan branch plan tidak bisa diubah). **Run All** menjalankan semua task, lalu QA otomatis; QA yang gagal membuat task `[FIX]` (maks. 3 ronde). Semua QA lolos = tiket pindah ke **Done**. Discuss di Agent hanya membantu (baca-saja). Kalau kontrak perlu berubah: pindahkan tiket kembali ke Business (approval dicabut, review ulang, approve lagi). Tidak bisa saat run sedang jalan.
+- **Done** hanya dicapai dari Agent. Push & PR dari Done seperti biasa.
+
+Desain: `docs/superpowers/specs/2026-11-27-contract-first-flow-design.md`.
+
 ## Browser QA dengan bukti screenshot
 
 QA Test Case di board yang punya **QA stack** dijalankan di browser sungguhan; board tanpa stack tetap QA read-only seperti biasa.

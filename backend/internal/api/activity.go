@@ -74,7 +74,7 @@ func (s *server) activity(w http.ResponseWriter, r *http.Request) {
 	jobs, _ := s.st.ActiveJobs()
 	jobSeen := map[string]bool{}
 	for _, j := range jobs {
-		if j.Status != "running" {
+		if j.Status != "running" || j.Kind == "review_chat" { // review_chat is the chat's own marker; s.rchats already lists it as "review"
 			continue
 		}
 		if j.CardID != 0 {

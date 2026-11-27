@@ -61,7 +61,7 @@ func gitRunFixture(t *testing.T) *gitRun {
 	json.Unmarshal(body, &card)
 	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
 	reviewWaiter(t, s, cp, ck)("done")
-	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
+	s.approveContract(t, cp, ck, card.ID)
 	br, err := s.St.PlanBranch(card.ID, repo, "main")
 	if err != nil {
 		t.Fatal(err)
@@ -74,9 +74,10 @@ func gitRunFixture(t *testing.T) *gitRun {
 
 func (g *gitRun) addTask(t *testing.T, title string) (store.Item, string) {
 	t.Helper()
-	_, body := g.s.req(t, "POST", g.cp+"/items", map[string]any{"kind": "agent", "title": title}, g.ck)
-	var it store.Item
-	json.Unmarshal(body, &it)
+	it, err := g.s.St.CreateItem(g.card.ID, "agent", title, "") // via the store: adding through the API would revoke the approval
+	if err != nil {
+		t.Fatal(err)
+	}
 	return it, "/api/items/" + strconv.FormatInt(it.ID, 10)
 }
 
@@ -190,10 +191,8 @@ func TestRunScopeUsesRegisteredRepos(t *testing.T) {
 	json.Unmarshal(body, &plain)
 	pcp := "/api/cards/" + strconv.FormatInt(plain.ID, 10)
 	reviewWaiter(t, g.s, pcp, g.ck)("done")
-	g.s.req(t, "POST", pcp+"/approve", map[string]bool{"approved": true}, g.ck)
-	_, body = g.s.req(t, "POST", pcp+"/items", map[string]any{"kind": "agent", "title": "Old way"}, g.ck)
-	var pit store.Item
-	json.Unmarshal(body, &pit)
+	pit, _ := g.s.St.CreateItem(plain.ID, "agent", "Old way", "")
+	g.s.approveContract(t, pcp, g.ck, plain.ID)
 	pip := "/api/items/" + strconv.FormatInt(pit.ID, 10)
 	cwd, dirs = "", nil
 	g.s.req(t, "POST", pip+"/run", map[string]any{}, g.ck)
@@ -227,7 +226,7 @@ func TestCommitFailureBlocksTask(t *testing.T) {
 	var all []store.Item
 	json.Unmarshal(body, &all)
 	for _, x := range all {
-		if "/api/items/"+strconv.FormatInt(x.ID, 10) == ip2 && (x.Status != "todo" || len(x.Log) != 1) {
+		if "/api/items/"+strconv.FormatInt(x.ID, 10) == ip2 && (x.Status != "todo" || len(x.Log) != 0) {
 			t.Errorf("the chain must stop: second task = %+v", x)
 		}
 	}
@@ -355,28 +354,80 @@ func TestRunRecordsWhatTheTaskChanged(t *testing.T) {
 	}
 }
 
-func TestRunAllMovesTicketToQAWhenEverythingIsDone(t *testing.T) {
+// qaChain: a ticket in Agent with two tasks and the given QA verdict; Run All runs the tasks, then the QA cases.
+func qaChain(t *testing.T, verdict string, withCase bool) *gitRun {
+	t.Helper()
 	g := gitRunFixture(t)
 	useAgent(t, func(_ context.Context, cwd string, _ []string, _, user string, _ func(string)) (string, error) {
 		writeInCwd(user, cwd)
 		return "ok", nil
 	})
+	oldStream := streamClaude // the chain outlives this function, so restore on cleanup, not on return
+	t.Cleanup(func() { streamClaude = oldStream })
+	streamClaude = func(context.Context, string, string, []string, func(string)) (string, error) { return verdict, nil }
+	items, _ := g.s.St.ListItems(g.card.ID)
+	for _, it := range items { // the fixture's placeholders: the real plan is added below
+		if it.Kind == "qa" {
+			g.s.St.DeleteItem(it.ID)
+		}
+	}
 	g.addTask(t, "one")
 	g.addTask(t, "two")
+	if withCase {
+		g.s.St.CreateItem(g.card.ID, "qa", "Sign in", "steps")
+	}
 	if _, err := g.s.St.MoveCard(g.card.ID, "agent", 0); err != nil {
 		t.Fatal(err)
 	}
 	if resp, body := g.s.req(t, "POST", g.cp+"/run-all", map[string]any{}, g.ck); resp.StatusCode != 202 {
 		t.Fatalf("run-all: %d %s", resp.StatusCode, body)
 	}
-	for i := 0; i < 150; i++ {
-		if c, _ := g.s.St.GetCard(g.card.ID); c.Status == "qa" {
+	return g
+}
+
+func waitStatus(t *testing.T, g *gitRun, want string) {
+	t.Helper()
+	for i := 0; i < 200; i++ {
+		if c, _ := g.s.St.GetCard(g.card.ID); c.Status == want {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 	c, _ := g.s.St.GetCard(g.card.ID)
-	t.Fatalf("card status = %q, want qa", c.Status)
+	t.Fatalf("card status = %q, want %s", c.Status, want)
+}
+
+func TestRunAllRunsQAAfterTheTasksAndClosesToDone(t *testing.T) {
+	g := qaChain(t, `{"result":"pass","issue":"","desc":"ok"}`, true)
+	waitStatus(t, g, "done")
+	if c, _ := g.s.St.GetCard(g.card.ID); !c.Approved {
+		t.Error("closing must keep the approval")
+	}
+}
+
+func TestRunAllStaysInAgentWithoutQACases(t *testing.T) {
+	g := qaChain(t, `{"result":"pass","issue":"","desc":"ok"}`, false)
+	time.Sleep(600 * time.Millisecond)
+	if c, _ := g.s.St.GetCard(g.card.ID); c.Status != "agent" {
+		t.Fatalf("card status = %q: with no QA cases the ticket must wait in Agent", c.Status)
+	}
+}
+
+func TestRunAllFailingQAAddsFixTasksAndStaysInAgent(t *testing.T) {
+	g := qaChain(t, `{"result":"fail","issue":"nav still visible","desc":"x"}`, true)
+	time.Sleep(900 * time.Millisecond)
+	g.s.req(t, "POST", g.cp+"/stop-all", map[string]any{}, g.ck)
+	fixes := 0
+	items, _ := g.s.St.ListItems(g.card.ID)
+	for _, it := range items {
+		if it.FixFor != 0 {
+			fixes++
+		}
+	}
+	c, _ := g.s.St.GetCard(g.card.ID)
+	if fixes == 0 || c.Status != "agent" || !c.Approved {
+		t.Fatalf("fixes=%d status=%q approved=%v", fixes, c.Status, c.Approved)
+	}
 }
 
 func TestRunAllKeepsTicketInAgentWhenATaskFails(t *testing.T) {

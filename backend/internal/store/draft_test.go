@@ -19,7 +19,7 @@ func TestListCardsOrdersDraftFirst(t *testing.T) {
 func TestMoveFromDraftOnlyToBusiness(t *testing.T) {
 	s, _, cs := threeCards(t)
 	s.MoveCard(cs[0].ID, "draft", 0)
-	for _, to := range []string{"agent", "qa", "done"} {
+	for _, to := range []string{"agent", "done"} {
 		if _, err := s.MoveCard(cs[0].ID, to, 0); !isConflict(err) {
 			t.Errorf("draft -> %s: want ConflictError, got %v", to, err)
 		}
@@ -31,6 +31,7 @@ func TestMoveFromDraftOnlyToBusiness(t *testing.T) {
 
 func TestMoveToDraftOnlyFromBusiness(t *testing.T) {
 	s, _, cs := threeCards(t)
+	approveRaw(t, s, cs[0].ID)
 	s.MoveCard(cs[0].ID, "agent", 0)
 	if _, err := s.MoveCard(cs[0].ID, "draft", 0); !isConflict(err) {
 		t.Fatalf("agent -> draft: want ConflictError, got %v", err)
