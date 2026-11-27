@@ -19,7 +19,7 @@ const STATUS_LABEL = { draft: 'Draft', business: 'Business', agent: 'Agent', don
 
 // Jira-style ticket modal: create (no `card`) or edit. Title/description on the
 // left, a details panel (status, deadline, approval) on the right.
-export default function TicketModal({ boardId, board, card, onChanged, onDeleted, onClose }) {
+export default function TicketModal({ boardId, board, card, asDraft = false, onChanged, onDeleted, onClose }) {
   const [current, setCurrent] = useState(card) // last saved card; set after the first create
   const [title, setTitle] = useState(card?.title ?? '')
   const [description, setDescription] = useState(card?.description ?? '')
@@ -68,7 +68,7 @@ export default function TicketModal({ boardId, board, card, onChanged, onDeleted
     try {
       const next = current
         ? await api(`/api/cards/${current.id}`, { method: 'PUT', body })
-        : await api(`/api/boards/${boardId}/cards`, { method: 'POST', body })
+        : await api(`/api/boards/${boardId}/${asDraft ? 'drafts' : 'cards'}`, { method: 'POST', body })
       setCurrent(next)
       setSaved(true)
       onChanged(next)
@@ -154,7 +154,7 @@ export default function TicketModal({ boardId, board, card, onChanged, onDeleted
     wasReviewing.current = !!reviewing
   }, [reviewing, reviewOpen, reloadCard])
 
-  const isDraft = current?.status === 'draft' // drafts have no review, flows, or approval
+  const isDraft = (current?.status ?? (asDraft ? 'draft' : 'business')) === 'draft' // drafts have no review, flows, or approval
 
   const edit = (setter) => (e) => {
     setter(e.target.value)
@@ -204,7 +204,7 @@ export default function TicketModal({ boardId, board, card, onChanged, onDeleted
           <aside className="ticket-side">
             <div className="field">
               <span>Status</span>
-              <span className="status-pill">{STATUS_LABEL[current?.status ?? 'business']}</span>
+              <span className="status-pill">{STATUS_LABEL[current?.status ?? (asDraft ? 'draft' : 'business')]}</span>
             </div>
             <div className="field">
               <span>Deadline</span>

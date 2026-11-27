@@ -144,7 +144,7 @@ export default function Board({ reloadBoards }) {
             cards={cards.filter((c) => c.status === status).sort((a, b) => a.position - b.position)}
             onMove={moveCard}
             onOpen={setTicket}
-            footer={status === 'business' ? <button className="add-card" onClick={() => setTicket('new')}>+ Add Card</button> : null}
+            footer={status === 'business' || status === 'draft' ? <button className="add-card" onClick={() => setTicket(status === 'draft' ? 'new-draft' : 'new')}>+ Add Card</button> : null}
           />
         ))}
       </div>
@@ -158,10 +158,11 @@ export default function Board({ reloadBoards }) {
       )}
       {ticket && (
         <TicketModal
-          key={ticket === 'new' ? 'new' : ticket.id}
+          key={typeof ticket === 'string' ? ticket : ticket.id}
           boardId={id}
           board={board}
-          card={ticket === 'new' ? undefined : ticket}
+          card={typeof ticket === 'string' ? undefined : ticket}
+          asDraft={ticket === 'new-draft'}
           onChanged={upsert}
           onDeleted={removed}
           onClose={() => setTicket(null)}
