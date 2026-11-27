@@ -39,6 +39,19 @@ func touchCard(tx *sql.Tx, cardID int64) error {
 	return nil
 }
 
+// TouchCard is touchCard for callers outside a transaction: the contract (tasks, QA cases, branch plan) changed.
+func (s *Store) TouchCard(cardID int64) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := touchCard(tx, cardID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *Store) ListFlows(cardID int64) ([]Flow, error) {
 	rows, err := s.DB.Query(`SELECT id,card_id,title,source,position,item_id FROM card_flows WHERE card_id=? AND item_id=0 ORDER BY position,id`, cardID)
 	if err != nil {

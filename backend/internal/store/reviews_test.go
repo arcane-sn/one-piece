@@ -99,6 +99,8 @@ func TestApprovalGate(t *testing.T) {
 	}
 	r2, _ := s.StartReview(c.ID, 1)
 	s.FinishReview(r2.ID, "pass", "good", nil)
+	s.CreateItem(c.ID, "agent", "Task", "")
+	s.CreateItem(c.ID, "qa", "Case", "")
 	got, err := s.SetApproved(c.ID, true)
 	if err != nil || !got.Approved {
 		t.Fatalf("pass: %+v, %v", got, err)
@@ -115,6 +117,56 @@ func TestApprovalGate(t *testing.T) {
 		t.Fatalf("unapprove always allowed: %+v, %v", got, err)
 	}
 	if _, err := s.SetApproved(9999, true); err != ErrNotFound {
+		t.Fatalf("unknown card: %v", err)
+	}
+}
+
+func passReview(t *testing.T, s *Store, c Card) {
+	t.Helper()
+	cur, _ := s.GetCard(c.ID)
+	r, _ := s.StartReview(c.ID, cur.ContentVersion)
+	s.FinishReview(r.ID, "pass", "good", nil)
+}
+
+func TestApproveNeedsTasksAndCases(t *testing.T) {
+	s, c := newCard(t)
+	passReview(t, s, c)
+	if _, err := s.SetApproved(c.ID, true); !isConflict(err) {
+		t.Fatalf("no items: want conflict, got %v", err)
+	}
+	a, _ := s.CreateItem(c.ID, "agent", "Task", "")
+	if _, err := s.SetApproved(c.ID, true); !isConflict(err) {
+		t.Fatalf("only a task: want conflict, got %v", err)
+	}
+	q, _ := s.CreateItem(c.ID, "qa", "Case", "")
+	s.SetSuperseded(q.ID, true)
+	if _, err := s.SetApproved(c.ID, true); !isConflict(err) {
+		t.Fatalf("superseded case only: want conflict, got %v", err)
+	}
+	s.SetSuperseded(q.ID, false)
+	if got, err := s.SetApproved(c.ID, true); err != nil || !got.Approved {
+		t.Fatalf("task + case: %+v, %v", got, err)
+	}
+	_ = a
+}
+
+func TestTouchCardRevokesApproval(t *testing.T) {
+	s, c := newCard(t)
+	s.CreateItem(c.ID, "agent", "Task", "")
+	s.CreateItem(c.ID, "qa", "Case", "")
+	passReview(t, s, c)
+	s.SetApproved(c.ID, true)
+	if err := s.TouchCard(c.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.GetCard(c.ID)
+	if got.Approved || got.ContentVersion != c.ContentVersion+1 {
+		t.Fatalf("after touch: %+v", got)
+	}
+	if _, err := s.SetApproved(c.ID, true); !isConflict(err) {
+		t.Fatalf("old review must be stale: %v", err)
+	}
+	if err := s.TouchCard(9999); err != ErrNotFound {
 		t.Fatalf("unknown card: %v", err)
 	}
 }

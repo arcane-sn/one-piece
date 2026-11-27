@@ -17,6 +17,8 @@ func TestReviseCardKeepsRevisionAndRestores(t *testing.T) {
 	if r, _ := s.GetRevision(rev); r.Title != v1.Title || r.Description != v1.Description || r.Version != v1.ContentVersion {
 		t.Fatalf("revision = %+v", r)
 	}
+	s.CreateItem(c.ID, "agent", "Task", "")
+	s.CreateItem(c.ID, "qa", "Case", "")
 	// a verdict is recorded for the text as it is now; a later edit outdates it
 	vd, err := s.RecordVerdict(c.ID, "pass", "ok", nil)
 	if err != nil || vd.ContentVersion != next.ContentVersion {

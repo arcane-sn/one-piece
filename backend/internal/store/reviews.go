@@ -103,6 +103,13 @@ func (s *Store) SetApproved(cardID int64, approved bool) (Card, error) {
 		if err != nil {
 			return Card{}, err
 		}
+		var tasks, cases int
+		if err := s.DB.QueryRow(`SELECT COALESCE(SUM(kind='agent'),0), COALESCE(SUM(kind='qa'),0) FROM card_items WHERE card_id=? AND superseded=0`, cardID).Scan(&tasks, &cases); err != nil {
+			return Card{}, err
+		}
+		if tasks == 0 || cases == 0 {
+			return Card{}, ConflictError{"Approval needs at least one Agent Task and one QA Test Case."}
+		}
 	}
 	v := 0
 	if approved {
