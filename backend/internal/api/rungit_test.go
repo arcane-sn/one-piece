@@ -226,7 +226,7 @@ func TestCommitFailureBlocksTask(t *testing.T) {
 	var all []store.Item
 	json.Unmarshal(body, &all)
 	for _, x := range all {
-		if "/api/items/"+strconv.FormatInt(x.ID, 10) == ip2 && (x.Status != "todo" || len(x.Log) != 1) {
+		if "/api/items/"+strconv.FormatInt(x.ID, 10) == ip2 && (x.Status != "todo" || len(x.Log) != 0) {
 			t.Errorf("the chain must stop: second task = %+v", x)
 		}
 	}

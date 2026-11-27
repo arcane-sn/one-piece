@@ -12,7 +12,7 @@ import (
 	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
 
-const itemsSystemPrompt = `You break an approved Business ticket into work for a team of coding agents.
+const itemsSystemPrompt = `You break a Business ticket, the plan the owner is about to approve, into work for a team of coding agents.
 Return ONLY one JSON object, no prose and no code fence:
 {"split":false,"reason":"","agent_tasks":[{"title":"...","body":"Markdown description with the technical approach"}]}
 Rules:
@@ -21,19 +21,19 @@ Rules:
 - If the ticket is too big for that (a whole application, several unrelated changes), return {"split":true,"reason":"what to split it into","agent_tasks":[]}.
 Write in the same language as the ticket.`
 
-const qaSystemPromptGen = `You write QA test cases for a Business ticket whose Agent Tasks are done.
+const qaSystemPromptGen = `You write the QA test cases of a Business ticket. They are its Definition of Done and are written BEFORE the Agent Tasks run, so the code of this ticket does not exist yet.
 Return ONLY one JSON object, no prose and no code fence:
 {"qa_cases":[{"title":"...","body":"Markdown: prerequisites, steps and expected result"}]}
 Rules:
-- 3-8 test cases covering the Definition of Done, the failure paths and the Business Flow.
+- 3-8 test cases. Each one describes behaviour a person can observe, and names the requirement of the ticket it covers (first line of the body: "Requirement: ..."). Every requirement gets at least one case; cover the failure paths and the Business Flow too.
 - Keep each title short (one line, under about 80 characters); put the rest in the body.
-- You may read the product's code (Read, Grep, Glob; a handful of tool calls). Name the real screens, buttons, routes and fields the steps use; never invent any. Say so when something only appears after a change you could not find.
+- You may read the product's code (Read, Grep, Glob; a handful of tool calls) to name the real screens, buttons, routes and fields that exist today. For anything this ticket will add, describe what the person sees in words; never invent selectors, routes or click paths for code that is not written yet.
 - Start every body with a "## Prerequisites" section, one bullet each, or "- none" when nothing special is needed:
   - Login: the kind of account the case needs (for example "admin", "a user without a PIN"); say "no login" for public pages.
   - Services: any other application or API that must be running besides the product itself (name it and what for).
   - Data: records or settings that must exist before the steps (for example "a transaction in pending status").
   Then "## Steps" and "## Expected result".
-- Each test case must be checkable by reading the code, plus what a person would see when using the product.
+- Each case must be checkable later, once the code exists, by reading it and by using the product.
 Write in the same language as the ticket.`
 
 type itemIn struct {
@@ -215,7 +215,7 @@ func (s *server) createItemFlow(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/cards/{id}/generate-items {"kind":"agent"|"qa"} → 202 + the job; its result is {"split","reason","count"}
-// Agent Tasks come from an approved ticket; QA Test Cases only once the ticket is in the QA column.
+// Agent Tasks and QA Test Cases are both part of the contract the owner approves, so they are generated in Business.
 // Runs as a background job. Old To Do items of that kind are struck through (not deleted); a "split" verdict changes nothing.
 func (s *server) generateItems(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
@@ -241,10 +241,8 @@ func (s *server) generateItems(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case in.Kind != "agent" && in.Kind != "qa":
 		err = store.ValidationError{Msg: "kind must be agent or qa"}
-	case !c.Approved:
-		err = store.ConflictError{Msg: "Approve the ticket before generating tasks."}
-	case in.Kind == "qa" && c.Status != "qa" && c.Status != "done":
-		err = store.ConflictError{Msg: "Move the ticket to QA before generating test cases."}
+	case c.Status != "business":
+		err = store.ConflictError{Msg: "Generate the plan while the ticket is in Business."}
 	}
 	if err != nil {
 		writeErr(w, err)
@@ -333,10 +331,14 @@ func (s *server) generateItems(w http.ResponseWriter, r *http.Request) {
 					ins = append(ins, store.Item{Title: t.Title, Body: t.Body, Log: logLine, Version: version})
 				}
 			}
+			if cur, gerr := s.st.GetCard(id); gerr != nil || cur.Status != "business" {
+				return nil, false, fmt.Errorf("The ticket left Business, so nothing was added.") // the contract is locked outside Business
+			}
 			items, err := s.st.SupersedeAndAdd(id, kind, ins)
 			if err != nil {
 				return nil, false, err
 			}
+			s.contractChanged(id)
 			flows := 0
 			if kind == "agent" {
 				flows = s.autoFlows(ctx, c, items)

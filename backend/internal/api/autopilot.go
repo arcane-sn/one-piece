@@ -2,10 +2,7 @@ package api
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"strconv"
-	"strings"
 
 	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
@@ -13,27 +10,6 @@ import (
 // autopilotRounds is how many times a QA run may send failures back through [FIX] tasks before it stops and
 // leaves the ticket in QA for the owner.
 const autopilotRounds = 3
-
-// autoGenerateQA drafts the QA Test Cases of a ticket that just moved to QA (the owner reviews them, then runs
-// them). It does nothing when the ticket already has cases, so a second Run All never replaces the owner's review.
-func (s *server) autoGenerateQA(cardID int64) {
-	items, err := s.st.ListItems(cardID)
-	if err != nil {
-		return
-	}
-	for _, it := range items {
-		if it.Kind == "qa" && !it.Superseded {
-			return
-		}
-	}
-	r := httptest.NewRequest("POST", "/api/cards/"+strconv.FormatInt(cardID, 10)+"/generate-items", strings.NewReader(`{"kind":"qa"}`))
-	r.SetPathValue("id", strconv.FormatInt(cardID, 10))
-	rec := httptest.NewRecorder()
-	s.generateItems(rec, r)
-	if rec.Code != http.StatusAccepted {
-		s.logCard(cardID, "Could not start QA generation: "+strings.TrimSpace(rec.Body.String()))
-	}
-}
 
 // qaAutopilot runs after a QA Run All: while a test case is still not done and [FIX] tasks exist, it runs the
 // fixes, then runs the failed test cases again. When every QA case is done the ticket moves to Done.

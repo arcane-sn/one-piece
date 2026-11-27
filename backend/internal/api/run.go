@@ -489,7 +489,6 @@ func (s *server) advanceToQA(cardID int64) {
 			break
 		}
 	}
-	go s.autoGenerateQA(cardID)
 }
 
 // resetOrphans puts back to To Do every "In Progress" item of the card that no run is working on (left behind
