@@ -1,6 +1,9 @@
 package store
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestReviseCardKeepsRevisionAndRestores(t *testing.T) {
 	s, c := newCard(t)
@@ -73,5 +76,35 @@ func TestReviewMessagesAndSwimlaneCheck(t *testing.T) {
 	}
 	if err := CheckSwimlane("just words"); err == nil {
 		t.Fatal("prose is not a flow")
+	}
+}
+
+func fullChecks(keys ...string) []Check {
+	var cs []Check
+	for _, k := range keys {
+		cs = append(cs, Check{Key: k, Status: "ok"})
+	}
+	return cs
+}
+
+func TestChecklistCoversTheWholeContract(t *testing.T) {
+	s, c := newCard(t)
+	all := []string{"description", "cases", "tasks", "qa", "edge", "scope", "flows", "open"}
+	var got []string
+	for _, k := range ReviewCriteria {
+		got = append(got, k.Key)
+	}
+	if strings.Join(got, ",") != strings.Join(all, ",") {
+		t.Fatalf("criteria = %v", got)
+	}
+	if _, err := s.RecordChecklistVerdict(c.ID, "pass", "x", nil, fullChecks(all[1:]...)); err == nil || !strings.Contains(err.Error(), "missing: description") {
+		t.Fatalf("missing key: %v", err)
+	}
+	old := append(append([]string{}, all[:2]...), "dod")
+	if _, err := s.RecordChecklistVerdict(c.ID, "pass", "x", nil, fullChecks(append(old, all[2:]...)...)); err == nil || !strings.Contains(err.Error(), "unknown or repeated checklist key: dod") {
+		t.Fatalf("old dod key: %v", err)
+	}
+	if _, err := s.RecordChecklistVerdict(c.ID, "pass", "x", nil, fullChecks(all...)); err != nil {
+		t.Fatalf("full checklist: %v", err)
 	}
 }

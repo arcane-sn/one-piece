@@ -163,6 +163,32 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 		for _, f := range fl {
 			fmt.Fprintf(out, "\nBusiness Flow %d | %s\n%s\n", f.ID, f.Title, f.Source)
 		}
+		// the rest of the contract the owner approves: tasks, QA cases and the branch plan
+		its, err := st.ListItems(card.ID)
+		if err != nil {
+			return err
+		}
+		n := 0
+		for _, it := range its {
+			if it.Superseded || it.FixFor != 0 {
+				continue
+			}
+			n++
+			fmt.Fprintf(out, "\n%s %s | %s\n%s\n", map[string]string{"agent": "Agent Task", "qa": "QA Case"}[it.Kind], it.Ident, it.Title, it.Body)
+		}
+		if n == 0 {
+			fmt.Fprintln(out, "\nAgent Tasks and QA Cases: none")
+		}
+		brs, err := st.ListBranches(card.ID)
+		if err != nil {
+			return err
+		}
+		if len(brs) == 0 {
+			fmt.Fprintln(out, "\nBranch plan: none")
+		}
+		for _, r := range brs {
+			fmt.Fprintf(out, "\nBranch plan | %s | %s → %s\n", r.Repo, r.BaseBranch, r.FeatureBranch)
+		}
 	case "items":
 		// the ticket's Agent Tasks and QA Test Cases with their state (read-only), so a closeout can check "everything is done"
 		its, err := st.ListItems(card.ID)
@@ -274,7 +300,7 @@ func runAgentCLI(args []string, getenv func(string) string, in io.Reader, out io
 		if sum, checks, ok := parseChecklist(raw); ok {
 			r, err = st.RecordChecklistVerdict(card.ID, args[1], sum, args[2:], checks)
 		} else if args[1] == "pass" {
-			return errors.New("a pass needs the checklist: one line per criterion, e.g. \"dod: ok | each action has a checkable outcome\"")
+			return errors.New("a pass needs the checklist: one line per criterion, e.g. \"tasks: ok | every requirement has a task\"")
 		} else {
 			r, err = st.RecordVerdict(card.ID, args[1], raw, args[2:])
 		}

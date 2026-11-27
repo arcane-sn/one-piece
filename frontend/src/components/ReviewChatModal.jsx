@@ -108,7 +108,7 @@ export default function ReviewChatModal({ card, boardId, onTurnDone, onCardChang
           {!available && view ? 'Claude Review is available while the ticket is in Business.' : (
             verdict
               ? <><span className={'review-badge ' + verdict[0]}>{verdict[1]}</span> {current.summary}</>
-              : <>Not reviewed yet. Claude checks six things: description, cases, Definition of Done, edge cases, scope and the Business Flow.</>
+              : <>Not reviewed yet. Claude checks the whole contract: description, cases, Agent Tasks, QA cases, edge cases, scope, the Business Flow and open questions.</>
           )}
           {current && <ReviewChecklist checks={current.checks} />}
           {current?.verdict === 'needs_work' && current.missing.length > 0 && (
