@@ -77,7 +77,7 @@ func (s *server) updateBranch(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	replan := in.BaseBranch != "" || in.FeatureBranch != nil || in.DevBranch != nil // status, PR, note and mode are run bookkeeping
+	replan := s.changesBranchPlan(id, in) // status, PR, note and mode are run bookkeeping
 	if replan && !s.editContract(w, id) {
 		return
 	}
@@ -111,4 +111,18 @@ func (s *server) deleteBranch(w http.ResponseWriter, r *http.Request) {
 	}
 	s.contractChanged(id)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// changesBranchPlan reports whether the update moves the plan itself (base, feature or dev branch) away from what is
+// stored. The branch modal resends the whole row on every save, so only a real difference counts.
+func (s *server) changesBranchPlan(cardID int64, in branchIn) bool {
+	rows, _ := s.st.ListBranches(cardID)
+	for _, r := range rows {
+		if r.Repo == in.Repo {
+			return (in.BaseBranch != "" && in.BaseBranch != r.BaseBranch) ||
+				(in.FeatureBranch != nil && *in.FeatureBranch != r.FeatureBranch) ||
+				(in.DevBranch != nil && *in.DevBranch != r.DevBranch)
+		}
+	}
+	return in.BaseBranch != "" || in.FeatureBranch != nil || in.DevBranch != nil // not a known row: let UpdateBranch judge it
 }

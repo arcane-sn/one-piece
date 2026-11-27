@@ -166,3 +166,20 @@ func TestBackToBusinessRefusedWhileARunIsGoing(t *testing.T) {
 	}
 	s.req(t, "POST", cp+"/stop-all", map[string]any{}, ck)
 }
+
+func TestBranchModalResendingThePlanIsNotAReplan(t *testing.T) {
+	s, ck, cp, card, _, _ := contractFixture(t)
+	s.St.DB.Exec(`INSERT INTO card_branches(card_id,repo,base_branch,feature_branch,dev_branch) VALUES(?,?,?,?,?)`, card.ID, "/repo/svc", "main", "feature/BRD-1", "feature/BRD-1-dev")
+	s.req(t, "POST", cp+"/move", map[string]any{"status": "agent", "position": 0}, ck)
+	same := map[string]any{"repo": "/repo/svc", "baseBranch": "main", "featureBranch": "feature/BRD-1", "devBranch": "feature/BRD-1-dev", "status": "branched"}
+	if resp, body := s.req(t, "PUT", cp+"/branches", same, ck); resp.StatusCode != 200 {
+		t.Fatalf("same plan + new status in Agent: %d %s, want 200", resp.StatusCode, body)
+	}
+	if c, _ := s.St.GetCard(card.ID); !c.Approved {
+		t.Error("a status change must not revoke approval")
+	}
+	same["featureBranch"] = "feature/other"
+	if resp, _ := s.req(t, "PUT", cp+"/branches", same, ck); resp.StatusCode != 409 {
+		t.Fatalf("a different feature branch in Agent: %d, want 409", resp.StatusCode)
+	}
+}

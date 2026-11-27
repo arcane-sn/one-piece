@@ -6,7 +6,6 @@ const STATUS = {
   draft: ['Draft', '#9A8F86'],
   business: ['Business', '#EA9259'],
   agent: ['Agent', '#D65A42'],
-  qa: ['QA', '#3B2417'],
   done: ['Done', '#7FC9C9'],
 }
 const MAX = 40

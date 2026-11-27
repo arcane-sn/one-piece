@@ -13,7 +13,8 @@ const NAME = { agent: 'Agent Task', qa: 'QA Test Case' }
 
 // Agent Task / QA Test Case: title, description, Technical Flows (agent tasks only)
 // on the left; status and the Claude log on the right.
-export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onClose }) {
+// locked: the ticket is in Agent or Done, so the text is read-only; only the status and the run controls work.
+export default function ItemModal({ cardId, item, kind, locked = false, onSaved, onDeleted, onClose }) {
   const k = item?.kind ?? kind
   const [current, setCurrent] = useState(item)
   const [title, setTitle] = useState(item?.title ?? '')
@@ -123,11 +124,11 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
           <div className="ticket-main">
             <label className="field">
               <span>Title</span>
-              <input autoFocus maxLength={200} placeholder={k === 'agent' ? 'What should the agent do?' : 'What should be tested?'} value={title} onChange={(e) => setTitle(e.target.value)} />
+              <input autoFocus={!locked} readOnly={locked} maxLength={200} placeholder={k === 'agent' ? 'What should the agent do?' : 'What should be tested?'} value={title} onChange={(e) => setTitle(e.target.value)} />
             </label>
             <div className="field">
               <span>Description</span>
-              <RichEditor value={body} placeholder={k === 'agent' ? 'Technical approach and what “done” looks like.' : 'Steps and the expected result.'} onChange={setBody} />
+              <RichEditor value={body} placeholder={k === 'agent' ? 'Technical approach and what “done” looks like.' : 'Steps and the expected result.'} onChange={setBody} readOnly={locked} />
             </div>
             {current && k === 'qa' && <QARunPanel itemId={current.id} refreshKey={current.status + (current.log?.length ?? 0)} />}
             {k === 'agent' && (
@@ -183,7 +184,7 @@ export default function ItemModal({ cardId, item, kind, onSaved, onDeleted, onCl
         </div>
         {error && <p className="error">{error}</p>}
         <div className="modal-actions ticket-actions">
-          {current && <button type="button" className="danger" onClick={remove} disabled={busy}>Delete</button>}
+          {current && !locked && <button type="button" className="danger" onClick={remove} disabled={busy}>Delete</button>}
           <span className="grow" />
           <button type="button" onClick={close}>Close</button>
           <button className="primary" type="submit" disabled={busy || !title.trim() || (current && !dirty)}>

@@ -9,7 +9,7 @@ const MODES = [['merge', 'Merge'], ['cherry-pick', 'Cherry-pick']]
 const label = (s) => STATUS.find((x) => x[0] === s)?.[1] ?? s
 
 // Per-repo branching of one ticket: base branch, feature branch, -dev branch, status and PR link.
-export default function BranchingSection({ cardId, reloadKey = 0, onModal, ticketDone = false }) {
+export default function BranchingSection({ cardId, reloadKey = 0, onModal, ticketDone = false, planOpen = true, onChanged }) {
   const [rows, setRows] = useState([])
   const [editing, setEditing] = useState(null) // null | 'new' | row
   const [stashes, setStashes] = useState([])
@@ -37,7 +37,7 @@ export default function BranchingSection({ cardId, reloadKey = 0, onModal, ticke
   }
 
   const open = (v) => { setEditing(v); onModal?.(!!v) }
-  const done = () => { open(null); load() }
+  const done = () => { open(null); load(); onChanged?.() }
 
   return (
     <div className="field">
@@ -47,7 +47,7 @@ export default function BranchingSection({ cardId, reloadKey = 0, onModal, ticke
           {ticketDone && rows.length > 0 && rows.some((r) => r.status !== 'pr_open') && (
             <button type="button" className="ai-btn" disabled={shipping} title="Push the branches and open the PRs (the ticket is Done)" onClick={ship}>{shipping ? 'Pushing…' : 'Push & PR'}</button>
           )}
-          <button type="button" className="ai-btn" onClick={() => open('new')}>+ Add Repo</button>
+          {planOpen && <button type="button" className="ai-btn" onClick={() => open('new')}>+ Add Repo</button>}
         </span>
       </div>
       {rows.length === 0 ? (
