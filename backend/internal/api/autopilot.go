@@ -37,7 +37,7 @@ func (s *server) qaAutopilot(ctx context.Context, cardID int64, runList func([]s
 		}
 		fixes, _ := pick("agent", "todo")
 		if len(fixes) == 0 || round >= autopilotRounds {
-			s.logCard(cardID, "Autopilot stopped: "+strconv.Itoa(len(qaTodo))+" QA case(s) still failing; the ticket stays in QA for you.")
+			s.logCard(cardID, "Autopilot stopped: "+strconv.Itoa(len(qaTodo))+" QA case(s) still failing; the ticket stays in Agent for you.")
 			return
 		}
 		if !runList(fixes) { // a fix that fails or is blocked needs the owner
@@ -51,10 +51,10 @@ func (s *server) qaAutopilot(ctx context.Context, cardID int64, runList func([]s
 	}
 }
 
-// finishTicket moves a QA ticket whose cases all passed to Done.
+// finishTicket moves an Agent ticket whose QA cases all passed to Done.
 func (s *server) finishTicket(cardID int64) {
 	c, err := s.st.GetCard(cardID)
-	if err != nil || c.Status != "qa" {
+	if err != nil || c.Status != "agent" {
 		return
 	}
 	if _, err := s.st.MoveCard(cardID, "done", 1<<30); err != nil {
@@ -63,13 +63,20 @@ func (s *server) finishTicket(cardID int64) {
 	s.logCard(cardID, "All QA cases passed: ticket moved to Done")
 }
 
-// logCard notes something on the ticket's newest QA case (items carry the log; the ticket itself has none).
+// logCard notes something on the ticket's newest QA case, or its newest item when it has none (items carry the
+// log; the ticket itself has none).
 func (s *server) logCard(cardID int64, text string) {
 	items, _ := s.st.ListItems(cardID)
-	for i := len(items) - 1; i >= 0; i-- {
-		if !items[i].Superseded && items[i].Kind == "qa" {
-			s.st.AppendItemLog(items[i].ID, text)
-			return
+	target := -1
+	for i, it := range items { // the newest live QA case wins; failing that, the newest live item
+		if it.Superseded {
+			continue
 		}
+		if it.Kind == "qa" || target < 0 || items[target].Kind != "qa" {
+			target = i
+		}
+	}
+	if target >= 0 {
+		s.st.AppendItemLog(items[target].ID, text)
 	}
 }

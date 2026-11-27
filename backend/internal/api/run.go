@@ -231,7 +231,7 @@ func (s *server) runAll(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if in.Kind == "agent" && ctx.Err() == nil {
-			s.advanceToQA(id)
+			s.continueToQA(ctx, id, runList)
 		}
 		if in.Kind == "qa" && ctx.Err() == nil {
 			s.qaAutopilot(ctx, id, runList)
@@ -456,8 +456,10 @@ func (s *server) stopItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, it)
 }
 
-// advanceToQA moves a ticket from Agent to QA once every Agent Task of it is Done (Run All finished cleanly).
-func (s *server) advanceToQA(cardID int64) {
+// continueToQA runs inside the Run All chain once the Agent Tasks ran: when every task is Done it runs the QA cases
+// of the contract (the Definition of Done) and lets the autopilot fix and retest. The ticket reaches Done only when
+// every case passed; otherwise it stays in Agent for the owner.
+func (s *server) continueToQA(ctx context.Context, cardID int64, runList func([]store.Item) bool) {
 	c, err := s.st.GetCard(cardID)
 	if err != nil || c.Status != "agent" {
 		return
@@ -466,29 +468,28 @@ func (s *server) advanceToQA(cardID int64) {
 	if err != nil {
 		return
 	}
-	n := 0
+	var todo []store.Item
+	cases := 0
 	for _, it := range items {
-		if it.Kind != "agent" || it.Superseded {
-			continue
+		switch {
+		case it.Superseded:
+		case it.Kind == "agent" && it.Status != "done":
+			return // a task is still open: failed, blocked or stopped
+		case it.Kind == "qa":
+			cases++
+			if it.Status == "todo" {
+				todo = append(todo, it)
+			}
 		}
-		if it.Status != "done" {
-			return
-		}
-		n++
 	}
-	if n == 0 {
+	if cases == 0 {
+		s.logCard(cardID, "No QA cases: the ticket stays in Agent for you.")
 		return
 	}
-	if _, err := s.st.MoveCard(cardID, "qa", 1<<30); err != nil {
-		log.Printf("run all: moving card %d to QA: %v", cardID, err)
+	if len(todo) > 0 && !runList(todo) {
 		return
 	}
-	for i := len(items) - 1; i >= 0; i-- { // note it on the last task's log
-		if items[i].Kind == "agent" && !items[i].Superseded {
-			s.st.AppendItemLog(items[i].ID, "All Agent Tasks done: ticket moved to QA")
-			break
-		}
-	}
+	s.qaAutopilot(ctx, cardID, runList)
 }
 
 // resetOrphans puts back to To Do every "In Progress" item of the card that no run is working on (left behind
