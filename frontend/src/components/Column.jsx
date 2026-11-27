@@ -4,7 +4,7 @@ import Logo from './Logo'
 
 // One kanban column. Dropping on a card inserts before it; dropping on the
 // column itself appends to the end.
-export default function Column({ status, label, dot, cards, onMove, onOpen, footer }) {
+export default function Column({ status, label, dot, cards, onMove, onOpen }) {
   const [over, setOver] = useState(false)
 
   function drop(e, index) {
@@ -19,7 +19,7 @@ export default function Column({ status, label, dot, cards, onMove, onOpen, foot
     status === 'draft'
       ? ['No Drafts Yet', 'Brainstorm a plan to fill this.']
       : status === 'business'
-        ? ['No Cards Yet', 'Add one to get started.']
+        ? ['No Cards Yet', 'Use New Ticket to add one.']
         : ['Nothing Here Yet', 'Drop a card to review it.']
 
   return (
@@ -43,7 +43,6 @@ export default function Column({ status, label, dot, cards, onMove, onOpen, foot
           <span>{emptyHint}</span>
         </div>
       )}
-      {footer}
     </section>
   )
 }

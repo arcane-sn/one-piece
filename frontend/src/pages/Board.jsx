@@ -121,7 +121,10 @@ export default function Board({ reloadBoards }) {
       <div className="crumb"><Link to="/">Boards</Link> / {board.name}</div>
       <div className="page-head row">
         <h1 className="title">{board.name}</h1>
-        <SearchButton />
+        <div className="head-actions">
+          <SearchButton />
+          <button type="button" className="primary new-ticket" onClick={() => setTicket('new')}>+ New Ticket</button>
+        </div>
       </div>
       <div className="board-tools">
         {board.folders.length === 0 && <span className="muted">No folders yet</span>}
@@ -144,7 +147,6 @@ export default function Board({ reloadBoards }) {
             cards={cards.filter((c) => c.status === status).sort((a, b) => a.position - b.position)}
             onMove={moveCard}
             onOpen={setTicket}
-            footer={status === 'business' ? <button className="add-card" onClick={() => setTicket('new')}>+ Add Card</button> : null}
           />
         ))}
       </div>
