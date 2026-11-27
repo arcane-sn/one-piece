@@ -39,6 +39,10 @@ func TestCardFlow(t *testing.T) {
 	if resp, body = s.req(t, "PUT", cp, map[string]string{"title": "T2", "description": ""}, c); resp.StatusCode != 200 {
 		t.Fatalf("update: %d %s", resp.StatusCode, body)
 	}
+	s.St.DB.Exec(`UPDATE cards SET approved=1 WHERE id=?`, card.ID)
+	if resp, body = s.req(t, "POST", cp+"/move", map[string]any{"status": "agent", "position": 0}, c); resp.StatusCode != 200 {
+		t.Fatalf("move to agent: %d %s", resp.StatusCode, body)
+	}
 	if resp, body = s.req(t, "POST", cp+"/move", map[string]any{"status": "done", "position": 0}, c); resp.StatusCode != 200 {
 		t.Fatalf("move: %d %s", resp.StatusCode, body)
 	}

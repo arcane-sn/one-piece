@@ -90,11 +90,15 @@ func (s *server) createItem(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if !s.editContract(w, id) {
+		return
+	}
 	it, err := s.st.CreateItem(id, in.Kind, in.Title, in.Body)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
+	s.contractChanged(id)
 	s.st.AppendItemLog(it.ID, "Added by you")
 	it, _ = s.st.GetItem(it.ID)
 	writeJSON(w, http.StatusCreated, it)
@@ -132,13 +136,20 @@ func (s *server) updateItem(w http.ResponseWriter, r *http.Request) {
 	if in.Status != "" && in.Status != old.Status {
 		lines = append(lines, "Status: "+in.Status)
 	}
-	if strings.TrimSpace(in.Title) != old.Title || in.Body != old.Body {
+	edited := strings.TrimSpace(in.Title) != old.Title || in.Body != old.Body
+	if edited {
 		lines = append(lines, "Edited by you")
+		if !s.editContract(w, old.CardID) { // a status change is run bookkeeping; only a text edit changes the contract
+			return
+		}
 	}
 	it, err := s.st.SaveItem(id, in.Title, in.Body, in.Status, lines)
 	if err != nil {
 		writeErr(w, err)
 		return
+	}
+	if edited {
+		s.contractChanged(old.CardID)
 	}
 	writeJSON(w, http.StatusOK, it)
 }
@@ -149,10 +160,19 @@ func (s *server) deleteItem(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	it, err := s.st.GetItem(id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if !s.editContract(w, it.CardID) {
+		return
+	}
 	if err := s.st.DeleteItem(id); err != nil {
 		writeErr(w, err)
 		return
 	}
+	s.contractChanged(it.CardID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

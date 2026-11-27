@@ -55,7 +55,7 @@ func TestRunItemExecutesAndStops(t *testing.T) {
 		t.Fatalf("run before approval: %d, want 409", resp.StatusCode)
 	}
 	reviewWaiter(t, s, cp, ck)("done")
-	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
+	s.approveContract(t, cp, ck, card.ID)
 
 	var gotCwd, gotUser string
 	defer func(f func(context.Context, string, []string, string, string, func(string)) (string, error)) {
@@ -81,7 +81,7 @@ func TestRunItemExecutesAndStops(t *testing.T) {
 	}
 
 	// stop a long run
-	s.req(t, "PUT", ip, map[string]any{"title": "Add endpoint", "body": "x", "status": "todo"}, ck)
+	s.req(t, "PUT", ip, map[string]any{"title": "Add endpoint", "body": "POST /api/login", "status": "todo"}, ck)
 	agentRun = func(ctx context.Context, _ string, _ []string, _, _ string, _ func(string)) (string, error) {
 		<-ctx.Done()
 		return "", ctx.Err()
@@ -108,8 +108,6 @@ func TestRunAllStopsAtFirstFailure(t *testing.T) {
 	var card store.Card
 	json.Unmarshal(body, &card)
 	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
-	reviewWaiter(t, s, cp, ck)("done")
-	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
 	var paths []string
 	for _, title := range []string{"one", "two", "three"} {
 		_, body = s.req(t, "POST", cp+"/items", map[string]any{"kind": "agent", "title": title}, ck)
@@ -117,6 +115,7 @@ func TestRunAllStopsAtFirstFailure(t *testing.T) {
 		json.Unmarshal(body, &it)
 		paths = append(paths, "/api/items/"+strconv.FormatInt(it.ID, 10))
 	}
+	s.reapprove(t, cp, ck, card.ID) // adding items revoked the approval
 	defer func(f func(context.Context, string, []string, string, string, func(string)) (string, error)) {
 		agentRun = f
 	}(agentRun)
@@ -150,8 +149,6 @@ func TestRunAllQAWaitsForAgentsAndKeepsGoingAfterFail(t *testing.T) {
 	var card store.Card
 	json.Unmarshal(body, &card)
 	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
-	reviewWaiter(t, s, cp, ck)("done")
-	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
 	mk := func(kind, title string) string {
 		_, body := s.req(t, "POST", cp+"/items", map[string]any{"kind": kind, "title": title}, ck)
 		var it store.Item
@@ -160,6 +157,7 @@ func TestRunAllQAWaitsForAgentsAndKeepsGoingAfterFail(t *testing.T) {
 	}
 	agent := mk("agent", "build")
 	q1, q2, q3 := mk("qa", "good"), mk("qa", "bad"), mk("qa", "also good")
+	s.reapprove(t, cp, ck, card.ID)
 
 	defer func(f func(context.Context, string, string, []string, func(string)) (string, error)) {
 		streamClaude = f
@@ -218,7 +216,7 @@ func TestRunAllQAWaitsForAgentsAndKeepsGoingAfterFail(t *testing.T) {
 	streamClaude = func(context.Context, string, string, []string, func(string)) (string, error) {
 		return `{"result":"pass","issue":"","desc":"fixed"}`, nil
 	}
-	s.req(t, "PUT", "/api/items/"+strconv.FormatInt(f[1].ID, 10), map[string]any{"title": f[1].Title, "status": "done"}, ck)
+	s.req(t, "PUT", "/api/items/"+strconv.FormatInt(f[1].ID, 10), map[string]any{"title": f[1].Title, "body": f[1].Body, "status": "done"}, ck)
 	s.req(t, "POST", q2+"/run", map[string]any{}, ck)
 	if ok := waitItem(t, s, cp, q2, ck, "done"); ok.Failure != "" || ok.FailureDesc != "" {
 		t.Errorf("failure not cleared: %q", ok.Failure)

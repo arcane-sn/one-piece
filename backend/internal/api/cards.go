@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+
+	"github.com/arcane-sn/one-piece/backend/internal/store"
 )
 
 type cardIn struct {
@@ -74,6 +76,10 @@ func (s *server) moveCard(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, err)
+		return
+	}
+	if in.Status == "business" && s.cardRunning(id) {
+		writeErr(w, store.ConflictError{Msg: "Stop the run first."})
 		return
 	}
 	c, err := s.st.MoveCard(id, in.Status, in.Position)

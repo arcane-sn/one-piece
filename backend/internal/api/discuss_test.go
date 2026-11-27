@@ -112,11 +112,17 @@ func TestDiscussOnlyInBusinessAndDone(t *testing.T) {
 		t.Errorf("resume id = %q", got)
 	}
 
-	for _, col := range []string{"agent", "qa"} { // no Discuss while Agents or QA own the ticket
-		s.req(t, "POST", cp+"/move", map[string]any{"status": col, "position": 0}, ck)
-		if code, _ := dSend(t, s, cp, ck, "x"); code != 409 {
-			t.Fatalf("%s column: status %d, want 409", col, code)
-		}
+	// Agent: Discuss stays open, but as a read-only helper (the contract is locked there)
+	s.St.DB.Exec(`UPDATE cards SET approved=1 WHERE id=?`, card.ID)
+	if resp, body := s.req(t, "POST", cp+"/move", map[string]any{"status": "agent", "position": 0}, ck); resp.StatusCode != 200 {
+		t.Fatalf("move to agent: %d %s", resp.StatusCode, body)
+	}
+	if code, body := dSend(t, s, cp, ck, "how far is it?"); code != 202 {
+		t.Fatalf("agent column: %d %s, want 202", code, body)
+	}
+	dIdle(t, s, cp, ck)
+	if last := (*calls)[len(*calls)-1]; last.Stage != "agent" || !strings.Contains(last.System, "locked") {
+		t.Errorf("agent stage call = stage %q, system %.80q", last.Stage, last.System)
 	}
 	s.req(t, "POST", cp+"/move", map[string]any{"status": "business", "position": 0}, ck) // Draft is only entered from Business
 	s.req(t, "POST", cp+"/move", map[string]any{"status": "draft", "position": 0}, ck)
@@ -130,6 +136,8 @@ func TestDiscussOnlyInBusinessAndDone(t *testing.T) {
 		t.Errorf("shape prompt must be about the Draft ticket and carry no git rules")
 	}
 	s.req(t, "POST", cp+"/move", map[string]any{"status": "business", "position": 0}, ck)
+	s.St.DB.Exec(`UPDATE cards SET approved=1 WHERE id=?`, card.ID)
+	s.req(t, "POST", cp+"/move", map[string]any{"status": "agent", "position": 0}, ck)
 	s.req(t, "POST", cp+"/move", map[string]any{"status": "done", "position": 0}, ck)
 	if code, body := dSend(t, s, cp, ck, "wrap up"); code != 202 {
 		t.Fatalf("done: %d %s", code, body)
@@ -186,7 +194,7 @@ func TestDiscussPromptStages(t *testing.T) {
 	}
 
 	raw := regexp.MustCompile(`\bgit (switch|merge|push|fetch|status|branch|rev-parse|log|checkout|reset)\b`)
-	for _, stage := range []string{"setup", "closeout"} {
+	for _, stage := range []string{"setup", "closeout", "agent"} {
 		sys := discussSystemPrompt(stage)
 		if raw.MatchString(sys) {
 			t.Errorf("%s system prompt has a raw git instruction: %q", stage, raw.FindString(sys))
@@ -213,10 +221,11 @@ func TestDiscussPromptStages(t *testing.T) {
 	if st, ok := discussStage("draft"); !ok || st != "shape" {
 		t.Error("draft → shape")
 	}
-	for _, other := range []string{"agent", "qa"} {
-		if _, ok := discussStage(other); ok {
-			t.Errorf("%s has no Discuss", other)
-		}
+	if st, ok := discussStage("agent"); !ok || st != "agent" {
+		t.Error("agent → agent (read-only helper)")
+	}
+	if _, ok := discussStage("qa"); ok {
+		t.Error("the qa column is gone")
 	}
 	for _, stage := range []string{"setup", "closeout"} {
 		sys := discussSystemPrompt(stage)

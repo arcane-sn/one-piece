@@ -89,6 +89,11 @@ func TestNoReviewRunsOnSaveAndApprovalNeedsACurrentPass(t *testing.T) {
 		t.Fatalf("approve on needs_work: %d, want 409", resp.StatusCode)
 	}
 	s.St.RecordVerdict(card.ID, "pass", "ok", nil)
+	if resp, _ := s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck); resp.StatusCode != 409 {
+		t.Fatalf("approve without tasks and QA cases: %d, want 409", resp.StatusCode)
+	}
+	s.St.CreateItem(card.ID, "agent", "Task", "")
+	s.St.CreateItem(card.ID, "qa", "Case", "")
 	if resp, _ := s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck); resp.StatusCode != 200 {
 		t.Fatalf("approve on pass: %d", resp.StatusCode)
 	}

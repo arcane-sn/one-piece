@@ -61,7 +61,7 @@ func gitRunFixture(t *testing.T) *gitRun {
 	json.Unmarshal(body, &card)
 	cp := "/api/cards/" + strconv.FormatInt(card.ID, 10)
 	reviewWaiter(t, s, cp, ck)("done")
-	s.req(t, "POST", cp+"/approve", map[string]bool{"approved": true}, ck)
+	s.approveContract(t, cp, ck, card.ID)
 	br, err := s.St.PlanBranch(card.ID, repo, "main")
 	if err != nil {
 		t.Fatal(err)
@@ -74,9 +74,10 @@ func gitRunFixture(t *testing.T) *gitRun {
 
 func (g *gitRun) addTask(t *testing.T, title string) (store.Item, string) {
 	t.Helper()
-	_, body := g.s.req(t, "POST", g.cp+"/items", map[string]any{"kind": "agent", "title": title}, g.ck)
-	var it store.Item
-	json.Unmarshal(body, &it)
+	it, err := g.s.St.CreateItem(g.card.ID, "agent", title, "") // via the store: adding through the API would revoke the approval
+	if err != nil {
+		t.Fatal(err)
+	}
 	return it, "/api/items/" + strconv.FormatInt(it.ID, 10)
 }
 
@@ -190,10 +191,8 @@ func TestRunScopeUsesRegisteredRepos(t *testing.T) {
 	json.Unmarshal(body, &plain)
 	pcp := "/api/cards/" + strconv.FormatInt(plain.ID, 10)
 	reviewWaiter(t, g.s, pcp, g.ck)("done")
-	g.s.req(t, "POST", pcp+"/approve", map[string]bool{"approved": true}, g.ck)
-	_, body = g.s.req(t, "POST", pcp+"/items", map[string]any{"kind": "agent", "title": "Old way"}, g.ck)
-	var pit store.Item
-	json.Unmarshal(body, &pit)
+	pit, _ := g.s.St.CreateItem(plain.ID, "agent", "Old way", "")
+	g.s.approveContract(t, pcp, g.ck, plain.ID)
 	pip := "/api/items/" + strconv.FormatInt(pit.ID, 10)
 	cwd, dirs = "", nil
 	g.s.req(t, "POST", pip+"/run", map[string]any{}, g.ck)

@@ -20,14 +20,16 @@ const discussTurnTimeout = 10 * time.Minute // pushes and PRs can be slow
 const discussMaxTurns = 25
 
 // discussStage maps a ticket column to its Discuss stage: shape (Draft: description and Business Flow),
-// setup (Business: the same plus the branches) and closeout (Done: integrate, push, open PRs). Agent and
-// QA have none: ok is false there.
+// setup (Business: the same plus the branches), agent (Agent: read-only, the contract is locked) and closeout
+// (Done: integrate, push, open PRs).
 func discussStage(status string) (string, bool) {
 	switch status {
 	case "draft":
 		return "shape", true
 	case "business":
 		return "setup", true
+	case "agent":
+		return "agent", true
 	case "done":
 		return "closeout", true
 	}
@@ -80,12 +82,19 @@ Phase 2: only when every via -dev repo is merged_dev (or further). For each via 
 Direct repos skip phase 1 (there is no -dev branch). For each direct repo, once it is clean and not blocked: OP git <repo> push -u origin <feature branch>; then, if OP remote-kind <repo> says github and there is no PR yet: OP gh <repo> pr create --base <base branch> --head <feature branch> --title "<ticket id>: <title>" --body "<short summary>", then OP branch-pr <repo> <pr url>; otherwise OP branch-status <repo> pushed and report the pushed branch.
 A via -dev PR goes from the -dev branch into the shared dev branch; never push or merge into the shared dev branch directly. Report each repo's result at the end.`
 
+// discussAgentPrompt: the ticket is approved and agents are working; the contract is locked, so this stage only
+// answers questions and helps with git. Changing the plan means moving the ticket back to Business.
+const discussAgentPrompt = `You help the product owner follow ONE ticket while the agents work on it. The ticket is approved and its contract (description, Agent Tasks, QA cases, branch plan) is locked. You do not write product code and you never change the contract: do not use ticket-edit, flow-add, flow-update, flow-delete or branch-plan. If the owner wants to change the plan, tell them to move the ticket back to Business, where it is reviewed and approved again.
+What you do: explain progress (OP items, OP branches, OP ticket-show), look at the code with Read, Grep and Glob, and help with git on the registered repos when asked (read-only commands first, OP git <repo> status). Keep replies short and reply in the language the owner writes in.` + discussGitRules
+
 func discussSystemPrompt(stage string) string {
 	switch stage {
 	case "closeout":
 		return discussCloseoutPrompt
 	case "shape":
 		return discussShapePrompt
+	case "agent":
+		return discussAgentPrompt
 	}
 	return discussSetupPrompt
 }
@@ -376,7 +385,7 @@ func (s *server) postDiscussMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	stage, ok := discussStage(c.Status)
 	if !ok {
-		writeErr(w, store.ConflictError{Msg: "Discuss is available while the ticket is in Draft or Business (and Close out in Done)."})
+		writeErr(w, store.ConflictError{Msg: "Discuss is not available for this ticket."})
 		return
 	}
 	if s.ticketBusyWithRun(c.ID) {
