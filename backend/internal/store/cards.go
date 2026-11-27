@@ -29,7 +29,7 @@ type Card struct {
 }
 
 // Statuses are the kanban columns, in display order.
-var Statuses = []string{"draft", "business", "agent", "qa", "done"}
+var Statuses = []string{"draft", "business", "agent", "done"}
 
 func validStatus(s string) bool {
 	for _, v := range Statuses {
@@ -180,7 +180,7 @@ func (s *Store) ListCards(boardID int64) ([]Card, error) {
 		return nil, err
 	}
 	rows, err := s.DB.Query(`SELECT `+cardCols+` FROM cards WHERE board_id=?
-		ORDER BY CASE status WHEN 'draft' THEN 0 WHEN 'business' THEN 1 WHEN 'agent' THEN 2 WHEN 'qa' THEN 3 ELSE 4 END, position`, boardID)
+		ORDER BY CASE status WHEN 'draft' THEN 0 WHEN 'business' THEN 1 WHEN 'agent' THEN 2 ELSE 3 END, position`, boardID)
 	if err != nil {
 		return nil, err
 	}
@@ -324,6 +324,11 @@ func (s *Store) MoveCard(id int64, status string, position int) (Card, error) {
 			return Card{}, err
 		}
 	}
+	if status == "business" && (c.Status == "agent" || c.Status == "done") { // the contract is reopened: version bump + approval gone
+		if err := touchCard(tx, id); err != nil {
+			return Card{}, err
+		}
+	}
 	if status == "draft" { // parked in the backlog: approval no longer holds (reviews and flows are kept)
 		if _, err := tx.Exec(`UPDATE cards SET approved=0 WHERE id=?`, id); err != nil {
 			return Card{}, err
@@ -344,6 +349,10 @@ func checkMove(tx *sql.Tx, c Card, to string) error {
 		return ConflictError{"A Draft ticket can only move to Business."}
 	case to == "draft" && c.Status != "draft" && c.Status != "business":
 		return ConflictError{"Only Business tickets can be moved back to Draft."}
+	case to == "agent" && c.Status != "agent" && !c.Approved:
+		return ConflictError{"Approve the ticket before moving it to Agent."}
+	case to == "done" && c.Status != "agent" && c.Status != "done":
+		return ConflictError{"Only Agent tickets can be moved to Done."}
 	case to == "draft" && c.Status != "draft":
 		var running int
 		if err := tx.QueryRow(`SELECT COUNT(*) FROM card_reviews WHERE card_id=? AND status='running'`, c.ID).Scan(&running); err != nil {
