@@ -160,6 +160,7 @@ export default function Board({ reloadBoards }) {
         <TicketModal
           key={ticket === 'new' ? 'new' : ticket.id}
           boardId={id}
+          board={board}
           card={ticket === 'new' ? undefined : ticket}
           onChanged={upsert}
           onDeleted={removed}

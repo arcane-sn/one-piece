@@ -5,8 +5,9 @@ import { toast } from '../lib/toast'
 const blank = { name: '', folder: '', command: '', port: '', readyUrl: '', readyTimeoutS: 60, external: false }
 const SESSION = { none: 'No saved login', valid: 'Login saved', expired: 'Login expired' }
 
-// Board setting: the local stack browser QA starts, the hosts it may reach, and the manual login.
-// Nothing here is reachable by Claude. Buttons are type="button" because this lives inside the board form.
+// The local stack browser QA starts, the hosts it may reach, and the manual login. It is set from the ticket (next to
+// the QA Test Cases) but stored per board, so the login and the stack are set once for all tickets of the board.
+// Nothing here is reachable by Claude. Buttons are type="button" because this lives inside the ticket form.
 export default function QAStackSection({ board }) {
   const base = `/api/boards/${board.id}/qa`
   const [view, setView] = useState(null)

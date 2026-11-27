@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import PromptModal from './PromptModal'
 import FlowsSection from './FlowsSection'
+import QAStackSection from './QAStackSection'
 import ItemsSection from './ItemsSection'
 import BranchingSection from './BranchingSection'
 import DiscussModal from './DiscussModal'
@@ -18,7 +19,7 @@ const STATUS_LABEL = { draft: 'Draft', business: 'Business', agent: 'Agent', don
 
 // Jira-style ticket modal: create (no `card`) or edit. Title/description on the
 // left, a details panel (status, deadline, approval) on the right.
-export default function TicketModal({ boardId, card, onChanged, onDeleted, onClose }) {
+export default function TicketModal({ boardId, board, card, onChanged, onDeleted, onClose }) {
   const [current, setCurrent] = useState(card) // last saved card; set after the first create
   const [title, setTitle] = useState(card?.title ?? '')
   const [description, setDescription] = useState(card?.description ?? '')
@@ -197,6 +198,7 @@ export default function TicketModal({ boardId, card, onChanged, onDeleted, onClo
             {!isDraft && current && <BranchingSection cardId={current.id} reloadKey={branchTick} onModal={setFlowOpen} ticketDone={current.status === 'done'} planOpen={current.status === 'business'} onChanged={reloadCard} />}
             {current && <DecisionLog cardId={current.id} reloadKey={branchTick} />}
             {!isDraft && <ItemsSection card={current} onModal={setFlowOpen} onChanged={reloadCard} />}
+            {!isDraft && board?.folders?.length > 0 && <QAStackSection board={board} />}
           </div>
 
           <aside className="ticket-side">
